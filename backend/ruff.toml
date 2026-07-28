@@ -1,0 +1,26 @@
+# Configuration ruff — pilote `ruff check backend/` (CI + local).
+#
+# Périmètre : on lint le CODE APPLICATIF, pas les scripts ops/debug à la racine
+# (vps_*, check_*, fetch_*, deploy_vps*, verify_*, *_explore, test_* ad-hoc) :
+# ils ne sont pas embarqués dans l'image (cf. .dockerignore) et n'ont jamais été
+# écrits pour passer un linter.
+extend-exclude = [
+    "vps_*.py",
+    "vps2_*.py",
+    "deploy_vps*.py",
+    "check_*.py",
+    "fetch_*.py",
+    "resync_*.py",
+    "run_resync.py",
+    "verify_*.py",
+    "*_explore.py",
+    "test_*.py",        # scripts de test ad-hoc (racine) + tests/ — non bloquants
+]
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",   # longueur de ligne — non bloquant
+    "E702",   # multiple statements sur une ligne (;) — style, fréquent en code docx
+    "E741",   # nom de variable ambigu (l/I/O) — style
+]

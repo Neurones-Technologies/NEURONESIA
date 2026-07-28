@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.env.*
+*.db
+*.sqlite
+data/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# Environnements virtuels locaux — NE JAMAIS envoyer au build (plusieurs Go).
+# C'était la cause du long "transferring context" avant chaque build.
+.venv/
+venv/
+env/
+*.egg-info/
+tests/
+*.log
+vps_*.py
+run_resync.py
+check_*.py
+fetch_*.py
+resync_*.py
+test_*.py
+Dockerfile

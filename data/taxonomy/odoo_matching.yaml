@@ -1,0 +1,59 @@
+# ════════════════════════════════════════════════════════════════════════════
+# Taxonomie MINIMALE de matching AO ↔ Odoo (couche C — garde-fou déterministe).
+#
+# Principe v2 : ce qui doit généraliser est appris (sémantique + LLM) ; ce qui
+# doit être infaillible est codé ICI. Ce fichier ne contient AUCUN thème métier —
+# uniquement 3 listes de sécurité. Il doit tenir en une page. S'il gonfle, c'est
+# qu'on y remet de la logique qui doit aller au LLM.
+#
+# Éditable par l'avant-vente sans redéploiement de code.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── 1. EXCLUSIONS ─────────────────────────────────────────────────────────────
+# Marqueurs MATÉRIELS. Une affaire qui en contient ne doit jamais être rangée
+# dans un thème logiciel/Odoo, même si le mot "module" apparaît (piège "module SFP").
+exclusions:
+  hardware_markers:
+    - "sfp"
+    - "jarretiere"
+    - "jarretière"
+    - "rocade"
+    - "fibre optique"
+    - "catalyst"
+    - "nexus"
+    - "convertisseur"
+    - "rj45"
+    - "patch panel"
+    - "tiroir optique"
+    - "onduleur"
+    - "courant ondule"
+    - "courant ondulé"
+    - "cablage"
+    - "câblage"
+
+# ── 2. NORMALISATION PRODUITS ─────────────────────────────────────────────────
+# Code/libellé brut (regex insensible à la casse) → libellé lisible. Sert au
+# nettoyage des order_lines avant matching et avant affichage.
+product_normalization:
+  - { match: "f5-|big-ip",            label: "F5 BIG-IP" }
+  - { match: "onefs|456-111",         label: "Dell EMC Isilon" }
+  - { match: "odoo",                  label: "Odoo" }
+  - { match: "forti|fg-|fortigate",   label: "Fortinet" }
+  - { match: "c9200|c9500|sfp-10g|cisco|catalyst", label: "Cisco" }
+  - { match: "vmware|vsphere|esxi",   label: "VMware" }
+  - { match: "microsoft 365|m365|csp|exchange online|sharepoint", label: "Microsoft 365" }
+  - { match: "veeam|netbackup|backup", label: "Sauvegarde" }
+  - { match: "power bi|powerbi",      label: "Power BI" }
+
+# ── 3. TERMES CRITIQUES ───────────────────────────────────────────────────────
+# Éliminatoires ou à ne jamais manquer. Détectés par correspondance exacte :
+#  - exigé par l'AO ET trouvé dans Odoo  → match marqué FORTE + is_critical
+#  - exigé par l'AO mais introuvable     → gap éliminatoire prioritaire
+critical_terms:
+  - { term: "fne",            flag: "eligibilite",   note: "Facture Normalisée Électronique (fiscalité ivoirienne)" }
+  - { term: "syscohada",      flag: "eligibilite",   note: "Référentiel comptable OHADA" }
+  - { term: "iso 27001",      flag: "certification", note: "Sécurité de l'information" }
+  - { term: "iso27001",       flag: "certification", note: "Sécurité de l'information" }
+  - { term: "partenaire odoo", flag: "eligibilite",  note: "Statut éditeur Odoo" }
+  - { term: "pmp",            flag: "certification", note: "Gestion de projet" }
+  - { term: "itil",           flag: "certification", note: "Gestion de services IT" }

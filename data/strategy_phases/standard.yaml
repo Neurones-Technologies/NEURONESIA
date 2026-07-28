@@ -1,0 +1,66 @@
+# Squelette standard du plan de réponse — 5 phases.
+# Le LLM ne crée PAS la structure : il remplit seulement les `actions` de chaque phase
+# (jour, responsable, livrable) en s'appuyant sur typical_actions comme guide.
+# Les 10 actions historiques de _STRATEGY_SYSTEM sont regroupées ici sur 5 phases.
+variant: standard
+label: "Plan de réponse standard (5 phases)"
+phases:
+  - id: PHASE_0
+    name: "Go/No-Go & validation partenaire"
+    description: >
+      Décision ferme de répondre, validation des préalables conditionnels et,
+      en cas de groupement, vérification de la conformité du partenaire (GECA).
+    is_blocking_next: true            # bloque tout tant que la décision n'est pas Go
+    typical_duration_days: 1
+    prerequisites: []
+    typical_actions:
+      - "Kick-off interne et attribution des rôles"
+      - "Décision Go/No-Go formalisée (solo ou groupement)"
+      - "Validation des préalables conditionnels et de la conformité du partenaire"
+  - id: PHASE_1
+    name: "Fondations administratives & cadrage"
+    description: >
+      Relecture complète de l'AO, questions de clarification au maître d'ouvrage,
+      collecte des pièces administratives et de la caution bancaire.
+    is_blocking_next: false
+    typical_duration_days: 3
+    prerequisites: ["PHASE_0"]
+    typical_actions:
+      - "Relecture AO complète et liste des questions de clarification"
+      - "Collecte des pièces administratives (RCCM, DGI, CNPS, bilans, statuts)"
+      - "Demande et obtention de la caution bancaire de soumission"
+  - id: PHASE_2
+    name: "Mobilisation équipe & références"
+    description: >
+      Mobilisation des profils demandés, vérification de leur disponibilité,
+      identification et collecte des références similaires avec attestations.
+    is_blocking_next: false
+    typical_duration_days: 4
+    prerequisites: ["PHASE_0"]
+    typical_actions:
+      - "Mobilisation des profils et vérification de disponibilité (RH)"
+      - "Actualisation des CVs aux formats exigés"
+      - "Collecte des références similaires et attestations de bonne fin"
+  - id: PHASE_3
+    name: "Rédaction offre technique & financière"
+    description: >
+      Rédaction du corpus technique (méthodologie, planning, profils) et montage
+      de l'offre financière (BPU, détail des coûts, marge).
+    is_blocking_next: false
+    typical_duration_days: 6
+    prerequisites: ["PHASE_1", "PHASE_2"]
+    typical_actions:
+      - "Rédaction de l'offre technique (méthodologie, planning, profils)"
+      - "Montage de l'offre financière (BPU, détail des coûts)"
+  - id: PHASE_4
+    name: "Revue, validation & soumission"
+    description: >
+      Revue interne croisée, validation Direction Générale, signature et dépôt
+      dans les délais.
+    is_blocking_next: false
+    typical_duration_days: 2
+    prerequisites: ["PHASE_3"]
+    typical_actions:
+      - "Revue interne croisée (technique + commercial + administratif)"
+      - "Validation Direction Générale et signature"
+      - "Dépôt / soumission avant la deadline"

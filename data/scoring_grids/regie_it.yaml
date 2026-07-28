@@ -1,0 +1,35 @@
+# Grille d'évaluation standard — Régie / prestation IT.
+# Utilisée comme filet de sécurité quand l'AO ne contient pas de grille explicite
+# et que le LLM n'en dérive aucune. Les critères chargés ici sont marqués is_inferred=True.
+# Total max_points = 100 (aligné sur une notation technique /100).
+doc_type: regie_it
+label: "Régie / prestation IT (grille standard Neurones)"
+criteria:
+  - id: "exp_societe"
+    label: "Expérience et références de la société sur prestations similaires"
+    max_points: 20
+    category: "Expérience"
+  - id: "ref_similaires"
+    label: "Références de projets similaires avec attestations de bonne fin"
+    max_points: 15
+    category: "Expérience"
+  - id: "profils_cles"
+    label: "Qualification et expérience des profils clés proposés (CV)"
+    max_points: 20
+    category: "RH"
+  - id: "methodologie"
+    label: "Méthodologie d'intervention et organisation proposée"
+    max_points: 15
+    category: "Méthodologie"
+  - id: "planning"
+    label: "Planning, disponibilité et capacité de mobilisation"
+    max_points: 10
+    category: "Méthodologie"
+  - id: "certifications"
+    label: "Certifications techniques et agréments pertinents"
+    max_points: 10
+    category: "Technique"
+  - id: "qualite_offre"
+    label: "Qualité, clarté et conformité de l'offre technique"
+    max_points: 10
+    category: "Offre"

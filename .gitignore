@@ -1,0 +1,64 @@
+# ── Secrets (jamais committer) ─────────────────────────────────────────────
+.env.prod
+.env
+backend/.env
+backend/.env.prod
+backend/.env.vps
+*.env.local
+docker-compose.override.yml
+# ── Data / volumes Docker (trop lourds, hors-repo) ─────────────────────────
+data/chromadb/
+data/bm25_index/
+data/local_db/
+data/uploads/
+data/ged/
+data/score_cache/
+data/ollama_models/
+data/debug/
+data/score_cache/
+ollama_models/
+
+# ── Dossiers temporaires ────────────────────────────────────────────────────
+steph/
+OneDrive_*/
+*.bak/
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+backend/.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# ── Node / Next.js ───────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/.next-cache/
+frontend/out/
+*.tsbuildinfo
+
+# ── Fichiers locaux non versionnés ──────────────────────────────────────────
+*.zip
+commande.txt
+analyze_template.py
+vps_confrontation.py
+resync_orders.py
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.claude/
+# logs runtime (non versionnés)
+*.log
+backend/run_std*.log
+frontend/run_std*.log
+*.pdf

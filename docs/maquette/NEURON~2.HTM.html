@@ -1,0 +1,1272 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neurones · Cockpit — maquette v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0A0B0C; --ink-2:#131416; --ink-3:#1D1F22; --ink-4:#2A2D31;
+  --paper:#F5F2EC; --paper-2:#FBF9F5; --card:#FFFFFF;
+  --line:#E6E1D6; --line-2:#D2CBBB; --hair:#F0ECE3;
+  --t1:#0A0B0C; --t2:#57534A; --t3:#6F6A5D;
+  --brand:#F79C31; --brand-2:#FBBE71; --brand-deep:#9C5309; --brand-soft:#FDF1E1; --brand-line:#F2D6AE;
+  --pos:#1F6A55; --pos-soft:#E4EFEA; --pos-line:#C9DED6;
+  --neg:#A4372A; --neg-soft:#F9E8E3; --neg-line:#EFD3CB;
+  --wat:#7C6224; --wat-soft:#F3ECDA; --wat-line:#E5D8B8;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --sans:"Inter",system-ui,-apple-system,sans-serif;
+  --disp:"Outfit","Inter",sans-serif;
+  --r1:8px; --r2:12px; --r3:18px; --r4:24px;
+  --sh1:0 1px 2px rgba(16,14,10,.05);
+  --sh2:0 1px 2px rgba(16,14,10,.04), 0 14px 32px -18px rgba(16,14,10,.22);
+  --sh3:0 24px 60px -22px rgba(16,14,10,.36);
+  --ring:0 0 0 4px rgba(247,156,49,.18);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--t1);font-family:var(--sans);font-size:15px;line-height:1.58;-webkit-font-smoothing:antialiased}
+::selection{background:rgba(247,156,49,.26)}
+button{font-family:inherit}
+h1,h2,h3,h4{font-family:var(--disp);font-weight:400;letter-spacing:-.02em;margin:0}
+.num{font-variant-numeric:tabular-nums lining-nums}
+.mono{font-family:var(--mono);font-size:12px;color:var(--t2);font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* =========== 1. AUTHENTIFICATION =========== */
+.auth{display:grid;grid-template-columns:1.02fr .98fr;min-height:100vh}
+.auth.gone{display:none}
+.auth-l{
+  position:relative;overflow:hidden;background:linear-gradient(155deg,#1D1F22 0%,#0A0B0C 62%);
+  color:#fff;padding:52px 56px;display:flex;flex-direction:column;justify-content:space-between
+}
+.auth-l::before{
+  content:"";position:absolute;left:-190px;top:50%;transform:translateY(-50%);width:760px;height:760px;
+  background:repeating-radial-gradient(circle at 0 50%,transparent 0 74px,rgba(247,156,49,.30) 74px 76px);
+  -webkit-mask-image:radial-gradient(circle at 0 50%,#000 0 46%,transparent 74%);
+  mask-image:radial-gradient(circle at 0 50%,#000 0 46%,transparent 74%);pointer-events:none
+}
+.auth-l>*{position:relative;z-index:1}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--brand);display:inline-block}
+.auth-kick{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:11px}
+.auth-l h1{font-size:46px;font-weight:200;line-height:1.06;color:#fff;max-width:15ch;margin:0 0 18px}
+.auth-l h1 em{font-style:normal;color:var(--brand-2);font-weight:300}
+.auth-l p{color:rgba(255,255,255,.66);font-size:16px;max-width:44ch;margin:0}
+.auth-meta{display:flex;gap:34px;flex-wrap:wrap}
+.auth-meta div{min-width:0}
+.auth-meta b{display:block;font-family:var(--disp);font-weight:300;font-size:26px;color:#fff;letter-spacing:-.02em}
+.auth-meta span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.42);margin-top:5px}
+
+.auth-r{background:var(--paper-2);padding:52px 56px;display:flex;flex-direction:column;justify-content:center}
+.auth-box{width:100%;max-width:452px;margin:0 auto}
+.auth-logo{display:block;height:30px;width:auto;margin-bottom:38px}
+.auth-r h2{font-size:27px;font-weight:400;margin:0 0 6px}
+.auth-r .sub{color:var(--t2);font-size:14.5px;margin:0 0 28px}
+.fgrp{margin-bottom:14px}
+.fgrp label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);margin-bottom:7px}
+.fgrp input{
+  width:100%;padding:13px 15px;font-family:var(--sans);font-size:14.5px;color:var(--t1);
+  background:var(--card);border:1px solid var(--line-2);border-radius:var(--r2);box-shadow:var(--sh1);outline:0
+}
+.fgrp input::placeholder{color:var(--t3)}
+.fgrp input:focus{border-color:var(--brand);box-shadow:var(--ring)}
+.frow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 22px}
+.frow a{font-size:13px;color:var(--t2);text-decoration:none;border-bottom:1px solid var(--line-2)}
+.frow a:hover{color:var(--brand-deep);border-color:var(--brand)}
+.chk{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--t2)}
+.chk input{width:16px;height:16px;accent-color:var(--brand)}
+.bmain{
+  width:100%;padding:14px 18px;border:0;border-radius:var(--r2);cursor:pointer;
+  background:linear-gradient(180deg,var(--ink-3),var(--ink));color:#fff;font-size:14.5px;font-weight:500;
+  box-shadow:var(--sh2);transition:transform .14s,box-shadow .14s
+}
+.bmain:hover{transform:translateY(-1px);box-shadow:var(--sh3)}
+.bmain:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.sep{display:flex;align-items:center;gap:14px;margin:30px 0 20px;font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3)}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+.plist{display:grid;gap:9px}
+.pcard{
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;cursor:pointer;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r3);padding:12px 15px;
+  box-shadow:var(--sh1);transition:border-color .16s,box-shadow .16s,transform .16s
+}
+.pcard:hover{border-color:var(--brand);box-shadow:var(--ring);transform:translateY(-1px)}
+.pcard:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.pav{
+  width:38px;height:38px;flex:0 0 38px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(180deg,var(--ink-4),var(--ink));color:#fff;font-family:var(--mono);font-size:11px;font-weight:500
+}
+.pcard:hover .pav{background:linear-gradient(180deg,var(--brand-2),var(--brand));color:#5A3003}
+.pc-t{flex:1;min-width:0}
+.pc-t b{display:block;font-size:14px;font-weight:500}
+.pc-t span{display:block;font-size:12.5px;color:var(--t2);margin-top:1px}
+.pc-a{font-family:var(--mono);font-size:13px;color:var(--t3)}
+.pcard:hover .pc-a{color:var(--brand-deep)}
+.auth-foot{margin-top:30px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--t3);line-height:1.9}
+
+@media (max-width:1000px){
+  .auth{grid-template-columns:1fr}
+  .auth-l{padding:38px 26px;gap:30px}
+  .auth-l h1{font-size:34px}
+  .auth-l::before{width:520px;left:-150px}
+  .auth-r{padding:38px 26px}
+}
+
+/* =========== 2. COQUE APPLICATIVE =========== */
+.app{display:none;grid-template-columns:78px minmax(0,1fr)}
+.app.live{display:grid}
+
+.rail{
+  background:var(--ink);position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;align-items:center;gap:5px;padding:16px 9px 14px
+}
+.rail-mk{width:38px;height:38px;margin-bottom:16px;flex:0 0 auto}
+.rl{
+  width:60px;height:58px;border-radius:14px;border:0;background:none;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  color:rgba(255,255,255,.52);font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+  transition:color .16s,background .16s
+}
+.rl svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.rl:hover{color:#fff;background:rgba(255,255,255,.07)}
+.rl[aria-current="true"]{color:#fff;background:rgba(247,156,49,.16);box-shadow:inset 0 0 0 1px rgba(247,156,49,.42)}
+.rl:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.rail-sp{flex:1}
+.rail-av{
+  width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.16);cursor:pointer;
+  background:rgba(255,255,255,.07);color:#fff;font-family:var(--mono);font-size:10.5px;font-weight:500
+}
+.rail-av:hover{border-color:var(--brand);color:var(--brand-2)}
+
+.hdr{
+  position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:13px 30px;
+  background:rgba(245,242,236,.86);backdrop-filter:saturate(150%) blur(10px);border-bottom:1px solid var(--line)
+}
+.hdr-t{min-width:0}
+.hdr-t b{display:block;font-family:var(--disp);font-weight:400;font-size:17px;letter-spacing:-.015em;line-height:1.2}
+.hdr-t span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--t3);margin-top:3px}
+.cmd{
+  margin-left:auto;flex:0 1 380px;display:flex;align-items:center;gap:10px;background:var(--card);
+  border:1px solid var(--line-2);border-radius:999px;padding:9px 16px;box-shadow:var(--sh1);transition:border-color .16s,box-shadow .16s
+}
+.cmd:focus-within{border-color:var(--brand);box-shadow:var(--ring)}
+.cmd svg{width:15px;height:15px;stroke:var(--t3);fill:none;stroke-width:1.6;flex:0 0 15px}
+.cmd input{flex:1;min-width:0;border:0;outline:0;background:none;font-family:var(--sans);font-size:13.5px;color:var(--t1)}
+.cmd input::placeholder{color:var(--t3)}
+.cmd kbd{font-family:var(--mono);font-size:9.5px;color:var(--t3);border:1px solid var(--line);border-radius:5px;padding:2px 6px;background:var(--paper-2)}
+.snap{
+  display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+  color:var(--pos);background:var(--pos-soft);border:1px solid var(--pos-line);border-radius:999px;padding:6px 12px;white-space:nowrap
+}
+.snap i{width:6px;height:6px;border-radius:50%;background:var(--pos);display:block}
+.pswitch{
+  display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line-2);
+  border-radius:999px;padding:5px 14px 5px 6px;cursor:pointer;box-shadow:var(--sh1);font-size:13px;transition:border-color .16s,box-shadow .16s
+}
+.pswitch:hover{border-color:var(--brand);box-shadow:var(--ring)}
+.pswitch .pav{width:28px;height:28px;flex:0 0 28px;border-radius:9px;font-size:10px}
+.pswitch b{font-weight:500}
+.pswitch span{font-family:var(--mono);font-size:11px;color:var(--t3)}
+
+.canvas{padding:30px 34px 76px;max-width:none;width:100%}
+.sect{display:none}
+.sect.live{display:block}
+
+/* --- panneau brief, encre --- */
+.brief{
+  position:relative;overflow:hidden;border-radius:var(--r4);padding:32px 36px 30px;margin-bottom:20px;
+  background:linear-gradient(150deg,#22252A 0%,#0A0B0C 66%);color:#fff;box-shadow:var(--sh2)
+}
+.brief::after{
+  content:"";position:absolute;right:-130px;top:-130px;width:460px;height:460px;pointer-events:none;
+  background:repeating-radial-gradient(circle at 100% 100%,transparent 0 56px,rgba(247,156,49,.30) 56px 57.5px);
+  -webkit-mask-image:radial-gradient(circle at 100% 100%,#000 0 52%,transparent 78%);
+  mask-image:radial-gradient(circle at 100% 100%,#000 0 52%,transparent 78%)
+}
+.brief>*{position:relative;z-index:1}
+.brief-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.brief h2{font-size:29px;font-weight:300;color:#fff;line-height:1.16;max-width:34ch;margin:0 0 12px}
+.brief p{color:rgba(255,255,255,.7);font-size:15.5px;line-height:1.68;max-width:104ch;margin:0 0 18px}
+.brief em{font-style:normal;color:var(--brand-2)}
+.brief-r{display:flex;flex-wrap:wrap;gap:9px}
+.bpill{
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;padding:6px 12px;border-radius:999px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.82)
+}
+.bpill.hot{background:rgba(247,156,49,.16);border-color:rgba(247,156,49,.44);color:var(--brand-2)}
+
+/* --- grille bento --- */
+.bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.t3{grid-column:span 3}.t4{grid-column:span 4}.t5{grid-column:span 5}
+.t6{grid-column:span 6}.t7{grid-column:span 7}.t8{grid-column:span 8}.t12{grid-column:span 12}
+.tile{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r3);padding:19px 21px 21px;
+  box-shadow:var(--sh2);transition:border-color .18s
+}
+.tile:hover{border-color:var(--line-2)}
+.tile--q{background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.tile-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:15px}
+.tile-h h3{font-size:17px;font-weight:400}
+.tile-k{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);white-space:nowrap}
+.stat-v{font-family:var(--disp);font-weight:300;font-size:44px;letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums lining-nums}
+.stat-u{font-family:var(--mono);font-size:11px;color:var(--t3);margin-left:8px;letter-spacing:.06em}
+.stat-d{font-family:var(--mono);font-size:11.5px;margin-top:12px;display:flex;align-items:center;gap:7px}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.wat{color:var(--wat)}
+.spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:16px}
+.spark i{flex:1;background:var(--hair);border-radius:2px}
+.spark i.on{background:linear-gradient(180deg,var(--brand-2),var(--brand))}
+
+.bars{display:grid;gap:13px}
+.bar-r{display:grid;grid-template-columns:1fr 78px;gap:14px;align-items:center}
+.bar-n{font-size:13.5px;min-width:0}
+.bar-n span{display:block;font-family:var(--mono);font-size:11px;color:var(--t3);margin-top:3px}
+.bar-t{height:8px;border-radius:999px;background:#EFEAE0;overflow:hidden;box-shadow:inset 0 1px 2px rgba(16,14,10,.07);margin-top:7px}
+.bar-t i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--brand-2),var(--brand))}
+.bar-t i.g{background:linear-gradient(90deg,#3E9179,var(--pos))}
+.bar-t i.r{background:linear-gradient(90deg,#C25A4A,var(--neg))}
+.bar-t i.w{background:linear-gradient(90deg,#A98C43,var(--wat))}
+.bar-v{font-family:var(--mono);font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums}
+
+.lst{display:grid}
+.lst-i{display:grid;grid-template-columns:26px 1fr auto;gap:12px;padding:12px 0;border-top:1px solid var(--hair);align-items:baseline}
+.lst-i:first-child{border-top:0;padding-top:2px}
+.lst-i>b{font-family:var(--mono);font-size:9.5px;color:var(--t3);font-weight:400;padding-top:3px}
+.lst-t{min-width:0}
+.lst-t b{display:block;font-size:13.5px;font-weight:500;line-height:1.4}
+.lst-t span{display:block;font-size:12.5px;color:var(--t2);margin-top:2px;line-height:1.5}
+.tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;padding:4px 10px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+.tag.r{background:var(--neg-soft);color:var(--neg);border-color:var(--neg-line)}
+.tag.w{background:var(--wat-soft);color:var(--wat);border-color:var(--wat-line)}
+.tag.g{background:var(--pos-soft);color:var(--pos);border-color:var(--pos-line)}
+.tag.a{background:var(--brand-soft);color:var(--brand-deep);border-color:var(--brand-line)}
+.tag.n{background:#F1EDE3;color:var(--t2);border-color:var(--line)}
+
+.mk{font-family:var(--mono);font-size:12.5px;background:var(--brand-soft);color:var(--brand-deep);padding:2px 5px;border-radius:4px}
+.mk.r{background:var(--neg-soft);color:var(--neg)}
+.mk.g{background:var(--pos-soft);color:var(--pos)}
+.foot-n{font-family:var(--mono);font-size:10.5px;line-height:1.7;color:var(--t3);border-left:2px solid var(--brand-line);padding-left:12px;margin-top:16px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--t3);font-weight:400;text-align:left;padding:0 9px 9px;border-bottom:1px solid var(--line-2)}
+.tbl td{padding:10px 9px;border-bottom:1px solid var(--hair);vertical-align:top}
+.tbl tbody tr:hover td{background:var(--paper-2)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .r{text-align:right}
+.btn{
+  font-size:12.5px;padding:8px 15px;border-radius:999px;border:1px solid var(--line-2);
+  background:var(--card);color:var(--t1);cursor:pointer;box-shadow:var(--sh1);transition:border-color .16s,box-shadow .16s
+}
+.btn:hover{border-color:var(--brand);box-shadow:var(--ring)}
+.btn.p{background:linear-gradient(180deg,var(--ink-3),var(--ink));border-color:var(--ink);color:#fff}
+.btn.p:hover{background:linear-gradient(180deg,#33363B,var(--ink-2))}
+.btn:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.acts{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
+
+/* --- copilote --- */
+.thread{max-width:none}
+.ba p{max-width:96ch}
+.dec-h p{max-width:110ch}
+.chips{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:24px}
+.chip{
+  background:var(--card);border:1px solid var(--line);border-radius:999px;padding:9px 15px;font-size:13px;
+  cursor:pointer;color:var(--t1);box-shadow:var(--sh1);transition:border-color .16s,color .16s,box-shadow .16s
+}
+.chip:hover{border-color:var(--brand);color:var(--brand-deep);box-shadow:var(--ring)}
+.chip:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.bq{display:flex;gap:13px;align-items:flex-start;margin-bottom:16px}
+.bq .pav{width:30px;height:30px;flex:0 0 30px;border-radius:10px;font-size:9.5px}
+.bq p{margin:0;font-family:var(--disp);font-size:21px;font-weight:400;letter-spacing:-.015em;line-height:1.35}
+.ba{background:var(--card);border:1px solid var(--line);border-radius:var(--r3);padding:22px 24px;box-shadow:var(--sh2)}
+.ba-k{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--brand-deep);display:flex;align-items:center;gap:9px;margin-bottom:13px}
+.ba-k i{width:6px;height:6px;border-radius:50%;background:var(--brand);display:block}
+.ba p{margin:0 0 16px;font-size:15.5px;line-height:1.7}
+.lim{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r2);padding:16px 18px;margin-top:18px}
+.lim ul{margin:9px 0 0;padding-left:19px}
+.lim li{font-size:13px;color:var(--t2);margin-bottom:6px;line-height:1.55}
+
+/* --- arbitrages --- */
+.dec{background:var(--card);border:1px solid var(--line);border-radius:var(--r3);box-shadow:var(--sh2);overflow:hidden;margin-bottom:18px}
+.dec-h{padding:19px 22px 17px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.dec-h h3{font-size:19px;margin-bottom:5px}
+.dec-h p{margin:0;font-size:13.5px;color:var(--t2);max-width:76ch;line-height:1.6}
+.dec-b{padding:20px 22px 22px}
+.opts{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(236px,1fr))}
+.opt{border:1px solid var(--line);border-radius:var(--r2);padding:15px 16px;background:var(--paper-2)}
+.opt.reco{border-color:var(--brand);background:var(--brand-soft);box-shadow:var(--ring)}
+.opt-h{display:flex;align-items:baseline;gap:9px;margin-bottom:9px}
+.opt-h b{font-size:14px;font-weight:500}
+.opt-n{font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+.opt.reco .opt-n{color:var(--brand-deep)}
+.opt p{margin:0 0 11px;font-size:12.5px;color:var(--t2);line-height:1.55}
+.cons{display:grid;grid-template-columns:1fr auto;gap:10px;font-size:12px;padding:7px 0;border-top:1px solid rgba(16,14,10,.07);align-items:baseline}
+
+/* --- reglages --- */
+.pblk{background:var(--card);border:1px solid var(--line);border-radius:var(--r3);box-shadow:var(--sh2);overflow:hidden;margin-bottom:16px}
+.pblk-h{padding:17px 21px 15px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.pblk-h h3{font-size:18px;margin-bottom:2px}
+.pblk-h p{margin:0;font-size:13px;color:var(--t2)}
+.pblk-b{padding:8px 21px 18px}
+.fld{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;padding:13px 0;border-bottom:1px solid var(--hair)}
+.fld:last-child{border-bottom:0}
+.fld b{display:block;font-size:13.5px;font-weight:500}
+.fld span{display:block;font-size:12.5px;color:var(--t2);margin-top:2px;line-height:1.5}
+.inp{font-family:var(--mono);font-size:12.5px;width:84px;text-align:right;padding:7px 10px;border:1px solid var(--line-2);border-radius:var(--r1);background:var(--paper-2);color:var(--t1);outline:0}
+.inp:focus{border-color:var(--brand);box-shadow:var(--ring)}
+.sw{width:42px;height:23px;border-radius:999px;background:var(--line-2);position:relative;border:0;cursor:pointer;flex:0 0 42px;transition:background .16s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:var(--sh1);transition:left .16s}
+.sw[aria-checked="true"]{background:var(--brand)}
+.sw[aria-checked="true"]::after{left:21px}
+.sw:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+@media (max-width:1180px){
+  .t3,.t4,.t5{grid-column:span 6}.t7,.t8{grid-column:span 12}
+}
+@media (max-width:820px){
+  .app.live{grid-template-columns:1fr}
+  .rail{position:static;height:auto;width:100%;flex-direction:row;justify-content:flex-start;overflow-x:auto;padding:9px 12px}
+  .rail-mk{margin:0 10px 0 0;width:30px;height:30px}
+  .rail-sp{display:none}
+  .rl{width:58px;height:50px}
+  .hdr{padding:12px 16px;flex-wrap:wrap}
+  .cmd{order:3;flex:1 1 100%;margin-left:0;max-width:none}
+  .canvas{padding:20px 16px 60px}
+  .brief{padding:24px 22px}
+  .brief h2{font-size:23px}
+  .t3,.t4,.t5,.t6,.t7,.t8{grid-column:span 12}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* --- select, utilisateur, mot de passe --- */
+.selw{position:relative}
+.selw select{
+  width:100%;padding:13px 42px 13px 15px;font-family:var(--sans);font-size:14.5px;color:var(--t1);
+  background:var(--card);border:1px solid var(--line-2);border-radius:var(--r2);box-shadow:var(--sh1);
+  outline:0;appearance:none;-webkit-appearance:none;cursor:pointer
+}
+.selw select:hover{border-color:var(--brand)}
+.selw select:focus{border-color:var(--brand);box-shadow:var(--ring)}
+.selc{position:absolute;right:15px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:11px;color:var(--t3);pointer-events:none}
+.ucard{
+  display:flex;align-items:center;gap:13px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r3);padding:13px 15px;margin:0 0 16px;box-shadow:var(--sh1);
+  animation:uin .22s ease-out
+}
+@keyframes uin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.ucard .pav{width:40px;height:40px;flex:0 0 40px;border-radius:13px;font-size:11.5px}
+.uc-t{flex:1;min-width:0}
+.uc-t b{display:block;font-size:14.5px;font-weight:500}
+.uc-t span{display:block;font-family:var(--mono);font-size:11.5px;color:var(--t2);margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+.pwdw{position:relative;display:flex}
+.pwdw input{flex:1;padding-right:86px;letter-spacing:.12em}
+.reveal{
+  position:absolute;right:7px;top:50%;transform:translateY(-50%);border:0;background:var(--paper-2);
+  color:var(--t2);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:7px 11px;border-radius:999px;cursor:pointer
+}
+.reveal:hover{background:var(--brand-soft);color:var(--brand-deep)}
+.reveal:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.hint{margin:8px 0 0;font-size:12px;color:var(--t3);line-height:1.5}
+.hint.bad{color:var(--brand-deep)}
+.shake{animation:shk .34s}
+@keyframes shk{10%,90%{transform:translateX(-2px)}30%,70%{transform:translateX(3px)}50%{transform:translateX(-3px)}}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.32);border-top-color:#fff;border-radius:50%;margin-right:9px;vertical-align:-2px;animation:sp .6s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* --- affordances cliquables --- */
+.clk{cursor:pointer;position:relative;transition:background .14s}
+.clk:hover{background:var(--paper-2)}
+.lst-i.clk{border-radius:10px;padding-left:8px;padding-right:8px;margin-left:-8px;margin-right:-8px}
+.bar-r.clk{border-radius:10px;padding:7px 8px;margin:-7px -8px}
+.bar-r.clk:hover .bar-t i{filter:saturate(1.25)}
+.clk:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:10px}
+.tbl tr.clk td:last-child::after{content:"›";font-family:var(--mono);color:var(--t3);margin-left:9px}
+.hintline{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin:0 0 14px;display:flex;align-items:center;gap:9px}
+.hintline i{width:5px;height:5px;border-radius:50%;background:var(--brand);display:block;flex:0 0 5px}
+
+/* --- graphique de trajectoire --- */
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:190px;overflow:visible}
+.chart .gl{stroke:var(--hair);stroke-width:1}
+.chart .ln{fill:none;stroke:var(--brand);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.chart .ar{fill:rgba(247,156,49,.13)}
+.chart .pt{fill:#fff;stroke:var(--brand);stroke-width:2;transition:r .12s}
+.chart .hit{fill:transparent;cursor:pointer}
+.chart .hit:hover+.pt,.chart .pt.on{r:6.5}
+.chart .xl{font-family:var(--mono);font-size:9px;fill:var(--t3)}
+.tip{
+  position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-118%);transition:opacity .12s;
+  background:var(--ink);color:#fff;border-radius:9px;padding:8px 11px;white-space:nowrap;z-index:8;box-shadow:var(--sh3)
+}
+.tip.on{opacity:1}
+.tip b{display:block;font-family:var(--mono);font-size:13px;font-weight:500}
+.tip span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:3px}
+.spark i{cursor:pointer}
+.spark i:hover{background:linear-gradient(180deg,var(--brand),var(--brand-deep))}
+
+/* --- tiroir de détail --- */
+.ovl{position:fixed;inset:0;background:rgba(10,11,12,.42);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.ovl.on{opacity:1;pointer-events:auto}
+.drw{
+  position:fixed;top:0;right:0;bottom:0;width:min(456px,94vw);background:var(--paper-2);z-index:41;
+  border-left:1px solid var(--line);box-shadow:var(--sh3);transform:translateX(102%);transition:transform .26s cubic-bezier(.22,.7,.28,1);
+  display:flex;flex-direction:column
+}
+.drw.on{transform:none}
+.drw-h{padding:22px 24px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.drw-k{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
+.drw-x{border:1px solid var(--line-2);background:var(--card);border-radius:999px;width:28px;height:28px;cursor:pointer;color:var(--t2);font-size:15px;line-height:1}
+.drw-x:hover{border-color:var(--brand);color:var(--brand-deep)}
+.drw-h h3{font-size:21px;line-height:1.25;margin-bottom:8px}
+.drw-b{padding:22px 24px 30px;overflow-y:auto;flex:1}
+.drw-b>p{margin:0 0 18px;font-size:14.5px;line-height:1.68;color:var(--t1)}
+.kv{display:grid;gap:0;border:1px solid var(--line);border-radius:var(--r2);background:var(--card);overflow:hidden;margin-bottom:18px}
+.kv div{display:flex;justify-content:space-between;gap:14px;padding:11px 14px;border-top:1px solid var(--hair);font-size:13px}
+.kv div:first-child{border-top:0}
+.kv span{color:var(--t2)}
+.kv b{font-family:var(--mono);font-size:12.5px;font-weight:500;text-align:right}
+.mini{display:flex;align-items:flex-end;gap:5px;height:64px;margin:4px 0 8px}
+.mini i{flex:1;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,var(--brand-2),var(--brand));position:relative}
+.mini i.dim{background:#E7E1D5}
+.mlab{display:flex;gap:5px;font-family:var(--mono);font-size:8.5px;color:var(--t3);margin-bottom:18px}
+.mlab span{flex:1;text-align:center}
+</style>
+
+<div class="auth" id="auth">
+  <div class="auth-l">
+    <p class="auth-kick"><span class="dot"></span>Neurones · plateforme décisionnelle</p>
+    <div>
+      <h1>Décider sur des <em>signaux</em>, pas sur des tableaux.</h1>
+      <p>Le cockpit relit le miroir Odoo chaque nuit, isole ce qui a bougé et pose l'arbitrage sur la table. La décision reste la vôtre.</p>
+    </div>
+    <div class="auth-meta">
+      <div><b>04:12</b><span>instantané quotidien</span></div>
+      <div><b>147</b><span>comptes suivis</span></div>
+      <div><b>5</b><span>profils métier</span></div>
+    </div>
+  </div>
+  <div class="auth-r">
+    <div class="auth-box">
+      <img class="auth-logo" src="data:image/png;base64,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" alt="Neurones" width="107" height="30">
+      <h2>Connexion</h2>
+      <p class="sub">Authentification unique Odoo &middot; second facteur actif</p>
+
+      <div class="fgrp">
+        <label for="profil">Profil d'accès</label>
+        <div class="selw">
+          <select id="profil">
+            <option value="dg">Direction générale — arbitrage &amp; atterrissage</option>
+            <option value="dc">Direction commerciale — pipeline &amp; transformation</option>
+            <option value="do">Direction des opérations — livraison &amp; fournisseurs</option>
+            <option value="df">Direction financière — encaissement &amp; marge</option>
+            <option value="am">Account manager — portefeuille &amp; prochaine action</option>
+          </select>
+          <span class="selc" aria-hidden="true">&#9662;</span>
+        </div>
+      </div>
+
+      <div class="ucard" id="ucard" aria-live="polite"></div>
+
+      <div class="fgrp">
+        <label for="pwd">Mot de passe</label>
+        <div class="pwdw">
+          <input id="pwd" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password">
+          <button class="reveal" id="reveal" type="button" aria-pressed="false">Afficher</button>
+        </div>
+        <p class="hint" id="hint">Maquette : la saisie n'est pas vérifiée, mais le champ doit être rempli.</p>
+      </div>
+
+      <div class="frow">
+        <label class="chk"><input type="checkbox" checked> Session de 12 h</label>
+        <a href="#" onclick="return false">Mot de passe oublié</a>
+      </div>
+      <button class="bmain" id="go">Se connecter</button>
+      <p class="auth-foot">Maquette de démonstration — aucune donnée réelle.<br>Neurones Côte d'Ivoire · exercice 2026</p>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <nav class="rail" aria-label="Navigation principale">
+  <svg class="rail-mk" viewBox="0 0 40 40" aria-hidden="true">
+    <circle cx="8.5" cy="20" r="3.3" fill="#F79C31"/>
+    <path d="M16.5 11.4a12.4 12.4 0 0 1 0 17.2" stroke="#F79C31" stroke-width="2.3" fill="none" stroke-linecap="round"/>
+    <path d="M23.5 7a18.9 18.9 0 0 1 0 26" stroke="#F79C31" stroke-width="2.3" fill="none" stroke-linecap="round" opacity=".7"/>
+    <path d="M30.5 2.8a25.4 25.4 0 0 1 0 34.4" stroke="#F79C31" stroke-width="2.3" fill="none" stroke-linecap="round" opacity=".42"/>
+  </svg>
+  <button class="rl" data-s="cockpit" aria-current="true" title="Cockpit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v6H4zM13 4h7v10h-7zM4 12h7v8H4zM13 16h7v4h-7z"/></svg>Cockpit</button>
+  <button class="rl" data-s="copilote" aria-current="false" title="Copilote"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.9L19 9.8l-5.1 1.9L12 17l-1.9-5.3L5 9.8l5.1-1.9zM18 15.5l.9 2.3 2.1.8-2.1.8-.9 2.1-.9-2.1-2.1-.8 2.1-.8z"/></svg>Copilote</button>
+  <button class="rl" data-s="arbitrages" aria-current="false" title="Arbitrages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 8h12M6 8l-3 6h6zM18 8l3 6h-6zM8 20h8"/></svg>Arbitrages</button>
+  <button class="rl" data-s="donnees" aria-current="false" title="Données"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6M4.5 12v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6"/></svg>Données</button>
+  <button class="rl" data-s="reglages" aria-current="false" title="Réglages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h9M17 17h3"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="15" cy="17" r="2"/></svg>Réglages</button>
+    <div class="rail-sp"></div>
+    <button class="rail-av" id="rav" title="Revenir à la connexion">DG</button>
+  </nav>
+  <div>
+    <header class="hdr">
+      <div class="hdr-t"><b id="hTitle">Cockpit</b><span id="hSub">Direction générale · semaine 31</span></div>
+      <div class="cmd">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
+        <input id="cmdi" placeholder="Demandez au Copilote…" aria-label="Interroger le Copilote">
+        <kbd>⌘K</kbd>
+      </div>
+      <span class="snap"><i></i><span id="hSnap">Instantané 28/07 · 04:12</span></span>
+      <button class="pswitch" id="pswitch" title="Changer de profil">
+        <span class="pav" id="pAv">DG</span><b id="pName">Direction générale</b><span aria-hidden="true">▾</span>
+      </button>
+    </header>
+    <main class="canvas">
+      <section class="sect live" id="s-cockpit" aria-label="Cockpit"></section>
+      <section class="sect" id="s-copilote" aria-label="Copilote"></section>
+      <section class="sect" id="s-arbitrages" aria-label="Arbitrages"></section>
+      <section class="sect" id="s-donnees" aria-label="Données"></section>
+      <section class="sect" id="s-reglages" aria-label="Réglages"></section>
+    </main>
+  </div>
+</div>
+<script>
+var P = {
+dg:{c:"DG",n:"Direction générale",r:"Arbitrage & atterrissage",sub:"semaine 31",snap:"Instantané 28/07 · 04:12",
+ brief:{k:"Brief de la nuit · 04:12",h:"Trois choses ont bougé cette nuit.",
+  p:"L'atterrissage recule de <em>92 M FCFA</em> en sept jours, mais l'essentiel tient à un seul dossier repoussé au T4 — le reste du portefeuille est stable. Le carnet, lui, se tient à <em>1 465 M</em>. Le vrai sujet du jour n'est pas le chiffre, c'est la <em>concentration</em> : les cinq premiers comptes pèsent désormais 53 % du facturé, contre 44 % il y a un an.",
+  pills:[["1 arbitrage en attente",1],["4 signaux nouveaux",0],["Miroir Odoo · 11 tables",0]]},
+ stats:[{l:"Atterrissage 2026",v:"4 088",u:"M FCFA",d:"−7,4 % vs budget",s:"neg",sp:[62,58,60,55,52,50,47,44]},
+        {l:"Carnet de commandes",v:"1 465",u:"M FCFA",d:"+4,5 % vs S1",s:"pos",sp:[40,44,42,48,52,58,63,70]},
+        {l:"Visibilité",v:"3,4",u:"mois",d:"seuil interne 4,0",s:"wat",sp:[72,68,66,60,58,54,50,48]}],
+ bars:{t:"Où se concentre le risque client",k:"Part du facturé 12 mois",
+  rows:[["Ivoire Énergie","4 affaires · 2 practices","412 M",100,""],
+        ["Banque du Littoral","TMA + infrastructure","318 M",77,""],
+        ["Téléco Lagune","1 affaire cadre, échéance mars","264 M",64,"w"],
+        ["Raffinerie du Golfe","renouvellement en juin","198 M",48,""],
+        ["Port Autonome Sud","mono-projet, sans suite identifiée","141 M",34,"r"]],
+  note:"53 % du facturé sur 5 comptes · +9 pts en 12 mois. Deux d'entre eux arrivent à échéance contractuelle avant mars."},
+ queue:{t:"Sur votre table",k:"3 décisions",
+  items:[["Projet Lagune : tenir ou décaler","Décalage au T4 déjà acté côté client. Tenir coûte 2 consultants immobilisés 6 semaines.","tranche cette semaine","r"],
+         ["Renouvellement Raffinerie du Golfe","Périmètre proposé en baisse de 18 %. Position de négociation à arrêter avant le 12/08.","sous 15 jours","w"],
+         ["Recrutement practice Cybersécurité","2 postes ouverts depuis 74 jours. Le carnet couvre 5,1 mois sur cette practice.","à confirmer","a"]]},
+ alerts:{t:"Signaux de la nuit",k:"depuis 04:12 hier",
+  items:[["Port Autonome Sud n'a pas commandé depuis 141 jours","Rythme historique : une commande tous les 52 jours.","rupture","r"],
+         ["Marge apparente en baisse sur Intégration","−3,1 pts sur le trimestre, concentrés sur deux affaires au forfait.","à creuser","w"],
+         ["Deux avenants signés non reflétés en facturation","Écart de 34 M entre engagement contractuel et lignes émises.","écart","w"],
+         ["Banque du Littoral a ouvert une consultation","Détectée hors Odoo, remontée par l'account manager le 27/07.","opportunité","g"]]},
+ cov:[["Facturation","invoices, invoice_lines","04:12 ce jour","complet","g"],
+      ["Commandes","sale_orders","04:12 ce jour","complet","g"],
+      ["Pipeline","opportunities","04:12 ce jour","partiel · 8 trimestres d'historique","w"],
+      ["Temps passé","—","absent","non instrumenté","r"]],
+ ask:[{q:"Quels comptes ont décroché de leur rythme de commande ?",i:0},
+      {q:"Où atterrit l'exercice si rien ne signe avant 90 jours ?",i:-1,why:"Le scénario existe, mais il dépend du pipeline pondéré : deux commerciaux n'ont pas encore deux trimestres d'historique d'instantanés."},
+      {q:"Quelle est la marge réelle par affaire ?",i:-1,why:"Non calculable : les feuilles de temps ne sont pas dans le miroir Odoo. Le cockpit ne montre que la marge apparente sur achats refacturés."},
+      {q:"Qu'est-ce qui a changé depuis lundi ?",i:-1,why:"Disponible dans le brief de la nuit, en tête du cockpit."}],
+ th:[{q:"Quels comptes ont décroché de leur rythme de commande ?",
+  a:"Quatre comptes sur 147 sont sortis de leur rythme, pour <span class='mk'>287 M FCFA</span> de commandes manquantes sur douze mois. Un seul est vraiment perdu — Port Autonome Sud, sans commande depuis 141 jours alors qu'il commandait tous les 52 jours. Les trois autres relèvent d'une réduction de périmètre au renouvellement, donc récupérables si vous rouvrez la discussion avant l'échéance.",
+  rows:[["Port Autonome Sud","141 j sans commande · rythme habituel 52 j","−141 M","perdu","r"],
+        ["Mutuelle Baobab","96 j sans commande · budget gelé annoncé","−68 M","gelé","w"],
+        ["Groupe Kossou","périmètre TMA réduit d'un tiers au renouvellement","−49 M","érosion","w"],
+        ["Assur Lagune","fin de projet non remplacée","−29 M","érosion","w"]],
+  meth:"Méthode · écart entre l'intervalle observé depuis la dernière commande et l'intervalle médian du compte sur 24 mois. Seuil de déclenchement : 2,5 × la médiane. Tables : sale_orders, partners. Instantané du 28/07 à 04:12."}],
+ dec:{obj:"Projet Lagune : tenir la date ou décaler au T4",
+  ctx:"Le client a acté en interne un décalage de six semaines sans le formaliser. Deux consultants seniors sont réservés sur la période. Le contrat ne prévoit pas d'indemnité d'immobilisation.",
+  opts:[["A","Tenir la date contractuelle","Facturation conforme au plan, mais deux consultants immobilisés six semaines sur un chantier qui n'avance pas.",0,[["Facturation T3","+180 M"],["Coût d'immobilisation","−62 M"],["Relation client","tendue"]]],
+        ["B","Décaler et redéployer","Décalage formalisé par avenant, équipe redéployée sur Banque du Littoral. L'atterrissage 2026 perd 180 M, le T1 2027 les récupère.",1,[["Facturation T3","−180 M"],["Coût d'immobilisation","0"],["Relation client","préservée"]]],
+        ["C","Décaler sans avenant","Statu quo apparent : rien n'est signé, l'engagement reste flou des deux côtés.",0,[["Facturation T3","incertaine"],["Risque contractuel","élevé"],["Relation client","ambiguë"]]]]}},
+
+dc:{c:"DC",n:"Direction commerciale",r:"Pipeline & transformation",sub:"pipeline T3",snap:"Instantané 28/07 · 04:12",
+ brief:{k:"Brief de la nuit · 04:12",h:"Le pipeline gonfle plus vite qu'il ne se transforme.",
+  p:"61 opportunités déclarées pour <em>2 840 M FCFA</em>, mais 38 % du montant dort depuis plus de soixante jours. Après correction des biais individuels, le forecast probable ressort à <em>836 M</em> contre 1 190 annoncés. L'écart n'est pas diffus : un seul portefeuille en explique la moitié.",
+  pills:[["23 affaires dormantes",1],["4 dates de clôture dépassées",0],["Moteur M5 · pondération calibrée",0]]},
+ stats:[{l:"Forecast annoncé",v:"1 190",u:"M FCFA",d:"déclaratif, non pondéré",s:"",sp:[50,54,58,60,62,66,70,74]},
+        {l:"Forecast probable",v:"836",u:"M FCFA",d:"−354 M après calibrage",s:"neg",sp:[48,50,49,52,50,53,52,55]},
+        {l:"Taux de transformation",v:"22",u:"%",d:"−4 pts vs 8 trimestres",s:"wat",sp:[64,62,60,58,55,52,50,48]}],
+ bars:{t:"Fiabilité par commercial",k:"Annoncé vs probable",
+  rows:[["K. Assamoi","annoncé 420 M · probable 231 M","55 %",55,"r"],
+        ["P. Koné","annoncé 265 M · probable 180 M","68 %",68,"w"],
+        ["A. Tanoh","annoncé 195 M · probable 141 M","72 %",72,"w"],
+        ["M. Diallo","annoncé 310 M · probable 284 M","92 %",92,"g"]],
+  note:"Le biais dominant n'est pas le montant, c'est la date : optimisme moyen de six semaines sur les clôtures, systématique chez deux commerciaux."},
+ queue:{t:"Sur votre table",k:"3 décisions",
+  items:[["Recadrer le portefeuille K. Assamoi","Neuf affaires à date dépassée, aucune requalifiée depuis mai.","cette semaine","r"],
+         ["Arbitrer la réponse à l'appel d'offres Lagune","Réponse à 40 M de coûts d'avant-vente, probabilité estimée 30 %.","avant le 05/08","w"],
+         ["Ouvrir la campagne cross-sell Cybersécurité","19 comptes équipés chez leurs pairs, pas chez nous.","à lancer","a"]]},
+ alerts:{t:"Signaux de la nuit",k:"depuis 04:12 hier",
+  items:[["Trois affaires ont perdu leur sponsor identifié","Contact principal parti ou changé de fonction, aucune reprise notée.","risque","r"],
+         ["Montant révisé à la baisse sur 5 opportunités","−214 M cumulés en une semaine, sans motif renseigné.","à creuser","w"],
+         ["Un motif de perte revient trop souvent","« Prix » sur 9 des 23 pertes du trimestre — dont 6 sans concurrent nommé.","à qualifier","w"],
+         ["Signal d'achat sur Groupe Kossou","Deux demandes de devis en 8 jours après 5 mois de silence.","opportunité","g"]]},
+ cov:[["Pipeline","opportunities","04:12 ce jour","complet","g"],
+      ["Historique du pipeline","snapshots_opportunities","04:12 ce jour","8 trimestres","g"],
+      ["Motifs de perte","opportunities.lost_reason","04:12 ce jour","renseigné à 78 %","w"],
+      ["Concurrence rencontrée","—","absent","non instrumenté","r"]],
+ ask:[{q:"Quel commercial a le pipeline le plus fragile ?",i:0},
+      {q:"Quelles affaires dorment depuis plus de 60 jours ?",i:-1,why:"Disponible : 23 affaires, 1 084 M. La vue détaillée est dans Arbitrages, elle demande un tri par commercial."},
+      {q:"Pourquoi perdons-nous sur le prix ?",i:-1,why:"Analysable à 78 % seulement : le concurrent rencontré n'est pas un champ du miroir, et un motif de perte sur cinq est vide."},
+      {q:"Quel est mon taux de transformation par étape ?",i:-1,why:"Calculable, mais peu fiable avant deux trimestres d'instantanés supplémentaires sur les étapes intermédiaires."}],
+ th:[{q:"Quel commercial a le pipeline le plus fragile ?",
+  a:"K. Assamoi, sans ambiguïté : <span class='mk r'>55 % de fiabilité</span> historique, neuf affaires à date de clôture dépassée, et 189 M d'écart entre annoncé et probable — soit plus de la moitié de l'écart total de l'équipe. Le problème est structurel, pas ponctuel : l'optimisme porte sur les dates, avec un décalage médian de six semaines reproduit sur les huit derniers trimestres.",
+  rows:[["K. Assamoi","9 affaires à date dépassée · écart 189 M","55 %","à recadrer","r"],
+        ["P. Koné","4 affaires dormantes · écart 85 M","68 %","à accompagner","w"],
+        ["A. Tanoh","2 affaires sans sponsor · écart 54 M","72 %","à accompagner","w"],
+        ["M. Diallo","aucune anomalie de date","92 %","fiable","g"]],
+  meth:"Méthode · pondération par étape recalibrée sur la fiabilité individuelle, mesurée par comparaison entre instantanés quotidiens du pipeline et issues réelles. Fenêtre : 8 trimestres. Tables : opportunities, snapshots_opportunities."}],
+ dec:{obj:"Répondre ou non à l'appel d'offres Lagune",
+  ctx:"Dossier à 620 M, réponse estimée à 40 M de coûts d'avant-vente et six semaines de mobilisation d'un architecte. Le client sortant est en place depuis quatre ans. Aucune rencontre préalable n'a eu lieu.",
+  opts:[["A","Répondre en direct","Réponse complète, architecte mobilisé six semaines. Probabilité estimée à 30 % faute de relation préalable.",0,[["Coût d'avant-vente","−40 M"],["Espérance","186 M"],["Coût d'opportunité","2 dossiers différés"]]],
+        ["B","Répondre en groupement","Portage partagé avec un intégrateur local déjà référencé. Marge divisée, probabilité estimée à 55 %.",1,[["Coût d'avant-vente","−18 M"],["Espérance","204 M"],["Coût d'opportunité","faible"]]],
+        ["C","Ne pas répondre","Redéploiement de l'avant-vente sur les 19 comptes cross-sell identifiés, à cycle plus court.",0,[["Coût d'avant-vente","0"],["Espérance","0 sur ce dossier"],["Coût d'opportunité","nul"]]]]}},
+
+do:{c:"DO",n:"Direction des opérations",r:"Livraison & fournisseurs",sub:"juillet 2026",snap:"Instantané 28/07 · 04:12",
+ brief:{k:"Brief de la nuit · 04:12",h:"Six affaires dérivent, deux causes suffisent à l'expliquer.",
+  p:"<em>438 M FCFA</em> de facturation prennent du retard sur la courbe théorique. Derrière ces six lignes, il n'y a pas six problèmes : trois relèvent d'un décalage de staffing interne, trois d'un blocage fournisseur amont. À elle seule, la dérive du fournisseur réseau explique <em>124 M</em>.",
+  pills:[["6 affaires en dérive",1],["3 fournisseurs mono-source",1],["Moteur M3 · courbe théorique",0]]},
+ stats:[{l:"Backlog à consommer",v:"1 465",u:"M FCFA",d:"38 affaires actives",s:"",sp:[52,55,58,56,60,62,65,68]},
+        {l:"Facturation en dérive",v:"438",u:"M FCFA",d:"6 affaires sur 24 mesurables",s:"neg",sp:[20,26,30,38,44,52,58,66]},
+        {l:"Visibilité la plus basse",v:"2,1",u:"mois",d:"practice Intégration",s:"wat",sp:[60,56,52,48,44,40,34,30]}],
+ bars:{t:"Mois de visibilité par practice",k:"Backlog / rythme de consommation",
+  rows:[["Infrastructure","backlog 486 M","5,8 mois",96,"g"],
+        ["Cybersécurité","backlog 312 M","5,1 mois",85,"g"],
+        ["Services managés","backlog 274 M","4,2 mois",70,""],
+        ["Intégration applicative","backlog 218 M","2,1 mois",35,"r"],
+        ["Data & décisionnel","backlog 175 M","3,3 mois",55,"w"]],
+  note:"Seuil interne : 4,0 mois. Deux practices sous le seuil, dont une qui pèse 15 % du backlog total."},
+ queue:{t:"Sur votre table",k:"3 décisions",
+  items:[["Réaffecter deux consultants Intégration","2,1 mois de visibilité contre 5,8 en Infrastructure. Fenêtre de bascule : août.","cette semaine","r"],
+         ["Sortir du mono-source réseau","Trois fournisseurs critiques sans solution de repli, dont un en retard sur 71 jours.","sous 30 jours","w"],
+         ["Régulariser quatre avenants","Périmètres modifiés sans formalisation, 34 M non couverts contractuellement.","à instruire","a"]]},
+ alerts:{t:"Signaux de la nuit",k:"depuis 04:12 hier",
+  items:[["Un bon de commande fournisseur ouvert depuis 71 jours","Réception partielle, deux affaires client bloquées en aval.","blocage","r"],
+         ["Facturation par lots irrégulière sur trois affaires","Dernier lot émis il y a 54 jours en moyenne.","dérive","w"],
+         ["Périmètre réduit sans avenant sur une TMA","Constat opérationnel, aucune trace contractuelle.","contractuel","w"],
+         ["Un fournisseur a rattrapé son retard","Délai moyen ramené de 34 à 12 jours sur les deux derniers mois.","amélioration","g"]]},
+ cov:[["Commandes fournisseurs","purchase_orders","04:12 ce jour","complet","g"],
+      ["Réceptions","stock_pickings","04:12 ce jour","7 fournisseurs sur 22","w"],
+      ["Durées contractuelles","sale_orders","04:12 ce jour","24 affaires sur 38","w"],
+      ["Plan de charge","—","absent","non instrumenté","r"]],
+ ask:[{q:"Quelles affaires facturent moins vite que prévu ?",i:0},
+      {q:"Quelle practice a le moins de visibilité ?",i:-1,why:"Réponse directe dans le cockpit : Intégration applicative, 2,1 mois. Le détail par affaire est dans la vue Données."},
+      {q:"Quel est le taux d'occupation par consultant ?",i:-1,why:"Non calculable : les feuilles de temps ne sont pas dans le miroir Odoo. Le cockpit raisonne sur la facturation, pas sur la charge."},
+      {q:"Quels fournisseurs nous mettent en retard ?",i:-1,why:"Fiable pour 7 fournisseurs sur 22 seulement : ailleurs, la date de réception est absente et le calcul retombe sur la date de facture."}],
+ th:[{q:"Quelles affaires facturent moins vite que prévu ?",
+  a:"Six affaires dérivent, pour <span class='mk r'>438 M FCFA</span> de facturation décalée. La lecture utile n'est pas la liste mais la cause : trois dérives viennent d'un staffing interne repoussé, trois d'un fournisseur amont. Le proxy est assumé — sans feuilles de temps, le cockpit compare la courbe de facturation réelle au prorata de la durée contractuelle, ce qui ne mesure pas la charge réelle.",
+  rows:[["Refonte SI · Ivoire Énergie","facturé 34 % à mi-parcours contre 60 % attendus","124 M","staffing","r"],
+        ["Réseau agences · Banque du Littoral","BC fournisseur ouvert depuis 71 j, réception partielle","98 M","amont","r"],
+        ["Déploiement postes · Téléco Lagune","facturation par lots, dernier lot il y a 54 j","76 M","à surveiller","w"],
+        ["TMA · Groupe Kossou","périmètre réduit sans avenant","34 M","contractuel","w"]],
+  meth:"Méthode · écart entre courbe de facturation réelle et courbe théorique au prorata de la durée contractuelle. Couverture : 24 affaires sur 38 disposent d'une durée exploitable. Proxy assumé, faute de feuilles de temps."}],
+ dec:{obj:"Réaffecter la practice Intégration ou attendre la signature Lagune",
+  ctx:"Intégration applicative tombe à 2,1 mois de visibilité. Deux consultants seniors sont libres en août. Le dossier Lagune, qui les occuperait, est probable à 55 % et ne signerait pas avant octobre.",
+  opts:[["A","Attendre Lagune","Équipe maintenue sur la practice, disponible immédiatement si le dossier signe. Deux mois d'inter-contrat probable.",0,[["Coût d'attente","−54 M"],["Réactivité Lagune","immédiate"],["Risque","inter-contrat"]]],
+        ["B","Réaffecter vers Infrastructure","Bascule des deux consultants sur un backlog à 5,8 mois. Montée en compétence de trois semaines, réversible.",1,[["Coût d'attente","0"],["Réactivité Lagune","3 semaines"],["Risque","faible"]]],
+        ["C","Réaffecter et sous-traiter Lagune","Bascule immédiate, recours à la sous-traitance si Lagune signe. Marge du dossier amputée de 9 pts.",0,[["Coût d'attente","0"],["Réactivité Lagune","immédiate"],["Risque","marge −9 pts"]]]]}},
+
+df:{c:"DF",n:"Direction financière",r:"Encaissement & marge",sub:"clôture juillet",snap:"Instantané 28/07 · 04:12",
+ brief:{k:"Brief de la nuit · 04:12",h:"L'encaissement décroche du chiffre d'affaires.",
+  p:"Le délai de paiement moyen glisse de <em>7,4 jours</em> sur le trimestre, et l'essentiel vient de trois comptes publics — pas d'une dégradation générale. À 30 jours, la prévision comportementale annonce <em>612 M</em> d'encaissement contre 794 M d'échéances théoriques. L'écart est prévisible, donc finançable.",
+  pills:[["3 anomalies de facturation",1],["182 M d'écart à 30 j",1],["Moteur M4 · modèle comportemental",0]]},
+ stats:[{l:"Encaissement prévu 30 j",v:"612",u:"M FCFA",d:"vs 794 M d'échéances",s:"neg",sp:[64,62,60,58,55,52,50,47]},
+        {l:"Délai de paiement moyen",v:"58,6",u:"jours",d:"+7,4 j sur le trimestre",s:"wat",sp:[40,44,46,50,54,58,62,66]},
+        {l:"Encours échu",v:"327",u:"M FCFA",d:"dont 118 M à plus de 90 j",s:"neg",sp:[30,34,40,44,50,56,60,64]}],
+ bars:{t:"Où se loge le retard de paiement",k:"Encours échu par segment",
+  rows:[["Secteur public","3 comptes · délai 94 j","148 M",100,"r"],
+        ["Banque & assurance","5 comptes · délai 62 j","81 M",55,"w"],
+        ["Industrie","7 comptes · délai 48 j","54 M",36,""],
+        ["Télécoms","2 comptes · délai 41 j","28 M",19,"g"],
+        ["Distribution","4 comptes · délai 38 j","16 M",11,"g"]],
+  note:"Le secteur public concentre 45 % de l'encours échu pour 19 % du facturé. Le modèle prédit ces retards à ±6 jours."},
+ queue:{t:"Sur votre table",k:"3 décisions",
+  items:[["Arbitrer la relance des trois comptes publics","148 M échus. La relance juridique compromet deux renouvellements en cours.","cette semaine","r"],
+         ["Décider du financement du besoin d'août","182 M d'écart prévu entre encaissement et échéances.","avant le 08/08","w"],
+         ["Traiter trois anomalies de facturation","Deux doubles facturations, une remise appliquée hors grille.","à instruire","a"]]},
+ alerts:{t:"Signaux de la nuit",k:"depuis 04:12 hier",
+  items:[["Deux factures émises en double","Même affaire, même montant, 4 jours d'écart. 18 M concernés.","anomalie","r"],
+         ["Une remise hors grille détectée","−14 pts sur une ligne, sans validation traçable dans Odoo.","à valider","w"],
+         ["Effet ciseau sur les achats refacturés","Prix d'achat +6,2 %, prix de vente +1,8 % sur douze mois.","marge","w"],
+         ["Un compte public a soldé son encours","62 M encaissés, 128 jours après échéance.","encaissé","g"]]},
+ sup:{
+  rows:[["Licences Logika","Éditeur · licences et support","320 M","288 M",90,"31/07 · dans 3 jours","tension","r"],
+        ["Distrib Réseaux Afrique","Matériel réseau · mono-source","180 M","148 M",82,"12/08 · dans 15 jours","élevé","r"],
+        ["Cloud Sahel","Hébergement · abonnement mensuel","90 M","74 M",82,"05/08 · dans 8 jours","à surveiller","w"],
+        ["Nordic Systems","Matériel serveurs et postes","250 M","96 M",38,"25/08 · dans 28 jours","sain","g"],
+        ["Câblage Lagune","Sous-traitance chantiers","60 M","21 M",35,"18/09 · dans 52 jours","sain","g"]],
+  bud:[["Licences","budget 340 M · engagé 309 M","91 %",91,"r"],
+       ["Sous-traitance","budget 210 M · engagé 218 M","104 %",100,"r"],
+       ["Cloud et hébergement","budget 120 M · engagé 92 M","77 %",77,"w"],
+       ["Matériel","budget 480 M · engagé 326 M","68 %",68,""],
+       ["Transport et logistique","budget 95 M · engagé 51 M","54 %",54,"g"]],
+  al:[["Licences Logika : 90 % de la ligne consommée à 3 jours de l'échéance","288 M engagés sur 320 M autorisés. Un dépassement bloque les renouvellements de support.","échéance 31/07","r"],
+      ["Sous-traitance en dépassement budgétaire de 4 %","218 M engagés pour 210 M budgétés, à cinq mois de la clôture.","dépassement","r"],
+      ["Distrib Réseaux : 82 % de ligne engagée pour 71 jours de retard","Mono-source. L'encours progresse alors que la livraison n'avance pas.","risque double","r"],
+      ["Cloud Sahel annonce +14 % au renouvellement","Renégociation à ouvrir avant le 05/08, sinon reconduction tacite au nouveau tarif.","à négocier","w"]],
+  note:"Encours fournisseurs total : 627 M FCFA sur 900 M de lignes accordées (70 %). À payer sous 30 jours : 412 M ; sous 60 jours : 188 M. L'encaissement client prévu sur la même fenêtre est de 612 M."},
+ cov:[["Factures & avoirs","invoices, invoice_lines","04:12 ce jour","complet","g"],
+      ["Règlements","account_payments","04:12 ce jour","complet","g"],
+      ["Achats refacturés","purchase_order_lines","04:12 ce jour","lignes détaillées partielles","w"],
+      ["Coût de revient chargé","—","absent","non instrumenté","r"]],
+ ask:[{q:"Quels comptes vont payer en retard, et de combien ?",i:0},
+      {q:"Quel est l'effet ciseau achat / vente par practice ?",i:-1,why:"Partiel : le détail des lignes de commandes fournisseurs manque pour 4 practices sur 5. Le calcul global reste indicatif."},
+      {q:"Quelle est la marge nette par affaire ?",i:-1,why:"Non calculable : ni feuilles de temps ni coût de revient chargé dans le miroir. Seule la marge sur achats refacturés est disponible."},
+      {q:"Quelles anomalies de facturation cette semaine ?",i:-1,why:"Trois anomalies détectées, listées dans les signaux de la nuit et instruites depuis Arbitrages."}],
+ th:[{q:"Quels comptes vont payer en retard, et de combien ?",
+  a:"Le modèle comportemental identifie <span class='mk'>onze comptes</span> qui paieront au-delà de leur échéance, pour <span class='mk r'>182 M FCFA</span> de décalage à 30 jours. Ce n'est pas un risque d'impayé mais un besoin de trésorerie prévisible : trois comptes publics expliquent 81 % du montant, et leur comportement de paiement est régulier — en retard, mais régulier, à ±6 jours près sur les vingt-quatre derniers mois.",
+  rows:[["Ivoire Énergie (public)","échéance 15/08 · paiement attendu 12/10","−74 M","structurel","r"],
+        ["Port Autonome Sud (public)","échéance 22/08 · paiement attendu 28/09","−48 M","structurel","r"],
+        ["Mutuelle Baobab","échéance 05/08 · paiement attendu 02/09","−26 M","habituel","w"],
+        ["Banque du Littoral","échéance 18/08 · paiement attendu 29/08","−19 M","léger","w"]],
+  meth:"Méthode · modèle de délai par compte, appris sur 24 mois d'appariement facture / règlement. Erreur médiane : 6 jours. Tables : invoices, account_payments, partners. Hors litiges déclarés."}],
+ dec:{obj:"Relancer les trois comptes publics, et jusqu'où",
+  ctx:"148 M échus depuis plus de 90 jours sur trois comptes publics. Deux d'entre eux ont un renouvellement en cours d'instruction. Le comportement de paiement est lent mais fiable historiquement.",
+  opts:[["A","Relance juridique immédiate","Mise en demeure sur les trois comptes. Encaissement accéléré d'environ six semaines, relation commerciale exposée.",0,[["Trésorerie","+148 M à 45 j"],["Renouvellements","2 exposés"],["Coût","frais + relation"]]],
+        ["B","Relance graduée, financement du reste","Relance commerciale ferme, escompte de 90 M sur les créances les plus sûres pour couvrir août.",1,[["Trésorerie","+90 M à 10 j"],["Renouvellements","préservés"],["Coût","−4,2 M de frais"]]],
+        ["C","Attendre le paiement naturel","Aucune action. Le modèle prévoit l'encaissement entre le 28/09 et le 12/10.",0,[["Trésorerie","tension en août"],["Renouvellements","préservés"],["Coût","0"]]]]}},
+
+am:{c:"AM",n:"Account manager",r:"Portefeuille & prochaine action",sub:"portefeuille · 24 comptes",snap:"Instantané 28/07 · 04:12",
+ brief:{k:"Brief de la nuit · 04:12",h:"Deux comptes à rappeler aujourd'hui, un rendez-vous à préparer.",
+  p:"Groupe Kossou a demandé deux devis en huit jours après cinq mois de silence : c'est votre meilleur signal de la semaine. À l'inverse, Assur Lagune a dépassé de <em>44 jours</em> son rythme habituel de commande. Et vous voyez Ivoire Énergie à 15 h — leur encours échu est de <em>74 M</em>, autant le savoir avant d'entrer.",
+  pills:[["2 rappels prioritaires",1],["1 rendez-vous à 15 h",0],["3 renouvellements sous 90 j",0]]},
+ stats:[{l:"Facturé sur mon portefeuille",v:"748",u:"M FCFA",d:"+6,1 % sur 12 mois",s:"pos",sp:[44,48,50,54,56,60,64,68]},
+        {l:"Pipeline actif",v:"412",u:"M FCFA",d:"9 opportunités",s:"",sp:[50,52,55,53,58,60,62,64]},
+        {l:"Comptes en rupture de rythme",v:"3",u:"sur 24",d:"dont 1 depuis 141 jours",s:"neg",sp:[20,24,30,34,40,48,54,60]}],
+ bars:{t:"Mon portefeuille par poids",k:"Facturé 12 mois",
+  rows:[["Ivoire Énergie","rendez-vous aujourd'hui 15 h","248 M",100,"w"],
+        ["Groupe Kossou","2 devis demandés en 8 jours","162 M",65,"g"],
+        ["Mutuelle Baobab","budget gelé annoncé en mai","134 M",54,"w"],
+        ["Assur Lagune","96 j sans commande","118 M",48,"r"],
+        ["Port Autonome Sud","141 j sans commande","86 M",35,"r"]],
+  note:"Trois comptes sur vos cinq premiers montrent un signal à traiter cette semaine."},
+ queue:{t:"Ma prochaine action",k:"3 actions",
+  items:[["Rappeler Groupe Kossou","Deux devis en huit jours, aucun rendez-vous posé. Fenêtre d'achat ouverte.","aujourd'hui","g"],
+         ["Préparer le rendez-vous Ivoire Énergie","74 M d'encours échu, un projet en dérive de staffing, un renouvellement en octobre.","avant 15 h","a"],
+         ["Relancer Assur Lagune","96 jours sans commande, contre 41 jours de rythme habituel.","cette semaine","r"]]},
+ alerts:{t:"Ce qui a changé sur mes comptes",k:"depuis 04:12 hier",
+  items:[["Groupe Kossou : deuxième devis en huit jours","Après cinq mois sans demande. Montant cumulé 96 M.","signal d'achat","g"],
+         ["Ivoire Énergie : projet en retard de facturation","34 % facturé à mi-parcours. Sujet probable du rendez-vous de 15 h.","à anticiper","w"],
+         ["Assur Lagune a dépassé son rythme de 44 jours","Aucune commande depuis le 23/04.","rupture","r"],
+         ["Trois contrats de parc arrivent à échéance","Renouvellements à instruire avant fin octobre.","renouvellement","a"]]},
+ cov:[["Comptes & contacts","partners","04:12 ce jour","complet","g"],
+      ["Commandes & factures","sale_orders, invoices","04:12 ce jour","complet","g"],
+      ["Parc installé","equipment","04:12 ce jour","renseigné à 71 %","w"],
+      ["Comptes rendus de visite","—","absent","non instrumenté","r"]],
+ ask:[{q:"Que dois-je savoir avant mon rendez-vous de 15 h ?",i:0},
+      {q:"Quels comptes dois-je rappeler cette semaine ?",i:-1,why:"Trois comptes, classés dans « Ma prochaine action » en tête du cockpit."},
+      {q:"Quel est le potentiel cross-sell de mon portefeuille ?",i:-1,why:"Estimation disponible sur 71 % du parc installé seulement : les équipements saisis hors Odoo échappent au calcul."},
+      {q:"Quelle marge je dégage sur mes comptes ?",i:-1,why:"Non accessible à votre profil, et non calculable : la marge par affaire demande les feuilles de temps."}],
+ th:[{q:"Que dois-je savoir avant mon rendez-vous de 15 h ?",
+  a:"Trois choses, dans cet ordre. D'abord l'argent : <span class='mk r'>74 M échus</span> depuis plus de 90 jours, et leur comportement de paiement dit que ce n'est pas un litige mais un circuit lent — ne le traitez pas comme un impayé. Ensuite la livraison : leur projet de refonte est facturé à 34 % pour 60 % attendus, ils le savent probablement. Enfin l'ouverture : leur renouvellement de parc tombe en octobre, et deux practices sont absentes de leur périmètre.",
+  rows:[["Encours échu","74 M · plus de 90 jours · paiement attendu 12/10","74 M","à évoquer","r"],
+        ["Projet refonte SI","facturé 34 % à mi-parcours, cause staffing interne","124 M","à devancer","w"],
+        ["Renouvellement parc","échéance octobre, 48 postes concernés","—","à ouvrir","a"],
+        ["Cross-sell","Cybersécurité et Data absentes du périmètre","62 M estimés","à proposer","g"]],
+  meth:"Méthode · fiche assemblée à partir des factures, du suivi de facturation, du parc installé et du référentiel practices. Le potentiel cross-sell est une estimation par comparaison avec des comptes de taille et de secteur voisins."}],
+ dec:{obj:"Comment ouvrir le sujet de l'encours à 15 h",
+  ctx:"74 M échus depuis plus de 90 jours, mais un renouvellement de parc à instruire en octobre et un projet en dérive dont vous êtes en partie responsable. L'ordre dans lequel les sujets sont posés change l'issue.",
+  opts:[["A","Commencer par l'encours","Sujet posé d'entrée, avant que la conversation ne dérive sur le projet en retard.",0,[["Encaissement","favorable"],["Renouvellement","exposé"],["Climat","tendu"]]],
+        ["B","Commencer par le projet, puis l'encours","Vous ouvrez sur votre propre dérive, ce qui rend légitime d'aborder ensuite la leur. Renouvellement gardé pour la fin.",1,[["Encaissement","probable"],["Renouvellement","préservé"],["Climat","constructif"]]],
+        ["C","Ne pas aborder l'encours","Sujet laissé à la direction financière, rendez-vous centré sur le renouvellement.",0,[["Encaissement","différé"],["Renouvellement","favorable"],["Climat","neutre"]]]]}}
+};
+
+
+var USERS = {
+  dg:{u:"A. Konan",  m:"a.konan@neuronestech.com",  t:"Directeur général"},
+  dc:{u:"M. Sanogo", m:"m.sanogo@neuronestech.com", t:"Directrice commerciale"},
+  do:{u:"S. Bamba",  m:"s.bamba@neuronestech.com",  t:"Directeur des opérations"},
+  df:{u:"L. Gnahoré",m:"l.gnahore@neuronestech.com",t:"Directrice financière"},
+  am:{u:"T. Yao",    m:"t.yao@neuronestech.com",    t:"Account manager senior"}
+};
+
+/* ---------- fiches de détail ---------- */
+var D = {
+"df.f0":{d:"288 M engagés sur une ligne de 320 M, échéance dans trois jours. Au-delà de 95 %, l'éditeur suspend les renouvellements de support — c'est le risque, pas la trésorerie.",kv:[["Ligne accordée","320 M FCFA"],["Encours","288 M FCFA"],["Utilisation","90 %"],["Échéance","31/07"],["Conséquence d'un dépassement","support suspendu"]]},
+"df.f1":{d:"Mono-source sur le matériel réseau : 148 M engagés et 71 jours de retard de livraison. L'encours progresse alors que la contrepartie n'arrive pas.",kv:[["Ligne accordée","180 M FCFA"],["Encours","148 M FCFA"],["Utilisation","82 %"],["Retard livraison","71 jours"],["Solution de repli","aucune"]]},
+"df.f2":{d:"Abonnement mensuel à 82 % de la ligne, échéance le 05/08 avec une hausse annoncée de 14 %. Sans action, la reconduction est tacite au nouveau tarif.",kv:[["Ligne accordée","90 M FCFA"],["Encours","74 M FCFA"],["Utilisation","82 %"],["Hausse annoncée","+14 %"],["Reconduction","tacite"]]},
+"df.f3":{d:"38 % de la ligne consommée, paiements à jour, aucun incident sur douze mois. C'est le fournisseur sur lequel un report de charge est négociable.",kv:[["Ligne accordée","250 M FCFA"],["Encours","96 M FCFA"],["Utilisation","38 %"],["Incidents 12 mois","0"],["Marge de manœuvre","154 M FCFA"]]},
+"df.f4":{d:"Sous-traitant chantiers, encours faible et échéance lointaine. Le poste budgétaire auquel il appartient est en revanche déjà dépassé de 4 %.",kv:[["Ligne accordée","60 M FCFA"],["Encours","21 M FCFA"],["Utilisation","35 %"],["Échéance","18/09"],["Poste budgétaire","en dépassement"]]},
+"df.g0":{d:"309 M engagés sur 340 M budgétés à cinq mois de la clôture. Le rythme actuel conduit à un dépassement de 46 M en fin d'exercice.",kv:[["Budget","340 M FCFA"],["Engagé","309 M FCFA"],["Projection clôture","386 M FCFA"]]},
+"df.g1":{d:"Poste déjà dépassé de 8 M. Deux chantiers restants sont couverts par des bons de commande, donc le dépassement est acquis.",kv:[["Budget","210 M FCFA"],["Engagé","218 M FCFA"],["Dépassement","+4 %"]]},
+"df.g2":{d:"77 % consommés, mais la hausse tarifaire annoncée de 14 % porte la projection au-delà du budget si le renouvellement est reconduit tel quel.",kv:[["Budget","120 M FCFA"],["Engagé","92 M FCFA"],["Projection","137 M FCFA"]]},
+"df.g3":{d:"68 % consommés à mi-parcours, sans dérive. C'est le poste qui peut absorber un arbitrage.",kv:[["Budget","480 M FCFA"],["Engagé","326 M FCFA"],["Disponible","154 M FCFA"]]},
+"df.g4":{d:"54 % consommés, poste stable et prévisible depuis trois exercices.",kv:[["Budget","95 M FCFA"],["Engagé","51 M FCFA"],["Disponible","44 M FCFA"]]},
+"df.fa0":{d:"288 M sur 320 M à trois jours de l'échéance. Payer maintenant coûte de la trésorerie en août ; ne pas payer coûte le support sur 41 applications.",kv:[["Montant","288 M FCFA"],["Échéance","31/07"],["Applications concernées","41"]]},
+"df.fa1":{d:"218 M engagés pour 210 M budgétés. Les deux chantiers restants sont déjà sous bon de commande : le dépassement ne peut plus être évité, seulement arbitré.",kv:[["Dépassement","8 M FCFA"],["Chantiers engagés","2"],["Mois restants","5"]]},
+"df.fa2":{d:"82 % de la ligne engagée face à 71 jours de retard, sans fournisseur de repli. Deux affaires client attendent ce matériel pour facturer.",kv:[["Encours","148 M FCFA"],["Retard","71 jours"],["Affaires bloquées","2"]]},
+"df.fa3":{d:"Hausse de 14 % annoncée pour le renouvellement du 05/08. Sans réponse écrite, la reconduction est tacite au nouveau tarif.",kv:[["Impact annuel","+13 M FCFA"],["Date limite","05/08"],["Reconduction","tacite"]]},
+"dg.b0":{d:"Quatre affaires, deux practices. Deux d'entre elles s'achèvent en octobre sans renouvellement instruit — le risque est là, pas dans le montant.",kv:[["Facturé 12 mois","412 M FCFA"],["Part du facturé","15,1 %"],["Échéances < 6 mois","2 affaires"]],s:[58,62,60,66,70,68,74,80]},
+"dg.b1":{d:"TMA reconduite trois fois, plus un chantier d'infrastructure. Le compte progresse, mais tout passe par un seul interlocuteur identifié.",kv:[["Facturé 12 mois","318 M FCFA"],["Ancienneté","6 ans"],["Contacts identifiés","1"]],s:[40,46,50,54,58,62,66,72]},
+"dg.b2":{d:"Une seule affaire cadre, échéance mars. Aucune autre practice n'est entrée sur ce compte depuis deux ans.",kv:[["Facturé 12 mois","264 M FCFA"],["Affaires actives","1"],["Échéance","mars 2027"]],s:[70,68,64,62,58,56,52,50]},
+"dg.b3":{d:"Renouvellement en juin avec un périmètre proposé en baisse de 18 %. La discussion est déjà ouverte côté client.",kv:[["Facturé 12 mois","198 M FCFA"],["Renouvellement","juin 2027"],["Périmètre proposé","−18 %"]],s:[52,54,50,52,48,50,46,44]},
+"dg.b4":{d:"Mono-projet livré en février, aucune suite identifiée. 141 jours sans commande contre 52 de rythme habituel.",kv:[["Facturé 12 mois","141 M FCFA"],["Dernière commande","il y a 141 j"],["Suite identifiée","aucune"]],s:[64,60,54,44,34,22,12,4]},
+"dg.q0":{d:"Le client a acté six semaines de décalage en comité interne sans le formaliser. Sans avenant, l'immobilisation des équipes reste à votre charge.",kv:[["Enjeu facturation","180 M FCFA"],["Consultants réservés","2 seniors"],["Fenêtre de décision","5 jours"]]},
+"dg.q1":{d:"Le périmètre proposé retire la supervision, soit 34 M par an. La position doit être arrêtée avant le comité d'achat du 12/08.",kv:[["Enjeu annuel","198 M FCFA"],["Baisse proposée","−18 %"],["Échéance","12/08"]]},
+"dg.q2":{d:"Deux postes ouverts depuis 74 jours. Le carnet couvre 5,1 mois sur cette practice : recruter est tenable, attendre produit des refus d'affaires.",kv:[["Postes ouverts","2"],["Ancienneté","74 jours"],["Visibilité practice","5,1 mois"]]},
+"dg.a0":{d:"Le compte commandait tous les 52 jours depuis 2023. Le silence dure depuis 141 jours, sans litige déclaré ni contact sortant.",kv:[["Rythme médian","52 jours"],["Silence actuel","141 jours"],["Moteur","M1 · Rythme"]],s:[64,60,54,44,34,22,12,4]},
+"dg.a1":{d:"−3,1 points sur le trimestre, concentrés sur deux forfaits. Marge apparente seulement : sans feuilles de temps, la main-d'œuvre n'entre pas dans le calcul.",kv:[["Écart","−3,1 pts"],["Affaires concernées","2 forfaits"],["Limite","hors main-d'œuvre"]]},
+"dg.a2":{d:"Deux avenants signés en mai, aucune ligne de facturation associée à ce jour. L'écart entre engagement et émission atteint 34 M.",kv:[["Écart","34 M FCFA"],["Avenants","2"],["Signés depuis","mai 2026"]]},
+"dg.a3":{d:"Consultation détectée hors Odoo, remontée par l'account manager le 27/07. Aucune opportunité n'a encore été créée dans le pipeline.",kv:[["Source","déclaratif AM"],["Montant","non chiffré"],["Opportunité créée","non"]]},
+
+"dc.b0":{d:"Neuf affaires à date de clôture dépassée, aucune requalifiée depuis mai. Le biais porte sur les dates, pas sur les montants.",kv:[["Annoncé","420 M FCFA"],["Probable","231 M FCFA"],["Décalage médian","6 semaines"]],s:[72,68,64,60,58,56,55,55]},
+"dc.b1":{d:"Quatre affaires dormantes de plus de soixante jours. La fiabilité tient, mais le portefeuille ne tourne pas.",kv:[["Annoncé","265 M FCFA"],["Probable","180 M FCFA"],["Affaires dormantes","4"]],s:[66,66,68,66,68,68,68,68]},
+"dc.b2":{d:"Deux affaires ont perdu leur sponsor identifié. Le reste du portefeuille se comporte comme prévu.",kv:[["Annoncé","195 M FCFA"],["Probable","141 M FCFA"],["Sans sponsor","2"]],s:[70,70,72,70,72,72,72,72]},
+"dc.b3":{d:"Aucune anomalie de date sur huit trimestres. C'est ce portefeuille qui sert de référence au calibrage des autres.",kv:[["Annoncé","310 M FCFA"],["Probable","284 M FCFA"],["Anomalies","0"]],s:[88,90,90,92,92,92,92,92]},
+"dc.q0":{d:"Neuf affaires à requalifier pour 189 M d'écart. Une revue de portefeuille suffit : le sujet est la méthode de datation, pas la compétence.",kv:[["Écart expliqué","189 M FCFA"],["Affaires à requalifier","9"],["Dernière revue","mai"]]},
+"dc.q1":{d:"40 M d'avant-vente pour une probabilité estimée à 30 % sans relation préalable. Le groupement change l'équation plus que l'effort.",kv:[["Montant dossier","620 M FCFA"],["Coût avant-vente","40 M FCFA"],["Probabilité seul","30 %"]]},
+"dc.q2":{d:"Dix-neuf comptes achètent de la cybersécurité chez leurs pairs et pas chez nous. Cycle court, avant-vente faible, ticket moyen connu.",kv:[["Comptes ciblés","19"],["Potentiel estimé","286 M FCFA"],["Cycle moyen","7 semaines"]]},
+"dc.a0":{d:"Trois contacts principaux partis ou ayant changé de fonction. Aucune reprise notée dans Odoo depuis leur départ.",kv:[["Affaires touchées","3"],["Montant exposé","214 M FCFA"],["Reprise notée","aucune"]]},
+"dc.a1":{d:"−214 M en une semaine sur cinq opportunités, sans motif renseigné. Révision groupée : probablement une consigne interne plutôt que cinq événements.",kv:[["Écart semaine","−214 M FCFA"],["Opportunités","5"],["Motif renseigné","0"]]},
+"dc.a2":{d:"« Prix » sur neuf pertes sur vingt-trois, dont six sans concurrent nommé. Le motif sert souvent de case par défaut.",kv:[["Pertes du trimestre","23"],["Motif « prix »","9"],["Concurrent nommé","3"]]},
+"dc.a3":{d:"Deux demandes de devis en huit jours après cinq mois de silence. La fenêtre d'achat est probablement ouverte maintenant.",kv:[["Devis demandés","2"],["Silence précédent","5 mois"],["Montant cumulé","96 M FCFA"]],s:[10,8,6,4,6,30,58,86]},
+
+"do.b0":{d:"486 M de backlog pour un rythme de consommation stable. C'est la practice qui peut absorber un redéploiement sans casser sa courbe.",kv:[["Backlog","486 M FCFA"],["Visibilité","5,8 mois"],["Affaires actives","11"]],s:[60,62,64,66,68,70,72,74]},
+"do.b1":{d:"Backlog solide, mais deux postes ouverts depuis 74 jours : la contrainte est la ressource, pas la demande.",kv:[["Backlog","312 M FCFA"],["Visibilité","5,1 mois"],["Postes ouverts","2"]],s:[58,60,62,64,66,66,68,70]},
+"do.b2":{d:"Récurrent, prévisible, peu exposé. Aucune échéance contractuelle avant janvier.",kv:[["Backlog","274 M FCFA"],["Visibilité","4,2 mois"],["Part récurrente","83 %"]],s:[66,66,68,68,70,70,70,70]},
+"do.b3":{d:"2,1 mois de visibilité et deux seniors libres en août. C'est le point de décision du mois.",kv:[["Backlog","218 M FCFA"],["Visibilité","2,1 mois"],["Consultants libres","2"]],s:[60,56,50,46,40,36,32,28]},
+"do.b4":{d:"Backlog correct mais concentré sur une seule affaire, elle-même en attente d'un jalon client.",kv:[["Backlog","175 M FCFA"],["Visibilité","3,3 mois"],["Concentration","1 affaire · 61 %"]],s:[56,56,54,52,52,50,48,46]},
+"do.q0":{d:"2,1 mois de visibilité en Intégration contre 5,8 en Infrastructure. La bascule prend trois semaines de montée en compétence et reste réversible.",kv:[["Écart de visibilité","3,7 mois"],["Consultants","2 seniors"],["Fenêtre","août"]]},
+"do.q1":{d:"Trois fournisseurs critiques sans solution de repli, dont un en retard de 71 jours qui bloque deux affaires client en aval.",kv:[["Fournisseurs mono-source","3"],["Affaires exposées","5"],["Retard maximal","71 jours"]]},
+"do.q2":{d:"Quatre périmètres modifiés sans formalisation. 34 M sont livrés ou engagés sans couverture contractuelle.",kv:[["Avenants manquants","4"],["Montant non couvert","34 M FCFA"],["Ancienneté moyenne","2,5 mois"]]},
+"do.a0":{d:"Bon de commande ouvert depuis 71 jours, réception partielle. Deux affaires client attendent ce matériel pour facturer leur jalon.",kv:[["Ancienneté du BC","71 jours"],["Réception","partielle"],["Affaires bloquées","2"]]},
+"do.a1":{d:"Trois affaires facturent par lots sans cadence lisible. Dernier lot émis il y a 54 jours en moyenne.",kv:[["Affaires","3"],["Dernier lot","54 jours"],["Montant en attente","76 M FCFA"]]},
+"do.a2":{d:"Réduction de périmètre constatée par l'équipe de livraison, sans trace contractuelle correspondante dans Odoo.",kv:[["Affaire","TMA · Groupe Kossou"],["Écart","34 M FCFA"],["Trace contractuelle","aucune"]]},
+"do.a3":{d:"Délai moyen ramené de 34 à 12 jours sur deux mois. Le fournisseur sort de la liste de surveillance s'il tient jusqu'en septembre.",kv:[["Délai avant","34 jours"],["Délai actuel","12 jours"],["Surveillance","jusqu'en septembre"]],s:[86,80,72,60,46,32,20,14]},
+
+"df.b0":{d:"Trois comptes publics concentrent 45 % de l'encours échu pour 19 % du facturé. Retard structurel, pas litige : le modèle le prédit à six jours près.",kv:[["Encours échu","148 M FCFA"],["Délai moyen","94 jours"],["Comptes","3"]],s:[40,48,54,60,66,72,78,84]},
+"df.b1":{d:"Cinq comptes autour de soixante jours, tous dans la norme de leur secteur. Aucun signal de dégradation.",kv:[["Encours échu","81 M FCFA"],["Délai moyen","62 jours"],["Comptes","5"]],s:[52,54,52,56,54,58,56,60]},
+"df.b2":{d:"Sept comptes, paiements réguliers. L'encours suit le rythme de facturation, sans décrochage.",kv:[["Encours échu","54 M FCFA"],["Délai moyen","48 jours"],["Comptes","7"]],s:[46,48,46,48,46,48,46,48]},
+"df.b3":{d:"Deux comptes, paiement conforme aux conditions négociées. Segment le plus sain du portefeuille.",kv:[["Encours échu","28 M FCFA"],["Délai moyen","41 jours"],["Comptes","2"]],s:[42,40,42,40,40,40,38,40]},
+"df.b4":{d:"Quatre comptes à cycle court. Encours résiduel, sans action requise.",kv:[["Encours échu","16 M FCFA"],["Délai moyen","38 jours"],["Comptes","4"]],s:[38,38,36,38,36,38,36,36]},
+"df.q0":{d:"148 M échus à plus de 90 jours. La relance juridique accélère l'encaissement d'environ six semaines mais expose deux renouvellements en instruction.",kv:[["Montant échu","148 M FCFA"],["Renouvellements exposés","2"],["Gain de délai","≈ 6 semaines"]]},
+"df.q1":{d:"182 M d'écart prévu entre encaissement et échéances à trente jours. L'escompte des créances les plus sûres couvre le besoin pour 4,2 M de frais.",kv:[["Besoin","182 M FCFA"],["Escompte envisagé","90 M FCFA"],["Coût","−4,2 M FCFA"]]},
+"df.q2":{d:"Deux doubles facturations pour 18 M et une remise de 14 points appliquée sans validation traçable.",kv:[["Anomalies","3"],["Montant","32 M FCFA"],["Moteur","M4 · Anomalie"]]},
+"df.a0":{d:"Même affaire, même montant, quatre jours d'écart entre les deux émissions. Aucun avoir n'a été passé.",kv:[["Montant","18 M FCFA"],["Écart d'émission","4 jours"],["Avoir passé","non"]]},
+"df.a1":{d:"−14 points sur une ligne, hors grille tarifaire, sans validation traçable dans Odoo. À rapprocher du dossier commercial.",kv:[["Remise","−14 pts"],["Validation","non traçable"],["Impact","−9 M FCFA"]]},
+"df.a2":{d:"Prix d'achat +6,2 %, prix de vente +1,8 % sur douze mois. L'effet ciseau n'est mesurable que sur les achats refacturés.",kv:[["Achat","+6,2 %"],["Vente","+1,8 %"],["Couverture","1 practice sur 5"]]},
+"df.a3":{d:"62 M encaissés 128 jours après échéance, sans relance juridique. Confirme le comportement appris par le modèle.",kv:[["Encaissé","62 M FCFA"],["Retard","128 jours"],["Écart au modèle","4 jours"]],s:[80,78,74,70,64,50,28,6]},
+
+"am.b0":{d:"Rendez-vous aujourd'hui à 15 h. Trois sujets se croisent : 74 M échus, un projet en dérive, un renouvellement en octobre.",kv:[["Facturé 12 mois","248 M FCFA"],["Encours échu","74 M FCFA"],["Renouvellement","octobre"]],s:[58,62,60,66,70,68,74,80]},
+"am.b1":{d:"Deux devis en huit jours après cinq mois de silence. Aucun rendez-vous posé : c'est l'action la plus rentable de votre semaine.",kv:[["Facturé 12 mois","162 M FCFA"],["Devis en cours","2 · 96 M"],["Dernier contact","il y a 5 mois"]],s:[10,8,6,4,6,30,58,86]},
+"am.b2":{d:"Budget gelé annoncé en mai, confirmé en juin. Le compte reste actif en TMA mais ne lance rien de neuf avant 2027.",kv:[["Facturé 12 mois","134 M FCFA"],["Statut","budget gelé"],["Réouverture attendue","2027"]],s:[70,66,60,52,44,36,30,26]},
+"am.b3":{d:"96 jours sans commande contre 41 de rythme habituel. Aucun litige, aucun changement de contact identifié.",kv:[["Facturé 12 mois","118 M FCFA"],["Rythme habituel","41 jours"],["Silence actuel","96 jours"]],s:[62,58,52,46,38,30,22,16]},
+"am.b4":{d:"Mono-projet livré en février, 141 jours de silence. À traiter comme une reconquête, pas comme une relance.",kv:[["Facturé 12 mois","86 M FCFA"],["Silence","141 jours"],["Suite identifiée","aucune"]],s:[64,58,50,40,30,20,10,2]},
+"am.q0":{d:"Deux devis demandés en huit jours, aucun rendez-vous posé. Appeler avant que le besoin ne se formalise ailleurs.",kv:[["Montant en jeu","96 M FCFA"],["Devis","2"],["Délai conseillé","aujourd'hui"]]},
+"am.q1":{d:"74 M échus, un projet facturé à 34 % pour 60 % attendus, un renouvellement de parc en octobre. L'ordre des sujets décide de l'issue.",kv:[["Encours échu","74 M FCFA"],["Dérive projet","124 M FCFA"],["Renouvellement","48 postes"]]},
+"am.q2":{d:"96 jours sans commande sur un compte qui commandait tous les 41 jours. Un appel suffit pour savoir si le besoin a disparu ou changé de main.",kv:[["Silence","96 jours"],["Rythme habituel","41 jours"],["Facturé annuel","118 M FCFA"]]},
+"am.a0":{d:"Deuxième devis en huit jours, montant cumulé de 96 M, après cinq mois sans aucune demande.",kv:[["Devis","2"],["Montant","96 M FCFA"],["Signal","achat probable"]],s:[10,8,6,4,6,30,58,86]},
+"am.a1":{d:"Le projet est facturé à 34 % pour 60 % attendus, cause staffing interne. Mieux vaut l'annoncer que l'entendre.",kv:[["Avancement facturé","34 %"],["Attendu","60 %"],["Cause","staffing interne"]]},
+"am.a2":{d:"Aucune commande depuis le 23/04, contre un rythme habituel de 41 jours. Dépassement de 44 jours.",kv:[["Dernière commande","23/04"],["Dépassement","44 jours"],["Moteur","M1 · Rythme"]]},
+"am.a3":{d:"Trois contrats de parc arrivent à échéance avant fin octobre, dont un chez le compte que vous voyez cet après-midi.",kv:[["Contrats","3"],["Échéance","avant fin octobre"],["Postes concernés","112"]]}
+};
+
+
+var ORDER = ["dg","dc","do","df","am"], cur = "dg", REG = [], CI = 0;
+var $ = function(s){ return document.querySelector(s); };
+var W = ["S24","S25","S26","S27","S28","S29","S30","S31"];
+
+/* ---------- infobulle ---------- */
+var tip = document.createElement("div");
+tip.className = "tip"; tip.style.position = "fixed"; document.body.appendChild(tip);
+function showTip(el, big, small){
+  var r = el.getBoundingClientRect();
+  tip.innerHTML = "<b>" + big + "</b><span>" + small + "</span>";
+  tip.style.left = (r.left + r.width / 2) + "px";
+  tip.style.top = r.top + "px";
+  tip.classList.add("on");
+}
+function hideTip(){ tip.classList.remove("on"); }
+
+/* ---------- écran de connexion ---------- */
+function fillUser(){
+  var k = $("#profil").value, u = USERS[k], p = P[k];
+  $("#ucard").innerHTML = '<span class="pav">' + p.c + '</span>'
+    + '<span class="uc-t"><b>' + u.u + '</b><span>' + u.m + '</span></span>'
+    + '<span class="tag n">' + u.t + '</span>';
+}
+$("#profil").addEventListener("change", function(){ fillUser(); $("#pwd").focus(); });
+$("#reveal").addEventListener("click", function(){
+  var i = $("#pwd"), on = i.type === "password";
+  i.type = on ? "text" : "password";
+  this.textContent = on ? "Masquer" : "Afficher";
+  this.setAttribute("aria-pressed", String(on)); i.focus();
+});
+$("#pwd").addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
+function submit(){
+  var i = $("#pwd"), b = $("#go"), h = $("#hint");
+  if(!i.value){
+    i.classList.remove("shake"); void i.offsetWidth; i.classList.add("shake");
+    h.textContent = "Saisissez un mot de passe — n'importe lequel, il n'est pas vérifié.";
+    h.classList.add("bad"); i.focus(); return;
+  }
+  h.classList.remove("bad");
+  h.textContent = "Vérification du second facteur…";
+  b.innerHTML = '<span class="spin"></span>Connexion…'; b.disabled = true;
+  setTimeout(function(){
+    enter($("#profil").value);
+    b.innerHTML = "Se connecter"; b.disabled = false; i.value = "";
+    h.textContent = "Maquette : la saisie n'est pas vérifiée, mais le champ doit être rempli.";
+  }, 780);
+}
+$("#go").addEventListener("click", submit);
+fillUser();
+
+/* ---------- fragments ---------- */
+function reg(c){ REG.push(c); return REG.length - 1; }
+function tile(cls, title, kick, body){
+  return '<div class="tile ' + cls + '"><div class="tile-h"><h3>' + title + '</h3>'
+    + (kick ? '<span class="tile-k">' + kick + '</span>' : '') + '</div>' + body + '</div>';
+}
+function det(key, fb){
+  var d = D[key] || {};
+  return { k:fb.k, t:fb.t, tag:fb.tag, tagc:fb.tagc, d:d.d || fb.d || "", kv:d.kv || fb.kv || [],
+           s:d.s || fb.s || null, note:fb.note || "" };
+}
+function lst(items, keyp){
+  return '<div class="lst">' + items.map(function(it, i){
+    var r = reg(det(keyp + i, { k:"Élément du cockpit", t:it[0], tag:it[2], tagc:it[3], d:it[1],
+      note:"Signal recalculé à chaque instantané. Cliquer une ligne n'écrit rien dans Odoo." }));
+    return '<div class="lst-i clk" tabindex="0" data-r="' + r + '"><b>' + String(i + 1).padStart(2, "0") + '</b>'
+      + '<span class="lst-t"><b>' + it[0] + '</b><span>' + it[1] + '</span></span>'
+      + '<span class="tag ' + it[3] + '">' + it[2] + '</span></div>';
+  }).join("") + '</div>';
+}
+function covTable(rows){
+  return '<table class="tbl"><thead><tr><th>Domaine</th><th>Source</th><th>Fraîcheur</th><th>État</th></tr></thead><tbody>'
+    + rows.map(function(r){
+        var i = reg({ k:"Source de données", t:r[0], tag:r[3], tagc:r[4],
+          d:"Table répliquée en lecture seule depuis Odoo, rafraîchie par l'instantané de 04:12. Aucune écriture n'est possible depuis le cockpit.",
+          kv:[["Table", r[1]], ["Fraîcheur", r[2]], ["État", r[3]], ["Mode d'accès", "lecture seule"]],
+          note:"Une ligne absente du miroir n'est pas une ligne à zéro : le cockpit préfère se taire plutôt qu'estimer." });
+        return '<tr class="clk" tabindex="0" data-r="' + i + '"><td>' + r[0] + '</td>'
+          + '<td class="mono">' + r[1] + '</td><td class="mono">' + r[2] + '</td>'
+          + '<td><span class="tag ' + r[4] + '">' + r[3] + '</span></td></tr>';
+      }).join("") + '</tbody></table>';
+}
+function hintline(t){ return '<p class="hintline"><i></i>' + t + '</p>'; }
+
+/* ---------- graphique interactif ---------- */
+function chartSvg(p, si){
+  var s = p.stats[si], n = s.sp.length, x0 = 42, x1 = 700, y0 = 26, y1 = 150;
+  var xs = s.sp.map(function(v, i){ return x0 + i * (x1 - x0) / (n - 1); });
+  var ys = s.sp.map(function(v){ return y1 - (v / 100) * (y1 - y0); });
+  var line = xs.map(function(x, i){ return (i ? "L" : "M") + x.toFixed(1) + " " + ys[i].toFixed(1); }).join(" ");
+  var area = line + " L" + x1 + " " + y1 + " L" + x0 + " " + y1 + " Z";
+  var grid = [0, 25, 50, 75, 100].map(function(g){
+    var y = y1 - (g / 100) * (y1 - y0);
+    return '<line class="gl" x1="' + x0 + '" y1="' + y + '" x2="' + x1 + '" y2="' + y + '"/>'
+      + '<text class="xl" x="8" y="' + (y + 3) + '">' + g + '</text>'; }).join("");
+  var pts = xs.map(function(x, i){
+    return '<circle class="hit" cx="' + x + '" cy="' + ys[i] + '" r="20" data-w="' + i + '" data-v="' + s.sp[i] + '"/>'
+      + '<circle class="pt" cx="' + x + '" cy="' + ys[i] + '" r="4.5" vector-effect="non-scaling-stroke"/>'; }).join("");
+  var labs = xs.map(function(x, i){ return '<text class="xl" text-anchor="middle" x="' + x + '" y="172">' + W[i] + '</text>'; }).join("");
+  return '<svg viewBox="0 0 720 190" preserveAspectRatio="none" role="img" aria-label="Trajectoire de ' + s.l
+    + ' sur huit semaines">' + grid + '<path class="ar" d="' + area + '"/>'
+    + '<path class="ln" d="' + line + '" vector-effect="non-scaling-stroke"/>' + pts + labs + '</svg>';
+}
+function drawChart(){
+  var p = P[cur], s = p.stats[CI];
+  $("#chart").innerHTML = chartSvg(p, CI);
+  $("#chartN").innerHTML = s.l + " · dernier point " + s.v + " " + s.u + " — " + s.d
+    + ". Indice ramené à 100 sur le plus haut point observé ; survolez un point pour la valeur, cliquez la tuile pour la série complète.";
+  document.querySelectorAll("#chartSel .chip").forEach(function(b, i){
+    b.setAttribute("aria-pressed", String(i === CI));
+    b.style.borderColor = i === CI ? "var(--brand)" : "var(--line)";
+    b.style.color = i === CI ? "var(--brand-deep)" : "var(--t1)";
+  });
+}
+
+/* ---------- 1. cockpit ---------- */
+function cockpit(p){
+  var stats = p.stats.map(function(s, i){
+    var r = reg(det(cur + ".s" + i, { k:"Indicateur", t:s.l, tag:s.d, tagc:s.s || "n",
+      d:"Série des huit dernières semaines, en indice base 100 sur le plus haut point observé. La valeur courante est de " + s.v + " " + s.u + ".",
+      kv:[["Valeur courante", s.v + " " + s.u], ["Lecture", s.d], ["Fréquence", "recalculé chaque nuit à 04:12"]], s:s.sp,
+      note:"Indicateur dérivé du miroir Odoo, sans saisie manuelle ni retraitement." }));
+    return '<div class="tile t4 clk" tabindex="0" data-r="' + r + '"><div class="tile-h"><h3>' + s.l + '</h3></div>'
+      + '<div><span class="stat-v num">' + s.v + '</span><span class="stat-u">' + s.u + '</span></div>'
+      + '<div class="stat-d ' + s.s + '">' + s.d + '</div><div class="spark">'
+      + s.sp.map(function(v, j){ return '<i class="' + (j >= s.sp.length - 3 ? "on" : "")
+          + '" style="height:' + v + '%" data-t="' + W[j] + ' · indice ' + v + '" data-s="' + s.l + '"></i>'; }).join("")
+      + '</div></div>';
+  }).join("");
+
+  var bars = tile("t7", p.bars.t, p.bars.k, hintline("Cliquez une ligne pour le détail")
+    + '<div class="bars">' + p.bars.rows.map(function(r, i){
+        var ri = reg(det(cur + ".b" + i, { k:p.bars.k, t:r[0], tag:r[2], tagc:r[4] || "n", d:r[1],
+          kv:[["Valeur", r[2]], ["Lecture", r[1]]], note:p.bars.note }));
+        return '<div class="bar-r clk" tabindex="0" data-r="' + ri + '"><div class="bar-n">' + r[0] + '<span>' + r[1] + '</span>'
+          + '<div class="bar-t"><i class="' + r[4] + '" style="width:' + r[3] + '%"></i></div></div>'
+          + '<div class="bar-v">' + r[2] + '</div></div>'; }).join("")
+    + '</div><p class="foot-n">' + p.bars.note + '</p>');
+
+  var chart = tile("t12", "Trajectoire des huit dernières semaines", "indice · base 100",
+    '<div class="chips" id="chartSel" style="margin-bottom:16px">'
+    + p.stats.map(function(s, i){ return '<button class="chip" data-c="' + i + '">' + s.l + '</button>'; }).join("")
+    + '</div><div class="chart" id="chart"></div><p class="foot-n" id="chartN"></p>');
+
+  return '<div class="brief"><p class="brief-k"><span class="dot"></span>' + p.brief.k + '</p>'
+    + '<h2>' + p.brief.h + '</h2><p>' + p.brief.p + '</p><div class="brief-r">'
+    + p.brief.pills.map(function(x){ return '<span class="bpill' + (x[1] ? " hot" : "") + '">' + x[0] + '</span>'; }).join("")
+    + '</div></div><div class="bento">' + stats + chart + bars
+    + tile("t5", p.queue.t, p.queue.k, lst(p.queue.items, cur + ".q"))
+    + tile("t6", p.alerts.t, p.alerts.k, lst(p.alerts.items, cur + ".a"))
+    + tile("t6", "Sur quoi ceci repose", "Miroir Odoo", covTable(p.cov)
+        + '<p class="foot-n">Le cockpit n\'affiche que ce qu\'il peut sourcer. Une ligne absente n\'est pas une ligne à zéro.</p>')
+    + (p.sup ? supTiles(p) : "")
+    + '</div>';
+}
+
+function supTiles(p){
+  var t = '<table class="tbl"><thead><tr><th>Fournisseur</th><th class="r">Ligne accordée</th><th class="r">Encours</th>'
+    + '<th>Utilisation</th><th>Prochaine échéance</th><th>Risque</th></tr></thead><tbody>'
+    + p.sup.rows.map(function(r, i){
+        var ri = reg(det(cur + ".f" + i, { k:"Fournisseur", t:r[0], tag:r[6], tagc:r[7], d:r[1],
+          kv:[["Ligne accordée", r[2]], ["Encours", r[3]], ["Utilisation", r[4] + " %"], ["Échéance", r[5]]],
+          note:p.sup.note }));
+        return '<tr class="clk" tabindex="0" data-r="' + ri + '"><td><b style="font-weight:500">' + r[0] + '</b>'
+          + '<div style="color:var(--t2);font-size:12px;margin-top:2px">' + r[1] + '</div></td>'
+          + '<td class="r mono">' + r[2] + '</td><td class="r mono">' + r[3] + '</td>'
+          + '<td style="min-width:120px"><div class="bar-t"><i class="' + r[7] + '" style="width:' + r[4] + '%"></i></div>'
+          + '<div class="mono" style="font-size:11px;margin-top:5px">' + r[4] + ' %</div></td>'
+          + '<td class="mono">' + r[5] + '</td><td><span class="tag ' + r[7] + '">' + r[6] + '</span></td></tr>'; }).join("")
+    + '</tbody></table>';
+  var bud = '<div class="bars">' + p.sup.bud.map(function(r, i){
+      var ri = reg(det(cur + ".g" + i, { k:"Poste budgétaire", t:r[0], tag:r[2], tagc:r[4] || "n", d:r[1],
+        kv:[["Consommation", r[2]], ["Détail", r[1]]], note:"Budget achats de l'exercice 2026, engagé au sens des bons de commande émis." }));
+      return '<div class="bar-r clk" tabindex="0" data-r="' + ri + '"><div class="bar-n">' + r[0] + '<span>' + r[1] + '</span>'
+        + '<div class="bar-t"><i class="' + r[4] + '" style="width:' + r[3] + '%"></i></div></div>'
+        + '<div class="bar-v">' + r[2] + '</div></div>'; }).join("") + '</div>';
+  return tile("t12", "Fournisseurs · lignes de crédit, encours et échéances", "6 lignes accordées · 900 M FCFA",
+      hintline("Cliquez un fournisseur pour son exposition détaillée") + t + '<p class="foot-n">' + p.sup.note + '</p>')
+    + tile("t7", "Consommation du budget achats", "exercice 2026", hintline("Cliquez un poste pour sa projection") + bud
+        + '<p class="foot-n">Deux postes sur cinq dépasseront le budget au rythme actuel. Le poste Matériel offre 154 M de marge de manœuvre.</p>')
+    + tile("t5", "Alertes fournisseurs", p.sup.al.length + " signaux", lst(p.sup.al, cur + ".fa"));
+}
+
+/* ---------- 2. copilote ---------- */
+function answer(p, i){
+  var a = p.ask[i];
+  var head = '<div class="bq"><span class="pav">' + p.c + '</span><p>' + a.q + '</p></div>';
+  if(a.i < 0){
+    return head + '<div class="ba"><div class="ba-k"><i></i>Ce que le cockpit ne sait pas</div>'
+      + '<p>' + a.why + '</p><div class="acts"><button class="btn" data-q="0">Voir une question instrumentée</button></div></div>';
+  }
+  var t = p.th[a.i];
+  return head + '<div class="ba"><div class="ba-k"><i></i>Réponse · sourcée sur l\'instantané de 04:12</div>'
+    + '<p>' + t.a + '</p>' + hintline("Cliquez une ligne pour ouvrir sa fiche")
+    + '<table class="tbl"><thead><tr><th>Élément</th><th>Lecture</th><th class="r">Effet</th><th>État</th></tr></thead><tbody>'
+    + t.rows.map(function(r){
+        var ri = reg({ k:"Ligne d'analyse", t:r[0], tag:r[3], tagc:r[4],
+          d:r[1].charAt(0).toUpperCase() + r[1].slice(1) + ". Cette ligne pèse " + r[2]
+            + " dans la réponse et ressort en état « " + r[3] + " » : c'est ce qui la fait remonter ici plutôt qu'ailleurs.",
+          kv:[["Effet", r[2]], ["État", r[3]], ["Question", t.q]], note:t.meth });
+        return '<tr class="clk" tabindex="0" data-r="' + ri + '"><td style="font-weight:500">' + r[0] + '</td>'
+          + '<td style="color:var(--t2);font-size:12.5px">' + r[1] + '</td>'
+          + '<td class="r mono">' + r[2] + '</td><td><span class="tag ' + r[4] + '">' + r[3] + '</span></td></tr>'; }).join("")
+    + '</tbody></table><div class="lim"><span class="tile-k">Méthode et périmètre</span>'
+    + '<p style="margin:9px 0 0;font-size:13px;color:var(--t2);line-height:1.6">' + t.meth + '</p></div>'
+    + '<div class="acts"><button class="btn p" data-go="arbitrages">Ouvrir un arbitrage</button>'
+    + '<button class="btn" data-go="donnees">Voir les sources</button><button class="btn">Programmer en veille</button></div></div>';
+}
+function copilote(p){
+  return '<div class="thread"><div class="chips">'
+    + p.ask.map(function(a, i){ return '<button class="chip" data-q="' + i + '">' + a.q + '</button>'; }).join("")
+    + '</div><div id="ansZone">' + answer(p, 0) + '</div></div>';
+}
+
+/* ---------- 3. arbitrages ---------- */
+function arbitrages(p){
+  var d = p.dec;
+  return '<div class="dec"><div class="dec-h"><h3>' + d.obj + '</h3><p>' + d.ctx + '</p></div>'
+    + '<div class="dec-b">' + hintline("Cliquez une option pour ses conséquences chiffrées") + '<div class="opts">'
+    + d.opts.map(function(o){
+        var ri = reg({ k:"Option " + o[0], t:o[1], tag:o[3] ? "recommandée" : "écartée", tagc:o[3] ? "a" : "n", d:o[2],
+          kv:o[4].concat([["Recommandation", o[3] ? "option retenue par le cockpit" : "non retenue"]]),
+          note:"Le cockpit classe les options selon les seuils du profil. Il ne tranche pas : la décision retenue est journalisée au nom de l'utilisateur." });
+        return '<div class="opt clk' + (o[3] ? " reco" : "") + '" tabindex="0" data-r="' + ri + '">'
+          + '<div class="opt-h"><span class="opt-n">Option ' + o[0] + '</span>'
+          + (o[3] ? '<span class="tag a">recommandée</span>' : '') + '</div>'
+          + '<div class="opt-h"><b>' + o[1] + '</b></div><p>' + o[2] + '</p>'
+          + o[4].map(function(c){ return '<div class="cons"><span style="color:var(--t2)">' + c[0] + '</span>'
+              + '<span class="mono">' + c[1] + '</span></div>'; }).join("") + '</div>'; }).join("")
+    + '</div><p class="foot-n">Le cockpit classe les options, il ne tranche pas. La décision et son motif sont journalisés au nom du profil qui la prend.</p>'
+    + '<div class="acts"><button class="btn p">Retenir une option</button><button class="btn">Demander un avis</button>'
+    + '<button class="btn">Reporter d\'une semaine</button></div></div></div>'
+    + '<div class="bento"><div class="tile t12"><div class="tile-h"><h3>Registre des décisions</h3>'
+    + '<span class="tile-k">12 derniers mois</span></div>'
+    + '<table class="tbl"><thead><tr><th>Date</th><th>Objet</th><th>Option retenue</th><th>Issue constatée</th></tr></thead><tbody>'
+    + [["12/06","Renouvellement Mutuelle Baobab","Maintien du périmètre","conforme","g","Le périmètre a été reconduit sans baisse. Le compte a depuis annoncé un gel budgétaire, sans effet sur le contrat signé."],
+       ["28/05","Sous-traitance déploiement Téléco","Recours partiel","marge −4 pts","w","La sous-traitance a tenu les délais mais coûté quatre points de marge, soit un point de plus que l'estimation du cockpit."],
+       ["14/04","Réponse appel d'offres Port Sud","Réponse en direct","perdu sur prix","r","Dossier perdu à 11 % d'écart de prix. Le cockpit recommandait le groupement, l'option directe a été retenue en comité."]]
+      .map(function(r){
+        var ri = reg({ k:"Décision journalisée · " + r[0], t:r[1], tag:r[3], tagc:r[4], d:r[5],
+          kv:[["Option retenue", r[2]], ["Issue constatée", r[3]], ["Relue le", r[0]]],
+          note:"Chaque décision est relue à échéance. C'est cette relecture qui recalibre les recommandations suivantes." });
+        return '<tr class="clk" tabindex="0" data-r="' + ri + '"><td class="mono">' + r[0] + '</td><td>' + r[1] + '</td>'
+          + '<td style="color:var(--t2);font-size:12.5px">' + r[2] + '</td>'
+          + '<td><span class="tag ' + r[4] + '">' + r[3] + '</span></td></tr>'; }).join("")
+    + '</tbody></table><p class="foot-n">Chaque décision est relue à échéance : c\'est ce qui calibre les recommandations suivantes.</p></div></div>';
+}
+
+/* ---------- 4. données ---------- */
+function donnees(p){
+  var gaps = p.ask.filter(function(a){ return a.i < 0; });
+  var moteurs = [
+    ["M1 · Rythme","Détecte les ruptures de cadence de commande par compte","statistique","n","élevée","g",
+     "Compare l'intervalle depuis la dernière commande à l'intervalle médian du compte sur 24 mois. Déclenche au-delà de 2,5 fois la médiane."],
+    ["M2 · Délai","Apprend le comportement de paiement et projette l'encaissement","statistique","n","élevée","g",
+     "Modèle de délai par compte appris sur 24 mois d'appariement facture / règlement. Erreur médiane de six jours."],
+    ["M3 · Dérive","Compare facturation réelle et courbe théorique de l'affaire","proxy assumé","n","moyenne","w",
+     "Proxy assumé : faute de feuilles de temps, l'avancement est estimé au prorata de la durée contractuelle. Couvre 24 affaires sur 38."],
+    ["M4 · Anomalie","Repère doublons, remises hors grille, écarts achat / vente","règles","n","élevée","g",
+     "Jeu de règles déterministes sur les lignes de facturation. Aucun apprentissage, donc aucun faux positif silencieux."],
+    ["M5 · Narration","Met les signaux en phrases et propose l'arbitrage","modèle de langage","a","à relire","w",
+     "Seul moteur génératif, et il ne calcule rien : il rédige à partir des sorties chiffrées des quatre autres. Désactivable sans perdre les chiffres."]];
+  return '<div class="bento">'
+    + tile("t7", "Ce que le miroir contient", "Instantané quotidien 04:12", hintline("Cliquez une source pour son mode d'accès") + covTable(p.cov)
+        + '<p class="foot-n">Réplication en lecture seule depuis Odoo. Aucune écriture, aucun accès direct à la base de production.</p>')
+    + tile("t5", "Ce que le cockpit ne peut pas dire", gaps.length + " limites", '<div class="lst">'
+        + gaps.map(function(a, i){
+            var ri = reg({ k:"Limite de couverture", t:a.q, tag:"limite", tagc:"n", d:a.why,
+              kv:[["Statut","non instrumentée"],["Cause","donnée absente ou partielle du miroir"]],
+              note:"Le cockpit expose ses limites plutôt que de produire une estimation non sourçable." });
+            return '<div class="lst-i clk" tabindex="0" data-r="' + ri + '"><b>' + String(i + 1).padStart(2, "0") + '</b>'
+              + '<span class="lst-t"><b>' + a.q + '</b><span>' + a.why + '</span></span>'
+              + '<span class="tag n">limite</span></div>'; }).join("") + '</div>')
+    + tile("t12", "Moteurs mobilisés par ce profil", "5 moteurs", hintline("Cliquez un moteur pour sa méthode")
+        + '<table class="tbl"><thead><tr><th>Moteur</th><th>Ce qu\'il fait</th><th>Nature</th><th>Fiabilité</th></tr></thead><tbody>'
+        + moteurs.map(function(m){
+            var ri = reg({ k:"Moteur", t:m[0], tag:m[4], tagc:m[5], d:m[6],
+              kv:[["Nature", m[2]], ["Fiabilité", m[4]], ["Sortie", "chiffrée, horodatée"]],
+              note:"Tous les moteurs tournent sur l'instantané de 04:12, jamais en direct sur la production Odoo." });
+            return '<tr class="clk" tabindex="0" data-r="' + ri + '"><td style="font-weight:500">' + m[0] + '</td>'
+              + '<td style="color:var(--t2);font-size:12.5px">' + m[1] + '</td>'
+              + '<td><span class="tag ' + m[3] + '">' + m[2] + '</span></td>'
+              + '<td><span class="tag ' + m[5] + '">' + m[4] + '</span></td></tr>'; }).join("")
+        + '</tbody></table><p class="foot-n">Seul M5 est génératif, et il ne calcule rien : il rédige à partir des sorties chiffrées des quatre autres.</p>')
+    + '</div>';
+}
+
+
+/* ---------- 5. réglages ---------- */
+function reglages(p){
+  var u = USERS[cur];
+  return '<div class="pblk"><div class="pblk-h"><h3>Seuils du profil</h3>'
+    + '<p>Ces valeurs déclenchent les signaux affichés dans le cockpit de ' + p.n.toLowerCase() + '.</p></div><div class="pblk-b">'
+    + '<div class="fld"><div><b>Rupture de rythme de commande</b><span>Multiple de l\'intervalle médian du compte avant alerte</span></div><input class="inp" value="2,5 ×"></div>'
+    + '<div class="fld"><div><b>Visibilité minimale par practice</b><span>En mois de backlog à consommer</span></div><input class="inp" value="4,0"></div>'
+    + '<div class="fld"><div><b>Dérive de facturation</b><span>Écart à la courbe théorique avant signalement</span></div><input class="inp" value="15 %"></div>'
+    + '<div class="fld"><div><b>Encours échu signalé</b><span>Ancienneté à partir de laquelle la créance remonte</span></div><input class="inp" value="90 j"></div>'
+    + '</div></div>'
+    + '<div class="pblk"><div class="pblk-h"><h3>Livraison et veille</h3><p>Quand et comment le cockpit vous sollicite.</p></div><div class="pblk-b">'
+    + '<div class="fld"><div><b>Brief quotidien par courriel</b><span>Envoyé à 06:30 à ' + u.m + ', après l\'instantané de 04:12</span></div><button class="sw" role="switch" aria-checked="true" aria-label="Brief quotidien"></button></div>'
+    + '<div class="fld"><div><b>Alerte immédiate sur rupture de rythme</b><span>Notification hors brief dès détection</span></div><button class="sw" role="switch" aria-checked="true" aria-label="Alerte rupture"></button></div>'
+    + '<div class="fld"><div><b>Signaler les limites de couverture</b><span>Afficher ce que le cockpit ne peut pas calculer</span></div><button class="sw" role="switch" aria-checked="true" aria-label="Limites"></button></div>'
+    + '<div class="fld"><div><b>Résumés rédigés par modèle de langage</b><span>Désactiver ne retire que la narration, pas les chiffres</span></div><button class="sw" role="switch" aria-checked="true" aria-label="Narration"></button></div>'
+    + '</div></div>'
+    + '<div class="pblk"><div class="pblk-h"><h3>Compte et périmètre</h3><p>Ce que ce profil voit, et ce qu\'il ne voit pas.</p></div><div class="pblk-b">'
+    + '<div class="fld"><div><b>' + u.u + '</b><span>' + u.m + ' · ' + u.t + '</span></div><span class="tag a">' + p.c + '</span></div>'
+    + '<div class="fld"><div><b>Second facteur</b><span>Application mobile, dernière validation il y a 3 minutes</span></div><span class="tag g">actif</span></div>'
+    + '<div class="fld"><div><b>Marge par affaire</b><span>Non calculable : feuilles de temps absentes du miroir</span></div><span class="tag n">indisponible</span></div>'
+    + '<div class="fld"><div><b>Écriture dans Odoo</b><span>Le cockpit lit, il n\'écrit jamais</span></div><span class="tag n">jamais</span></div>'
+    + '<div class="fld"><div><b>Journal des décisions</b><span>Horodaté et nominatif, conservé 5 ans</span></div><span class="tag g">actif</span></div>'
+    + '</div></div>';
+}
+
+/* ---------- tiroir de détail ---------- */
+var ovl = document.createElement("div"); ovl.className = "ovl"; document.body.appendChild(ovl);
+var drw = document.createElement("aside");
+drw.className = "drw"; drw.setAttribute("role", "dialog"); drw.setAttribute("aria-modal", "true");
+drw.setAttribute("aria-label", "Détail"); document.body.appendChild(drw);
+
+function openDrw(c){
+  if(!c) return;
+  var mini = "";
+  if(c.s){
+    var mx = Math.max.apply(null, c.s);
+    mini = '<span class="tile-k">Huit dernières semaines · indice</span><div class="mini">'
+      + c.s.map(function(v, i){ return '<i class="' + (i < c.s.length - 3 ? "dim" : "")
+          + '" style="height:' + Math.max(5, Math.round(v / mx * 100)) + '%" data-t="' + W[i] + ' · indice ' + v + '" data-s="série"></i>'; }).join("")
+      + '</div><div class="mlab">' + c.s.map(function(v, i){ return '<span>' + W[i] + '</span>'; }).join("") + '</div>';
+  }
+  drw.innerHTML = '<div class="drw-h"><div class="drw-k"><span>' + (c.k || "Détail") + '</span>'
+      + '<button class="drw-x" id="drwx" aria-label="Fermer le détail">&times;</button></div>'
+      + '<h3>' + c.t + '</h3>' + (c.tag ? '<span class="tag ' + (c.tagc || "n") + '">' + c.tag + '</span>' : '')
+    + '</div><div class="drw-b">' + (c.d ? '<p>' + c.d + '</p>' : "")
+      + (c.kv.length ? '<div class="kv">' + c.kv.map(function(k){
+          return '<div><span>' + k[0] + '</span><b>' + k[1] + '</b></div>'; }).join("") + '</div>' : "")
+      + mini + (c.note ? '<p class="foot-n">' + c.note + '</p>' : "")
+      + '<div class="acts"><button class="btn p" data-go="arbitrages">Ouvrir un arbitrage</button>'
+      + '<button class="btn" data-go="donnees">Voir la source</button>'
+      + '<button class="btn" data-close="1">Fermer</button></div></div>';
+  ovl.classList.add("on"); drw.classList.add("on");
+  var x = $("#drwx"); if(x) x.focus();
+}
+function closeDrw(){ ovl.classList.remove("on"); drw.classList.remove("on"); hideTip(); }
+ovl.addEventListener("click", closeDrw);
+
+/* ---------- rendu et navigation ---------- */
+var VIEWS = { cockpit:cockpit, copilote:copilote, arbitrages:arbitrages, donnees:donnees, reglages:reglages };
+var TITLES = { cockpit:"Cockpit", copilote:"Copilote", arbitrages:"Arbitrages", donnees:"Données", reglages:"Réglages" };
+
+function render(){
+  var p = P[cur]; REG = []; CI = 0;
+  Object.keys(VIEWS).forEach(function(k){ $("#s-" + k).innerHTML = VIEWS[k](p); });
+  $("#pAv").textContent = p.c; $("#rav").textContent = p.c;
+  $("#pName").textContent = USERS[cur].u; $("#hSnap").textContent = p.snap;
+  $("#hSub").textContent = p.n + " · " + p.sub;
+  drawChart();
+}
+function section(k){
+  document.querySelectorAll(".rl").forEach(function(b){ b.setAttribute("aria-current", String(b.dataset.s === k)); });
+  document.querySelectorAll(".sect").forEach(function(s){ s.classList.toggle("live", s.id === "s-" + k); });
+  $("#hTitle").textContent = TITLES[k];
+  window.scrollTo({ top:0 });
+}
+function enter(k){
+  cur = k; render(); section("cockpit");
+  $("#auth").classList.add("gone"); $("#app").classList.add("live");
+}
+function leave(){
+  closeDrw(); $("#app").classList.remove("live"); $("#auth").classList.remove("gone");
+  $("#profil").value = cur; fillUser(); window.scrollTo({ top:0 });
+}
+
+document.addEventListener("click", function(e){
+  var t = e.target;
+  if(t.closest("#drwx") || t.closest("[data-close]")){ closeDrw(); return; }
+  var go = t.closest("[data-go]"); if(go){ closeDrw(); section(go.dataset.go); return; }
+  var rl = t.closest(".rl"); if(rl){ closeDrw(); section(rl.dataset.s); return; }
+  var c = t.closest("[data-c]");
+  if(c){ CI = Number(c.dataset.c); drawChart(); return; }
+  var q = t.closest("[data-q]");
+  if(q){ $("#ansZone").innerHTML = answer(P[cur], Number(q.dataset.q)); section("copilote"); return; }
+  var sw = t.closest(".sw");
+  if(sw){ sw.setAttribute("aria-checked", sw.getAttribute("aria-checked") === "true" ? "false" : "true"); return; }
+  var r = t.closest("[data-r]"); if(r){ openDrw(REG[Number(r.dataset.r)]); return; }
+  if(t.closest("#pswitch") || t.closest("#rav")){ leave(); return; }
+});
+document.addEventListener("keydown", function(e){
+  if(e.key === "Escape"){ closeDrw(); return; }
+  if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); section("copilote"); $("#cmdi").focus(); return; }
+  if(e.key === "Enter" || e.key === " "){
+    var r = document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-r]");
+    if(r){ e.preventDefault(); openDrw(REG[Number(r.dataset.r)]); }
+  }
+});
+document.addEventListener("mouseover", function(e){
+  var el = e.target.closest("[data-t]"); if(el) showTip(el, el.dataset.t.split(" · ")[1] || el.dataset.t, el.dataset.t.split(" · ")[0]);
+  var h = e.target.closest(".hit");
+  if(h){
+    h.nextElementSibling.classList.add("on");
+    showTip(h, "indice " + h.dataset.v, W[Number(h.dataset.w)]);
+  }
+});
+document.addEventListener("mouseout", function(e){
+  if(e.target.closest("[data-t]")) hideTip();
+  var h = e.target.closest(".hit");
+  if(h){ h.nextElementSibling.classList.remove("on"); hideTip(); }
+});
+$("#cmdi").addEventListener("keydown", function(e){
+  if(e.key !== "Enter" || !e.target.value.trim()) return;
+  var p = P[cur], txt = e.target.value.trim();
+  $("#ansZone").innerHTML = '<div class="bq"><span class="pav">' + p.c + '</span><p>' + txt.replace(/</g, "&lt;") + '</p></div>'
+    + '<div class="ba"><div class="ba-k"><i></i>Maquette</div>'
+    + '<p>Cette maquette ne calcule rien : elle montre la forme d\'une réponse, pas son contenu. Les quatre questions proposées au-dessus sont, elles, entièrement rédigées — dont trois qui montrent ce que le cockpit refuse de répondre faute de données.</p>'
+    + '<div class="acts"><button class="btn p" data-q="0">Voir une réponse instrumentée</button></div></div>';
+  section("copilote"); e.target.value = "";
+});
+render();
+
+</script>

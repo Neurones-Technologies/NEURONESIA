@@ -1,0 +1,39 @@
+# Squelette express du plan de réponse — 3 phases.
+# Sélectionné quand il reste moins de 7 jours avant la deadline de soumission :
+# forcer 5 phases serait absurde, on compresse en 3 avec parallélisation.
+variant: express
+label: "Plan de réponse express (3 phases, deadline < 7 jours)"
+phases:
+  - id: PHASE_0
+    name: "Go/No-Go express"
+    description: >
+      Décision immédiate de répondre, validation des préalables bloquants et,
+      en cas de groupement, conformité minimale du partenaire. Tout en J0/J1.
+    is_blocking_next: true
+    typical_duration_days: 1
+    prerequisites: []
+    typical_actions:
+      - "Kick-off éclair et décision Go/No-Go"
+      - "Vérification des préalables bloquants et du partenaire"
+  - id: PHASE_1
+    name: "Rédaction & montage accéléré (parallélisé)"
+    description: >
+      Collecte des pièces, mobilisation des profils, rédaction technique et
+      montage financier menés EN PARALLÈLE pour tenir le délai court.
+    is_blocking_next: false
+    typical_duration_days: 4
+    prerequisites: ["PHASE_0"]
+    typical_actions:
+      - "Collecte pièces admin + caution en parallèle de la rédaction"
+      - "Mobilisation profils et CVs en urgence (RH)"
+      - "Rédaction offre technique resserrée + montage financier (BPU)"
+  - id: PHASE_2
+    name: "Revue express & soumission"
+    description: >
+      Revue croisée condensée, validation Direction Générale et dépôt immédiat.
+    is_blocking_next: false
+    typical_duration_days: 1
+    prerequisites: ["PHASE_1"]
+    typical_actions:
+      - "Revue croisée condensée (technique + admin)"
+      - "Validation DG et dépôt avant la deadline"
