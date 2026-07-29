@@ -31,9 +31,20 @@ export async function POST(request: Request) {
     fullName: data.user.full_name,
   });
 
+  // `secure` suit le protocole REEL de la requête (X-Forwarded-Proto injecté par
+  // nginx), pas NODE_ENV : en prod sur HTTP nu (accès par IP, pas de certificat
+  // possible pour une IP), un cookie Secure est purement et simplement ignoré par
+  // le navigateur → session jamais posée, le middleware renvoie en boucle sur
+  // /login et la connexion « ne fait rien ». Bug réel rencontré. Dès que le site
+  // passera derrière HTTPS, l'attribut se réactive tout seul.
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const isHttps = forwardedProto
+    ? forwardedProto.split(",")[0].trim() === "https"
+    : new URL(request.url).protocol === "https:";
+
   const cookieOpts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     sameSite: "lax" as const,
     path: "/",
     maxAge: SESSION_MAX_AGE,
