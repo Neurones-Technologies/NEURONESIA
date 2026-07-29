@@ -24,7 +24,7 @@ export function AppShell({
   return (
     <DetailProvider>
       <div className="app live">
-        <Rail profile={profile} code={user.code} />
+        <Rail profile={profile} code={user.code} isAdmin={user.isAdmin} />
         <div className="stage">
           <Header profile={profile} user={{ ...user, menuLabel: META[profile].menuLabel }} />
           <main className="canvas">{children}</main>

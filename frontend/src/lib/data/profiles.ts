@@ -42,11 +42,3 @@ export const META: Record<ProfileKey, ProfileMeta> = {
     menuLabel: "Portefeuille, alertes, renouvellements",
   },
 };
-
-export const SECTION_LABELS: Record<string, string> = {
-  vision: "Cockpit",
-  copilot: "Copilote",
-  arbitrage: "Arbitrages",
-  referentiel: "Données",
-  params: "Réglages",
-};
