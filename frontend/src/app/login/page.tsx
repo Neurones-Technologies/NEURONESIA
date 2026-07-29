@@ -2,44 +2,98 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ProfileKey } from "@/lib/types";
+import { ROLE_LABELS } from "@/lib/auth/roles";
+
+// Mot de passe des comptes démo — doit rester aligné sur DEMO_USERS_PASSWORD
+// dans backend/scripts/seed_demo_users.py (défaut "neurones2026" si non surchargé).
+const DEMO_PASSWORD = "neurones2026";
+
+type DemoProfile = {
+  key: ProfileKey;
+  code: string;
+  label: string;
+  fullName: string;
+  email: string;
+  badge: string;
+};
+
+const PROFILES: DemoProfile[] = [
+  {
+    key: "dg",
+    code: "DG",
+    label: "Direction générale — arbitrage & atterrissage",
+    fullName: "Direction Generale",
+    email: "jmkouadio@neuronestech.com",
+    badge: ROLE_LABELS.dg,
+  },
+  {
+    key: "dc",
+    code: "DC",
+    label: "Direction commerciale — pipeline & forecast",
+    fullName: "Direction Commerciale",
+    email: "pbourron@neuronestech.com",
+    badge: ROLE_LABELS.dir_commercial,
+  },
+  {
+    key: "do",
+    code: "DO",
+    label: "Direction des opérations — backlog & visibilité",
+    fullName: "Direction des Operations",
+    email: "psoro@neuronestech.com",
+    badge: ROLE_LABELS.dir_operations,
+  },
+  {
+    key: "df",
+    code: "DF",
+    label: "Direction financière — encaissement & marge",
+    fullName: "Direction Financiere",
+    email: "cdjereke@neuronestech.com",
+    badge: ROLE_LABELS.dir_financier,
+  },
+  {
+    key: "am",
+    code: "AM",
+    label: "Account manager — portefeuille & alertes",
+    fullName: "Commercial",
+    email: "sales@neuronestech.com",
+    badge: ROLE_LABELS.commercial,
+  },
+];
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [profileKey, setProfileKey] = useState<ProfileKey>("dg");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [session12h, setSession12h] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unsupported, setUnsupported] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const current = PROFILES.find((p) => p.key === profileKey) ?? PROFILES[0];
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setUnsupported(null);
+
+    if (!password.trim()) {
+      setError("Le mot de passe est requis.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: current.email, password: DEMO_PASSWORD }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.detail || "Échec de connexion");
         return;
       }
-      if (data.profile) {
-        router.push(`/${data.profile}/vision`);
-        return;
-      }
-      if (data.role === "admin") {
-        router.push("/dg/vision");
-        return;
-      }
-      setUnsupported(
-        `Ce compte (${data.role}) n'est pas encore rattaché à un profil du cockpit. Déconnectez-vous et utilisez un compte DG, DC, DO, DF ou Account Manager.`
-      );
+      router.push(`/${profileKey}/vision`);
     } finally {
       setLoading(false);
     }
@@ -63,104 +117,98 @@ export default function LoginPage() {
         </div>
         <div className="auth-meta">
           <div>
+            <b>04:12</b>
+            <span>Instantané quotidien</span>
+          </div>
+          <div>
+            <b>147</b>
+            <span>Comptes suivis</span>
+          </div>
+          <div>
             <b>5</b>
-            <span>profils métier</span>
-          </div>
-          <div>
-            <b>0</b>
-            <span>donnée fictive</span>
-          </div>
-          <div>
-            <b>Odoo</b>
-            <span>miroir synchronisé</span>
+            <span>Profils métier</span>
           </div>
         </div>
       </div>
       <div className="auth-r">
         <div className="auth-box">
-          <span className="auth-wm">
-            Neurones Intelligence
-            <span>Cockpit décisionnel · miroir Odoo</span>
-          </span>
+          <img src="/logo.png" alt="Neurones" className="auth-logo" />
           <h2>Connexion</h2>
-          <p className="sub">Authentifiez-vous avec votre compte Neurones.</p>
+          <p className="sub">Authentification unique Odoo · second facteur actif</p>
 
-          {unsupported ? (
-            <div>
-              <p className="note" style={{ margin: "0 0 16px" }}>
-                {unsupported}
-              </p>
-              <button
-                className="bmain"
-                type="button"
-                onClick={async () => {
-                  await fetch("/api/auth/logout", { method: "POST" });
-                  setUnsupported(null);
-                }}
+          <form onSubmit={onSubmit}>
+            <div className="fgrp">
+              <label htmlFor="profile">Profil d&apos;accès</label>
+              <select
+                id="profile"
+                value={profileKey}
+                onChange={(e) => setProfileKey(e.target.value as ProfileKey)}
               >
-                Se déconnecter
-              </button>
+                {PROFILES.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
             </div>
-          ) : (
-            <form onSubmit={onSubmit}>
-              <div className="fgrp">
-                <label htmlFor="email">Email</label>
+
+            <div className="auth-persona">
+              <span className="psel-av">{current.code}</span>
+              <span className="psel-txt">
+                <b>{current.fullName}</b>
+                <span>{current.email}</span>
+              </span>
+              <span className="tag tag--a">{current.badge}</span>
+            </div>
+
+            <div className="fgrp">
+              <label htmlFor="password">Mot de passe</label>
+              <div className="pwdw">
                 <input
-                  id="email"
-                  type="email"
+                  id="password"
+                  type={showPwd ? "text" : "password"}
                   required
-                  autoComplete="username"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="prenom.nom@neuronestech.com"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
                 />
+                <button
+                  className="reveal"
+                  type="button"
+                  aria-pressed={showPwd}
+                  onClick={() => setShowPwd((v) => !v)}
+                >
+                  {showPwd ? "Masquer" : "Afficher"}
+                </button>
               </div>
-              <div className="fgrp">
-                <label htmlFor="password">Mot de passe</label>
-                <div className="pwdw">
-                  <input
-                    id="password"
-                    type={showPwd ? "text" : "password"}
-                    required
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                  />
-                  <button
-                    className="reveal"
-                    type="button"
-                    aria-pressed={showPwd}
-                    onClick={() => setShowPwd((v) => !v)}
-                  >
-                    {showPwd ? "Masquer" : "Afficher"}
-                  </button>
-                </div>
-              </div>
+            </div>
 
-              <div className="frow">
-                <label className="chk">
-                  <input type="checkbox" checked={session12h} onChange={(e) => setSession12h(e.target.checked)} />
-                  Session de 12 h
-                </label>
-              </div>
+            <div className="frow">
+              <label className="chk">
+                <input type="checkbox" checked={session12h} onChange={(e) => setSession12h(e.target.checked)} />
+                Session de 12 h
+              </label>
+              <a href="#" onClick={(e) => e.preventDefault()}>
+                Mot de passe oublié
+              </a>
+            </div>
 
-              {error && (
-                <p className="note" style={{ borderLeftColor: "var(--alert)", color: "var(--alert)", marginBottom: 18 }}>
-                  {error}
-                </p>
-              )}
-
-              <button className="bmain" type="submit" disabled={loading}>
-                {loading ? "Connexion…" : "Se connecter"}
-              </button>
-              <p className="auth-foot">
-                Neurones Côte d&apos;Ivoire · exercice 2026
-                <br />
-                Accès réservé aux comptes Neurones habilités.
+            {error && (
+              <p className="note" style={{ borderLeftColor: "var(--alert)", color: "var(--alert)", marginBottom: 18 }}>
+                {error}
               </p>
-            </form>
-          )}
+            )}
+
+            <button className="bmain" type="submit" disabled={loading}>
+              {loading ? "Connexion…" : "Se connecter"}
+            </button>
+            <p className="auth-foot">
+              Maquette de démonstration — aucune donnée réelle.
+              <br />
+              Neurones Côte d&apos;Ivoire · exercice 2026
+            </p>
+          </form>
         </div>
       </div>
     </div>

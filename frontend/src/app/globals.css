@@ -619,18 +619,24 @@ table.tb tr.clk{cursor:pointer}
 
 .auth-r{background:var(--paper-2);padding:52px 56px;display:flex;flex-direction:column;justify-content:center}
 .auth-box{width:100%;max-width:400px;margin:0 auto}
-.auth-wm{display:block;font-family:var(--disp);font-weight:500;font-size:19px;letter-spacing:-.02em;color:var(--ink);margin-bottom:38px}
-.auth-wm span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--t3);margin-top:4px;font-weight:400}
-.auth-r h2{font-size:27px;font-weight:400;margin:0 0 6px;font-family:var(--disp)}
+.auth-logo{display:block;height:30px;width:auto;margin:0 auto 38px}
+.auth-r h2{font-size:27px;font-weight:400;margin:0 0 6px;font-family:var(--disp);text-align:center}
 .auth-r .sub{color:var(--t2);font-size:14.5px;margin:0 0 28px}
 .fgrp{margin-bottom:14px}
 .fgrp label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);margin-bottom:7px}
-.fgrp input{
+.fgrp input,.fgrp select{
   width:100%;padding:13px 15px;font-family:var(--sans);font-size:14.5px;color:var(--t1);
   background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-md);box-shadow:var(--shadow-xs);outline:0
 }
+.fgrp select{cursor:pointer}
 .fgrp input::placeholder{color:var(--t3)}
-.fgrp input:focus{border-color:var(--accent-strong);box-shadow:var(--ring)}
+.fgrp input:focus,.fgrp select:focus{border-color:var(--accent-strong);box-shadow:var(--ring)}
+.auth-persona{
+  display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line-2);
+  border-radius:var(--r-md);padding:11px 13px;box-shadow:var(--shadow-xs);margin-bottom:14px
+}
+.auth-persona .psel-txt{flex:1;min-width:0}
+.auth-persona .psel-av{width:34px;height:34px;font-size:11px;flex:0 0 34px}
 .frow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 22px}
 .frow a{font-size:13px;color:var(--t2);text-decoration:none;border-bottom:1px solid var(--line-2)}
 .frow a:hover{color:var(--accent);border-color:var(--accent-strong)}
