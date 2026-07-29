@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 import { ProfileKey, SectionKey } from "@/lib/types";
 
-const RAIL_ITEMS: { key: SectionKey; label: string; href: (p: ProfileKey) => string; icon: React.ReactNode }[] = [
+const RAIL_ITEMS: { key: SectionKey; label: string; href: (p: ProfileKey) => string; icon: React.ReactNode; adminOnly?: boolean }[] = [
   {
     key: "vision",
     label: "Cockpit",
@@ -39,13 +39,16 @@ const RAIL_ITEMS: { key: SectionKey; label: string; href: (p: ProfileKey) => str
   {
     key: "referentiel",
     label: "Données",
-    href: (p) => `/${p}/referentiel/couverture`,
+    href: (p) => `/${p}/referentiel`,
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <ellipse cx="12" cy="6" rx="7.5" ry="3" />
         <path d="M4.5 6v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6M4.5 12v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6" />
       </svg>
     ),
+    // Effectif et fraîcheur bruts du miroir (`/v1/stats/mirror`) : une lecture
+    // d'infrastructure, pas un module métier — réservée à l'administrateur.
+    adminOnly: true,
   },
   {
     key: "params",
@@ -62,10 +65,11 @@ const RAIL_ITEMS: { key: SectionKey; label: string; href: (p: ProfileKey) => str
   },
 ];
 
-export function Rail({ profile, code }: { profile: ProfileKey; code: string }) {
+export function Rail({ profile, code, isAdmin }: { profile: ProfileKey; code: string; isAdmin: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const items = RAIL_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   async function logout() {
     setLoggingOut(true);
@@ -82,9 +86,9 @@ export function Rail({ profile, code }: { profile: ProfileKey; code: string }) {
         <path d="M23.5 7a18.9 18.9 0 0 1 0 26" stroke="var(--accent-strong)" strokeWidth="2.3" fill="none" strokeLinecap="round" opacity=".7" />
         <path d="M30.5 2.8a25.4 25.4 0 0 1 0 34.4" stroke="var(--accent-strong)" strokeWidth="2.3" fill="none" strokeLinecap="round" opacity=".42" />
       </svg>
-      {RAIL_ITEMS.map((item) => {
+      {items.map((item) => {
         const href = item.href(profile);
-        const current = pathname === href || pathname.startsWith(href.split("?")[0].replace(/\/couverture$/, ""));
+        const current = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link key={item.key} className="rl" aria-current={current} title={item.label} href={href}>
             {item.icon}

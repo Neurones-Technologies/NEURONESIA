@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import { ProfileKey } from "@/lib/types";
-import { SECTION_LABELS } from "@/lib/data/profiles";
 import { VISION_SECTIONS } from "@/lib/data/sections";
 import { SectionNav } from "./SectionNav";
 import { UserMenu } from "./UserMenu";
@@ -12,6 +11,11 @@ function currentSectionKey(pathname: string, profile: ProfileKey): string {
   return rest.split("/")[0] || "vision";
 }
 
+/** En-tête de la coque : les onglets de section (scroll-spy) quand la page en
+ * définit, sinon rien à gauche — pas de fil d'Ariane ni de sous-titre de
+ * rôle/menu redondant avec le rail et la puce de profil. Le sélecteur de
+ * profil reste plaqué à droite dans tous les cas (cf. `.psel` dans
+ * globals.css). */
 export function Header({
   profile,
   user,
@@ -22,23 +26,11 @@ export function Header({
   const pathname = usePathname();
 
   const sectionKey = currentSectionKey(pathname, profile);
-  // Sur la vue Cockpit, le menu de sections prend la place du bloc titre :
-  // il porte déjà l'information de navigation, le titre serait redondant.
   const sections = sectionKey === "vision" ? VISION_SECTIONS[profile] : undefined;
 
   return (
     <header className="hdr">
-      {sections && sections.length > 0 ? (
-        <SectionNav items={sections} />
-      ) : (
-        <div className="hdr-t">
-          <b>{SECTION_LABELS[sectionKey] ?? "Cockpit"}</b>
-          <span>
-            {user.roleLabel} · {user.menuLabel}
-          </span>
-        </div>
-      )}
-
+      {sections && sections.length > 0 && <SectionNav items={sections} />}
 
       <UserMenu
         profile={profile}

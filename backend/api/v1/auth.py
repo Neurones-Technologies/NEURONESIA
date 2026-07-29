@@ -125,6 +125,7 @@ async def me(
         "full_name": current_user.full_name,
         "role": role,
         "allowed_views": await allowed_views(session, role),
+        "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
     }
 
 

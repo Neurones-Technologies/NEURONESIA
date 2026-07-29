@@ -32,7 +32,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`${disp.variable} ${sans.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      {/* suppressHydrationWarning : certaines extensions de navigateur
+          (ColorZilla, gestionnaires de mots de passe…) ajoutent des attributs
+          sur <body> avant l'hydratation — ex. `cz-shortcut-listen`. React
+          signalait alors une divergence serveur/client qui ne vient pas du
+          code. La suppression ne porte que sur les attributs de cet élément. */}
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

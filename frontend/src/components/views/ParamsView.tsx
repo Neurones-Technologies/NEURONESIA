@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { apiFetch } from "@/lib/api/client";
-import { META } from "@/lib/data/profiles";
+import { getMirrorCoverageSafe } from "@/lib/api/donnees";
+import { engineFiability, ENGINES } from "@/lib/data/donnees";
 import { ROLE_LABELS } from "@/lib/auth/roles";
+import { formatDate } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
-import { Acts, Note, Tag, ViewHeader } from "@/components/ui/primitives";
+import { Note, Tag } from "@/components/ui/primitives";
 
 interface Me {
   id: number;
@@ -11,6 +12,7 @@ interface Me {
   full_name: string;
   role: string;
   allowed_views: string[] | null;
+  last_login: string | null;
 }
 
 const VIEW_LABELS: Record<string, string> = {
@@ -42,20 +44,19 @@ const VIEW_LABELS: Record<string, string> = {
 
 const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
-export async function ParamsView({ profile }: { profile: ProfileKey }) {
-  const meta = META[profile];
-  const me = await apiFetch<Me>("/v1/auth/me");
+/** Vue Réglages — connectée au backend réel : identité et périmètre depuis
+ * `/v1/auth/me` (matrice module × rôle appliquée côté serveur, pas un
+ * masquage d'écran), fiabilité des moteurs depuis `/v1/stats/mirror`. Aucun
+ * bouton n'est ajouté sans un état serveur derrière : ni seuils éditables (ils
+ * vivent dans le code), ni préférences de notification (aucune table ne les
+ * persiste aujourd'hui). */
+export async function ParamsView({ profile: _profile }: { profile: ProfileKey }) {
+  const [me, coverage] = await Promise.all([apiFetch<Me>("/v1/auth/me"), getMirrorCoverageSafe()]);
   const isAdmin = me.allowed_views === null;
   const allowed = new Set(me.allowed_views ?? ALL_VIEWS);
 
   return (
     <>
-      <ViewHeader
-        eyebrow={`Paramètres · ${meta.name}`}
-        title="Périmètre, accès et méthode"
-        subtitle="Ce que votre compte peut voir est décidé côté serveur par la matrice module × rôle — pas par cet écran, qui ne fait qu'en afficher le résultat."
-      />
-
       <div className="pblk">
         <div className="pblk-h">
           <h3>Compte et périmètre</h3>
@@ -75,6 +76,13 @@ export async function ParamsView({ profile }: { profile: ProfileKey }) {
               <div className="fld-s">{ROLE_LABELS[me.role] ?? me.role}</div>
             </div>
             <Tag variant="s">actif</Tag>
+          </div>
+          <div className="fld">
+            <div>
+              <div className="fld-n">Connexion précédente</div>
+              <div className="fld-s">Horodatage du dernier jeton émis avant celui-ci</div>
+            </div>
+            <span className="ro">{me.last_login ? formatDate(me.last_login) : "première connexion"}</span>
           </div>
           <div className="fld">
             <div>
@@ -117,68 +125,28 @@ export async function ParamsView({ profile }: { profile: ProfileKey }) {
       <div className="pblk">
         <div className="pblk-h">
           <h3>Moteurs de détection</h3>
-          <p>Cinq détecteurs réutilisés par plusieurs modules — seuils fixés dans le code, à recalibrer avec l&apos;usage.</p>
+          <p>
+            Six moteurs réutilisés par plusieurs modules — seuils fixés dans le code, fiabilité de M3/M5 mesurée sur
+            l&apos;historique réel des instantanés.
+          </p>
         </div>
         <div className="pblk-b">
-          <div className="fld">
-            <div>
-              <div className="fld-n">M1 · Rupture de rythme</div>
-              <div className="fld-s">Écart entre le délai depuis le dernier événement et l&apos;intervalle habituel du compte.</div>
-            </div>
-            <span className="ro">actif</span>
-          </div>
-          <div className="fld">
-            <div>
-              <div className="fld-n">M2 · Dérive de délai</div>
-              <div className="fld-s">Glissement d&apos;un délai réel par rapport à son engagement contractuel.</div>
-            </div>
-            <span className="ro">actif</span>
-          </div>
-          <div className="fld">
-            <div>
-              <div className="fld-n">M3 · Écart backlog / facturation</div>
-              <div className="fld-s">Courbe de facturation réelle vs théorique du contrat.</div>
-            </div>
-            <span className="ro">proxy</span>
-          </div>
-          <div className="fld">
-            <div>
-              <div className="fld-n">M4 · Écart prix achat / vente</div>
-              <div className="fld-s">Évolution comparée du prix d&apos;achat et du prix de vente.</div>
-            </div>
-            <span className="ro">actif</span>
-          </div>
-          <div className="fld">
-            <div>
-              <div className="fld-n">M5 · Scoring pipeline</div>
-              <div className="fld-s">
-                Calibré sur les instantanés quotidiens du pipeline — collecte démarrée aujourd&apos;hui, l&apos;historique
-                se construit jour après jour.
+          {ENGINES.map((e) => {
+            const fiab = engineFiability(e, coverage?.tables ?? null);
+            return (
+              <div className="fld" key={e.code}>
+                <div>
+                  <div className="fld-n">{e.nom}</div>
+                  <div className="fld-s">{e.role}</div>
+                </div>
+                <Tag variant={fiab.variant}>{fiab.label}</Tag>
               </div>
-            </div>
-            <Tag variant="w">historique en cours</Tag>
-          </div>
+            );
+          })}
           <Note>
             Ces seuils vivent dans le code du backend, pas dans une table éditable — les rendre configurables depuis
             cet écran est un chantier distinct de l&apos;intégration des données.
           </Note>
-        </div>
-      </div>
-
-      <div className="pblk">
-        <div className="pblk-h">
-          <h3>Référentiel global</h3>
-          <p>Commun aux cinq profils.</p>
-        </div>
-        <div className="pblk-b">
-          <Acts style={{ margin: 0 }}>
-            <Link className="btn" href={`/${profile}/referentiel/couverture`}>
-              Couverture 29 / 29
-            </Link>
-            <Link className="btn" href={`/${profile}/referentiel/moteurs`}>
-              Moteurs et données
-            </Link>
-          </Acts>
         </div>
       </div>
     </>
