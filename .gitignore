@@ -6,6 +6,8 @@ backend/.env.prod
 backend/.env.vps
 *.env.local
 docker-compose.override.yml
+backend/tmp_token.txt
+*.token
 # ── Data / volumes Docker (trop lourds, hors-repo) ─────────────────────────
 data/chromadb/
 data/bm25_index/

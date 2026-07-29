@@ -5,6 +5,8 @@ __pycache__/
 .env.*
 *.db
 *.sqlite
+tmp_token.txt
+*.token
 data/
 .pytest_cache/
 .mypy_cache/
