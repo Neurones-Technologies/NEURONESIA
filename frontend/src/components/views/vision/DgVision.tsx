@@ -186,11 +186,11 @@ export async function DgVision() {
                 Briefing non disponible pour ce profil ou pas encore généré.
               </Note>
             )}
-            <FootNote>
+            {/* <FootNote>
               Généré le{" "}
               {briefing?.generated_at ? new Date(briefing.generated_at).toLocaleString("fr-FR") : "—"} (
               {briefing?.triggered_by ?? "—"}) et figé jusqu&apos;à la prochaine régénération planifiée.
-            </FootNote>
+            </FootNote> */}
           </Tile>
         </Bento>
       </Section>
@@ -216,10 +216,10 @@ export async function DgVision() {
                 detail={<>M FCFA · {formatNumber(forecast.scenarios.nb_opportunites)} opportunités</>}
               />
             </ScenGrid>
-            <FootNote>
+            {/* <FootNote>
               Pipeline total non pondéré : {formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA. Le scénario bas
               exclut les opportunités dont l&apos;échéance est déjà dépassée.
-            </FootNote>
+            </FootNote> */}
           </Tile>
 
           <Tile span={5} title="Facturation par mois" kick={`exercice ${kpis.year.year}`}>
@@ -249,13 +249,13 @@ export async function DgVision() {
             />
           </Tile>
 
-          <Tile span={12} title="Lecture de la trajectoire" kick="narration · M5">
+          {/* <Tile span={12} title="Lecture de la trajectoire" kick="narration · M5">
             {trendAnalysis ? (
               <AnalysisNarr text={trendAnalysis.analysis} />
             ) : (
               <Note style={{ marginTop: 0 }}>Historique mensuel insuffisant pour une analyse de tendance.</Note>
             )}
-          </Tile>
+          </Tile> */}
 
           <Tile span={12} title="Explication d'écart budgétaire" kick={`${variance.annee} vs ${variance.annee_precedente}`}>
             <HintLine>Cliquez un effet pour les clients concernés</HintLine>
@@ -367,7 +367,7 @@ export async function DgVision() {
                 {formatMFcfa(variance.top_clients_gagnes[0]?.ca_xof)} M).
               </p>
             </Narr>
-            <FootNote>{variance.note}</FootNote>
+            {/* <FootNote>{variance.note}</FootNote> */}
           </Tile>
         </Bento>
       </Section>
@@ -407,11 +407,11 @@ export async function DgVision() {
                 };
               })}
             />
-            <FootNote>
+            {/* <FootNote>
               {top5Pct !== null
                 ? `Les cinq premiers comptes cumulent ${formatPct(top5Pct, 0)} % du CA facturé${top5Pct > 50 ? " — au-delà du seuil de 50 %, la dépendance devient un risque structurel." : "."}`
                 : "Concentration non calculable sur cet exercice."}
-            </FootNote>
+            </FootNote> */}
           </Tile>
 
           <Tile span={5} title="Paliers de concentration" kick="cumul du CA">
@@ -452,15 +452,15 @@ export async function DgVision() {
                   : []),
               ]}
             />
-            <FootNote>
+            {/* <FootNote>
               La dépendance fournisseur et le poids de la sous-traitance ne sont pas accessibles depuis ce profil — cf.
               Direction des opérations.
-            </FootNote>
+            </FootNote> */}
           </Tile>
         </Bento>
       </Section>
 
-      <Section id="copilote" title="Copilote" subtitle="Poser une question directement">
+      {/* <Section id="copilote" title="Copilote" subtitle="Poser une question directement">
         <Bento>
           <Tile span={12} quiet title="Interrogation en langage naturel" kick="sémantique · M5">
             <p style={{ margin: "0 0 4px", fontSize: 14, color: "var(--t2)", lineHeight: 1.6 }}>
@@ -474,7 +474,7 @@ export async function DgVision() {
             </div>
           </Tile>
         </Bento>
-      </Section>
+      </Section> */}
     </>
   );
 }
