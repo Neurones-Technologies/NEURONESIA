@@ -268,6 +268,17 @@ class OdooAdapter(CRMRepository):
     async def get_year_stats(self, year: int) -> dict:
         return {"year": year, "clients_with_orders": 0, "orders_count": 0, "revenue_xof": 0.0}
 
+    async def get_ytd_stats(self, year: int, as_of=None, exclude_internal: bool = False) -> dict:
+        return {"year": year, "as_of": None, "clients_with_orders": 0, "orders_count": 0, "revenue_xof": 0.0}
+
+    async def get_account_rhythm_breaks(self, **kwargs) -> dict:
+        return {
+            "as_of": None, "nb_comptes_analyses": 0, "nb_comptes_rompus": 0,
+            "ca_annuel_historique_xof": 0.0, "ca_ytd_xof": 0.0, "impaye_cumule_xof": 0.0,
+            "comptes": [], "nb_comptes_dormants": 0, "ca_annuel_historique_dormants_xof": 0.0,
+            "dormants": [], "note": "",
+        }
+
     async def get_month_stats(self, year: int, month: int) -> dict:
         return {"year": year, "month": month, "clients_with_orders": 0, "orders_count": 0, "revenue_xof": 0.0}
 
@@ -646,6 +657,9 @@ class OdooAdapter(CRMRepository):
 
     async def get_top_clients(self, limit: int = 5, year: int | None = None) -> list[dict]:
         return []
+
+    async def get_clients_by_month(self, year: int, limit: int = 10) -> dict[int, list[dict]]:
+        return {}
 
     async def get_unpaid_invoices(self, limit: int = 10) -> list[dict]:
         return []

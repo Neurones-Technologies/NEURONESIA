@@ -45,6 +45,11 @@ async def kpis(
     y = year or datetime.now().year
     current = await crm.get_year_stats(y)
     previous = await crm.get_year_stats(y - 1)
+    # CA arrêté au même jour calendaire dans les deux années — seul agrégat
+    # comparable à N-1 en cours d'exercice (year/previous_year comparent une
+    # année partielle à une année pleine, cf. build_dg_facts).
+    ytd = await crm.get_ytd_stats(y)
+    previous_ytd = await crm.get_ytd_stats(y - 1)
     monthly = await crm.get_monthly_revenue(y)
     monthly_previous = await crm.get_monthly_revenue(y - 1)
     open_pipeline = await crm.get_open_pipeline_stats()
@@ -53,6 +58,8 @@ async def kpis(
     return {
         "year": current,
         "previous_year": previous,
+        "ytd": ytd,
+        "previous_ytd": previous_ytd,
         "monthly": monthly,
         "monthly_previous": monthly_previous,
         "open_pipeline": open_pipeline,
@@ -129,6 +136,13 @@ async def monthly_revenue(request: Request, year: int | None = Query(default=Non
     """Série CA commandé par mois (graphe d'évolution)."""
     y = year or datetime.now().year
     return {"year": y, "months": await _crm(request).get_monthly_revenue(y)}
+
+
+@router.get("/monthly-clients", dependencies=[Depends(require_views("dashboard"))])
+async def monthly_clients(request: Request, year: int | None = Query(default=None), limit: int = Query(default=10, ge=1, le=50)):
+    """Pour chaque mois de l'année, les clients ayant le plus commandé (détail au clic sur un mois)."""
+    y = year or datetime.now().year
+    return {"year": y, "months": await _crm(request).get_clients_by_month(y, limit)}
 
 
 @router.get("/revenue/by-salesperson", dependencies=[Depends(require_views("dashboard", "performance"))])

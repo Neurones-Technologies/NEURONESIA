@@ -52,6 +52,11 @@ class CRMRepository(ABC):
         """Statistiques pour un mois donné : clients actifs, nombre BDC, CA."""
 
     @abstractmethod
+    async def get_clients_by_month(self, year: int, limit: int = 10) -> dict[int, list[dict]]:
+        """Pour chaque mois de l'année, les N clients ayant le plus commandé
+        (par nombre de commandes). Retourne {mois: [{client, nb_commandes, ca_xof}, ...]}."""
+
+    @abstractmethod
     async def get_order_by_ref(self, ref: str) -> dict | None:
         """Cherche un bon de commande par référence (ex: FP/2026/12576)."""
 

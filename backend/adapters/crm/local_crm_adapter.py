@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select, or_
 
@@ -13,6 +13,34 @@ from db.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---- M1 « rupture de rythme » (première implémentation ; le moteur était
+#      documenté dans frontend/src/lib/data/engines.ts sans code derrière) ----
+
+# Facteur retenu : 2,5 × intervalle médian, et non « médiane + 1,5 σ » comme
+# l'annonce engines.ts. Sur ces comptes l'historique utile compte 2 à 5
+# intervalles, où σ est instable et produit des seuils absurdes (un compte à 3
+# commandes très espacées devient indétectable). 2,5 × médiane est robuste aux
+# petits échantillons et c'est déjà le seuil affiché à l'utilisateur dans
+# ParamsView.tsx.
+RUPTURE_FACTEUR_MEDIANE = 2.5
+
+# 36 mois et non 24 : les gros comptes (télécos, banques, bailleurs) commandent
+# par vagues annuelles de marché ; sur 24 mois la médiane d'intervalle d'un
+# compte à 3 commandes n'est pas représentative de son rythme réel.
+RUPTURE_FENETRE_MOIS = 36
+RUPTURE_MIN_COMMANDES = 3          # => au moins 2 intervalles mesurables
+
+# Au-delà d'un an de silence, le compte n'est plus une rupture de rythme à
+# rattraper mais un compte dormant à reconquérir : deux décisions différentes,
+# donc deux classes. Ce seuil écarte aussi mécaniquement les doublons de
+# partenaire Odoo (« ORANGE BF » vs « ORANGE BURKINA FASO ») des comptes cités
+# nommément — un compte cité par son nom doit être réellement récupérable.
+RUPTURE_HORIZON_RECUPERABLE_JOURS = 365
+
+# Sous ce CA annuel historique, la rupture n'est pas un sujet de Direction
+# générale.
+RUPTURE_MIN_CA_ANNUEL_XOF = 100_000_000
 
 
 class LocalCRMAdapter(CRMRepository):
@@ -127,6 +155,40 @@ class LocalCRMAdapter(CRMRepository):
             "clients_with_orders": clients_with_orders,
             "orders_count": orders_count,
             "revenue_xof": float(revenue),
+        }
+
+    async def get_ytd_stats(self, year: int, as_of: date | None = None,
+                            exclude_internal: bool = False) -> dict:
+        """CA commandé arrêté au même jour calendaire que `as_of` (aujourd'hui
+        par défaut) — le seul agrégat comparable à N-1 en cours d'exercice.
+        get_year_stats(2026) vaut 7 mois écoulés et get_year_stats(2025) 12
+        mois révolus : les comparer produit un écart artificiel. Ici les deux
+        années sont coupées au même jour/mois — la comparaison lexicographique
+        sur 'MM-DD' suit l'ordre calendaire à l'intérieur d'une année."""
+        from sqlalchemy import text as _text
+        if as_of is None:
+            as_of = datetime.now().date()
+        cutoff_md = as_of.strftime("%m-%d")
+        join_clients = "LEFT JOIN clients c ON c.client_id = o.client_id" if exclude_internal else ""
+        exclude_clause = "AND (c.name IS NULL OR c.name NOT LIKE '%NEURONES%')" if exclude_internal else ""
+        sql = f"""
+            SELECT COUNT(DISTINCT o.client_id), COUNT(*), COALESCE(SUM(o.amount), 0)
+            FROM sale_orders o
+            {join_clients}
+            WHERE o.state IN ('sale', 'done')
+              AND strftime('%Y', o.date_order) = :year
+              AND strftime('%m-%d', o.date_order) <= :cutoff_md
+              {exclude_clause}
+        """
+        params: dict = {"year": str(year), "cutoff_md": cutoff_md}
+        async with AsyncSessionLocal() as session:
+            row = (await session.execute(_text(sql), params)).fetchone()
+        return {
+            "year": year,
+            "as_of": as_of.isoformat(),
+            "clients_with_orders": row[0] or 0,
+            "orders_count": row[1] or 0,
+            "revenue_xof": float(row[2] or 0),
         }
 
     async def get_month_stats(self, year: int, month: int) -> dict:
@@ -340,6 +402,150 @@ class LocalCRMAdapter(CRMRepository):
             "retard_90j_nb_factures": retard_90j_nb,
             "retard_90j_montant_xof": retard_90j_montant,
             "top_10_debiteurs": top_debiteurs,
+        }
+
+    async def get_account_rhythm_breaks(
+        self,
+        as_of: date | None = None,
+        fenetre_mois: int = RUPTURE_FENETRE_MOIS,
+        min_commandes: int = RUPTURE_MIN_COMMANDES,
+        facteur_mediane: float = RUPTURE_FACTEUR_MEDIANE,
+        min_ca_annuel_xof: float = RUPTURE_MIN_CA_ANNUEL_XOF,
+        limit: int = 20,
+    ) -> dict:
+        """Détecte les comptes majeurs dont le rythme de commande a décroché
+        (moteur M1). Deux requêtes seulement (aucune boucle SQL par client) :
+        l'historique des commandes sur la fenêtre, puis les impayés par
+        client_id, croisés en Python pur.
+
+        Un compte est en rupture si son silence actuel dépasse
+        `facteur_mediane` × son intervalle médian entre commandes, sur les
+        `fenetre_mois` derniers mois, avec au moins `min_commandes` commandes
+        et un CA annuel moyen historique ≥ `min_ca_annuel_xof`. Un silence
+        au-delà de `RUPTURE_HORIZON_RECUPERABLE_JOURS` classe le compte en
+        « dormant » plutôt qu'en « récupérable » — deux décisions différentes."""
+        import statistics as _st
+        from sqlalchemy import text as _text
+
+        if as_of is None:
+            as_of = datetime.now().date()
+
+        async with AsyncSessionLocal() as session:
+            hist_sql = _text("""
+                SELECT o.client_id,
+                       COALESCE(NULLIF(TRIM(c.name), ''), o.client_name) AS nom,
+                       substr(o.date_order, 1, 10) AS jour,
+                       o.amount
+                FROM sale_orders o
+                LEFT JOIN clients c ON o.client_id = c.client_id
+                WHERE o.state IN ('sale', 'done')
+                  AND o.date_order >= date(:as_of, :fenetre)
+                  AND o.date_order < date(:as_of, '+1 day')
+                ORDER BY o.client_id, jour
+            """)
+            hist_rows = (await session.execute(hist_sql, {
+                "as_of": as_of.isoformat(),
+                "fenetre": f"-{fenetre_mois} months",
+            })).fetchall()
+
+            imp_sql = _text("""
+                SELECT client_id, COUNT(*), COALESCE(SUM(amount), 0),
+                       MAX(CAST(julianday(:as_of) - julianday(due_date) AS INTEGER))
+                FROM invoices
+                WHERE status != 'paid'
+                GROUP BY client_id
+            """)
+            imp_rows = (await session.execute(imp_sql, {"as_of": as_of.isoformat()})).fetchall()
+
+        impayes_par_client = {
+            r[0]: {"nb": r[1] or 0, "montant_xof": float(r[2] or 0), "retard_max_jours": int(r[3] or 0)}
+            for r in imp_rows
+        }
+
+        par_client: dict[str, dict] = {}
+        for client_id, nom, jour, amount in hist_rows:
+            entry = par_client.setdefault(client_id, {"nom": nom, "jours": [], "amounts": []})
+            entry["jours"].append(jour)
+            entry["amounts"].append(float(amount or 0))
+
+        annee_courante = str(as_of.year)
+        comptes: list[dict] = []
+        dormants: list[dict] = []
+        for client_id, data in par_client.items():
+            jours = data["jours"]
+            if len(jours) < min_commandes:
+                continue
+            dates = [datetime.strptime(j, "%Y-%m-%d").date() for j in jours]
+            intervalles = [
+                (dates[i] - dates[i - 1]).days
+                for i in range(1, len(dates))
+                if (dates[i] - dates[i - 1]).days > 0
+            ]
+            if len(intervalles) < 2:
+                continue
+            mediane = max(_st.median(intervalles), 1)
+            silence = (as_of - dates[-1]).days
+            if silence <= facteur_mediane * mediane:
+                continue
+
+            ca_fenetre = sum(data["amounts"])
+            ca_annuel_moyen = ca_fenetre / (fenetre_mois / 12)
+            if ca_annuel_moyen < min_ca_annuel_xof:
+                continue
+
+            ca_ytd = sum(a for j, a in zip(jours, data["amounts"]) if j[:4] == annee_courante)
+            impaye = impayes_par_client.get(client_id, {"nb": 0, "montant_xof": 0.0, "retard_max_jours": 0})
+
+            item = {
+                "client": data["nom"] or "—",
+                "client_id": client_id,
+                "nb_commandes": len(jours),
+                "intervalle_median_jours": round(mediane),
+                "jours_silence": silence,
+                "ratio_silence": round(silence / mediane, 2),
+                "derniere_commande": jours[-1],
+                "ca_fenetre_xof": ca_fenetre,
+                "ca_annuel_moyen_xof": ca_annuel_moyen,
+                "ca_ytd_xof": ca_ytd,
+                "impaye_xof": impaye["montant_xof"],
+                "nb_factures_impayees": impaye["nb"],
+                "retard_max_jours": impaye["retard_max_jours"],
+                "croise_impaye": impaye["montant_xof"] > 0,
+            }
+            if silence <= RUPTURE_HORIZON_RECUPERABLE_JOURS:
+                item["classe"] = "recuperable"
+                comptes.append(item)
+            else:
+                item["classe"] = "dormant"
+                dormants.append(item)
+
+        comptes.sort(key=lambda c: c["ca_annuel_moyen_xof"], reverse=True)
+        dormants.sort(key=lambda c: c["ca_annuel_moyen_xof"], reverse=True)
+
+        return {
+            "as_of": as_of.isoformat(),
+            "parametres": {
+                "fenetre_mois": fenetre_mois, "facteur_mediane": facteur_mediane,
+                "min_commandes": min_commandes, "min_ca_annuel_xof": min_ca_annuel_xof,
+                "horizon_recuperable_jours": RUPTURE_HORIZON_RECUPERABLE_JOURS,
+            },
+            "nb_comptes_analyses": len(par_client),
+            "nb_comptes_rompus": len(comptes),
+            "ca_annuel_historique_xof": sum(c["ca_annuel_moyen_xof"] for c in comptes),
+            "ca_ytd_xof": sum(c["ca_ytd_xof"] for c in comptes),
+            "impaye_cumule_xof": sum(c["impaye_xof"] for c in comptes),
+            "comptes": comptes[:limit],
+            "nb_comptes_dormants": len(dormants),
+            "ca_annuel_historique_dormants_xof": sum(c["ca_annuel_moyen_xof"] for c in dormants),
+            "dormants": dormants[:limit],
+            "note": (
+                "Granularité = partenaire Odoo (client_id), pas groupe commercial : un même "
+                "groupe existe parfois sous plusieurs fiches (ex. Orange, Coris, chacun décliné "
+                "par pays/filiale). Les comptes cités nommément sont limités à la classe "
+                "« récupérable » (silence ≤ 365 j), ce qui écarte les fiches doublons dormantes. "
+                "Aucune donnée d'appel ou de perte de marché dans le miroir : un silence n'est "
+                "pas une perte, c'est un fait à vérifier."
+            ),
         }
 
     async def get_invoice_collection_stats(self, client_name: str = "", year: int | None = None) -> dict:
@@ -1510,7 +1716,7 @@ class LocalCRMAdapter(CRMRepository):
                    SUM(amount) as ca,
                    COUNT(*) as nb
             FROM sale_orders
-            WHERE state NOT IN ('cancel', 'draft')
+            WHERE state IN ('sale', 'done')
               AND strftime('%Y', date_order) = :year
             GROUP BY mo ORDER BY mo
         """)
@@ -1520,6 +1726,28 @@ class LocalCRMAdapter(CRMRepository):
             {"mois": int(r[0]), "ca_xof": round(r[1] or 0), "nb_commandes": r[2]}
             for r in rows
         ]
+
+    async def get_clients_by_month(self, year: int, limit: int = 10) -> dict[int, list[dict]]:
+        """Pour chaque mois de l'année, les N clients ayant le plus commandé (par nb de commandes)."""
+        from sqlalchemy import text
+        sql = text("""
+            SELECT strftime('%m', date_order) as mo, client_name,
+                   COUNT(*) as nb_commandes, SUM(amount) as ca
+            FROM sale_orders
+            WHERE state IN ('sale', 'done')
+              AND strftime('%Y', date_order) = :year
+            GROUP BY mo, client_id, client_name
+            ORDER BY mo, nb_commandes DESC, ca DESC
+        """)
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(sql, {"year": str(year)})).fetchall()
+        by_month: dict[int, list[dict]] = {}
+        for r in rows:
+            mois = int(r[0])
+            bucket = by_month.setdefault(mois, [])
+            if len(bucket) < limit:
+                bucket.append({"client": r[1], "nb_commandes": r[2], "ca_xof": round(r[3] or 0)})
+        return by_month
 
     async def list_opportunities(self, stage: str | None = None, limit: int = 50) -> list[dict]:
         """Liste d'opportunités (kanban pipeline), triées par valeur pondérée décroissante."""
