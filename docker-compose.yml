@@ -1,0 +1,109 @@
+services:
+
+  # ─── LLM local (fallback Claude → GPT → Ollama) ─────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: neurones-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 3.5G
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+
+  # ─── Backend FastAPI ──────────────────────────────────────────────────────
+  backend:
+    # Image pré-construite et poussée par GitHub Actions (tag = SHA en prod via
+    # IMAGE_TAG ; `latest` par défaut). `build:` reste pour le dev local.
+    image: ghcr.io/neurones-technologies/neurones-ia-backend:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: neurones-ia-backend
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      # Chemins data DANS le volume persistant (/app/data) — priment sur .env.prod.
+      # Sans ça, les défauts "../data" tombent hors du volume → base SQLite (et users)
+      # effacée à CHAQUE redéploiement. Bug réel rencontré : admin créé puis disparu.
+      - GED_PATH=/app/data/ged
+      - TEMPLATES_PATH=/app/data/templates
+      - UPLOADS_PATH=/app/data/uploads
+      - CHROMADB_PATH=/app/data/chromadb
+      - BM25_INDEX_PATH=/app/data/bm25_index
+      - LOCAL_DB_PATH=/app/data/local_db/neurones.db
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - neurones_data:/app/data
+    depends_on:
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        # 6G : le pipeline /presales/score charge le modèle d'embeddings (×2 avec
+        # --workers 2) + gros contextes LLM ; à 2G le worker était OOM-killed en
+        # plein scoring → nginx renvoyait 502/504. Hôte : 15G, marge large.
+        limits:
+          memory: 6G
+
+  # ─── Frontend Next.js ─────────────────────────────────────────────────────
+  frontend:
+    image: ghcr.io/neurones-technologies/neurones-ia-frontend:${IMAGE_TAG:-latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # URL relative : le frontend appelle /api/v1 sur le même hôte que la page,
+        # nginx route /api → backend. Indépendant de l'IP/port/domaine (aucun rebuild
+        # nécessaire si l'IP change ou si on ajoute un domaine). Surchargeable au besoin.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+    container_name: neurones-ia-frontend
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      # Appels SERVEUR (login, Server Actions, backendFetch) : joignent le backend
+      # via le DNS interne Compose. NEXT_PUBLIC_API_URL (build-arg) ne couvre que
+      # les appels client relatifs routés par nginx ; côté serveur il faut cette URL
+      # absolue, sinon le défaut http://localhost:8000 vise le conteneur frontend
+      # lui-même → « backend injoignable » sur la page de connexion.
+      - BACKEND_URL=http://backend:8000
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      backend:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  ollama_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/neurones-ia/ollama_models
+  neurones_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/neurones-ia/data
