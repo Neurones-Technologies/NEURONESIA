@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Acts, Btn } from "@/components/ui/primitives";
 
 interface ChatMessage {
@@ -170,12 +172,13 @@ export function ChatBox({
                     {m.toolCalls.join(" · ")}
                   </p>
                 )}
-                {(m.content || (busy && i === messages.length - 1 ? "…" : ""))
-                  .split(/\n\s*\n/)
-                  .filter((p) => p.trim() || m.content === "")
-                  .map((para, j) => (
-                    <p key={j}>{para.trim()}</p>
-                  ))}
+                {m.content ? (
+                  <div className="ba-md">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  busy && i === messages.length - 1 && <p>…</p>
+                )}
               </div>
             )
           )}
