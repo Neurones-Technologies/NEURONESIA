@@ -27,9 +27,18 @@ export interface WinRate {
   taux_valeur_pct: number;
 }
 
+export interface YtdStats extends YearStats {
+  /** Jour calendaire (ISO) auquel `year`/`previous_year` équivalents sont
+   * arrêtés — permet de comparer deux exercices à date comparable, contrairement
+   * à `year`/`previous_year` qui comparent une année en cours à une année pleine. */
+  as_of: string;
+}
+
 export interface Kpis {
   year: YearStats;
   previous_year: YearStats;
+  ytd: YtdStats;
+  previous_ytd: YtdStats;
   monthly: MonthStat[];
   monthly_previous: MonthStat[];
   open_pipeline: OpenPipelineStats;
@@ -45,6 +54,25 @@ export interface Kpis {
 export async function getKpis(year?: number): Promise<Kpis> {
   const q = year ? `?year=${year}` : "";
   return apiFetch<Kpis>(`/v1/dashboard/kpis${q}`);
+}
+
+export interface MonthClient {
+  client: string;
+  nb_commandes: number;
+  ca_xof: number;
+}
+
+export interface MonthlyClients {
+  year: number;
+  /** Clé = numéro du mois (1-12) en string, tel que sérialisé par FastAPI. */
+  months: Record<string, MonthClient[]>;
+}
+
+export async function getMonthlyClients(year?: number, limit = 10): Promise<MonthlyClients> {
+  const params = new URLSearchParams();
+  if (year) params.set("year", String(year));
+  params.set("limit", String(limit));
+  return apiFetch<MonthlyClients>(`/v1/dashboard/monthly-clients?${params.toString()}`);
 }
 
 export interface ForecastScenarios {

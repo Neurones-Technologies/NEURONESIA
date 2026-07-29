@@ -6,6 +6,9 @@ export interface BriefingSection {
   /** Résumé en 5 lignes affiché en tête de cockpit. Absent des briefings
    * générés avant l'ajout du résumé — traiter comme optionnel. */
   resume?: string[];
+  /** Décision du jour, choisie par un calcul déterministe (jamais le LLM) —
+   * absente des briefings générés avant son ajout, traiter comme optionnelle. */
+  action?: string;
   analysis: string;
 }
 

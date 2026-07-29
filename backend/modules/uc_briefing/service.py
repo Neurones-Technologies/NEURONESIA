@@ -29,16 +29,18 @@ _FACTS_BUILDERS = {
 
 async def _build_section(role: str, crm, llm) -> dict:
     built = await _FACTS_BUILDERS[role](crm)
+    action = built.get("action")
     # Résumé (tête de cockpit) et analyse (lecture longue) portent sur les mêmes
     # faits mais ne servent pas le même usage : générés en parallèle, ce job
     # tournant de nuit, sa latence n'est pas vue par l'utilisateur.
     resume, analysis = await asyncio.gather(
-        build_brief_resume(llm, role, built["bullets"]),
+        build_brief_resume(llm, role, built["bullets"], action),
         build_daily_analysis(llm, role, built["bullets"]),
     )
     return {
         "facts": built["facts"],
         "bullets": built["bullets"],
+        "action": action,
         "resume": resume,
         "analysis": analysis,
     }
