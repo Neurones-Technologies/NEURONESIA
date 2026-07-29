@@ -53,7 +53,6 @@ export async function CopilotView({ profile }: { profile: ProfileKey }) {
   return (
     <>
       <ViewHeader
-        eyebrow={`Mon Copilote · ${meta.name}`}
         title="Interroger les données"
         subtitle="Le Copilote interroge directement le miroir Odoo avec les mêmes outils que le reste du cockpit (CRM, factures, statistiques) — jamais de donnée inventée."
       />

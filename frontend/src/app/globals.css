@@ -124,7 +124,7 @@ table{border-spacing:0}
 .snap i{width:6px;height:6px;border-radius:50%;background:var(--signal);display:block}
 
 /* ---------- profil (menu de compte, dans l'en-tête) ---------- */
-.psel{position:relative}
+.psel{position:relative;margin-left:auto}
 .psel-btn{
   display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line-2);
   border-radius:999px;padding:5px 14px 5px 6px;color:var(--t1);
@@ -476,6 +476,25 @@ table.tb tbody tr:hover{background:var(--paper-2)}
   .scope-sep{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- squelettes de chargement ---------- */
+.skel{
+  display:block;position:relative;overflow:hidden;background:var(--hair);flex:0 0 auto
+}
+.skel::after{
+  content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);
+  animation:skel-shimmer 1.5s ease-in-out infinite
+}
+.skel--dark{background:rgba(255,255,255,.09)}
+.skel--dark::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent)}
+@keyframes skel-shimmer{100%{transform:translateX(100%)}}
+.rl-skel{width:60px;height:58px;border-radius:14px;background:rgba(255,255,255,.06);position:relative;overflow:hidden}
+.rl-skel::after{
+  content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);
+  animation:skel-shimmer 1.5s ease-in-out infinite
+}
 
 /* ---------- panneau brief (encre) ---------- */
 .brief{

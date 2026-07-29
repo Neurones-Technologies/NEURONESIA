@@ -6,13 +6,13 @@ export function ViewHeader({
   title,
   subtitle,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   subtitle: ReactNode;
 }) {
   return (
     <>
-      <p className="eyebrow">{eyebrow}</p>
+      {eyebrow && <p className="eyebrow">{eyebrow}</p>}
       <h1 className="vt">{title}</h1>
       <p className="vsub">{subtitle}</p>
     </>
