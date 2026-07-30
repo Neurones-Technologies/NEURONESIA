@@ -9,26 +9,19 @@ import {
 } from "@/lib/api/dashboard";
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, Brief, FootNote, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
-import { AnalysisNarr, Note } from "@/components/ui/primitives";
+import { AnalysisSlot } from "@/components/ui/analysis-slot";
+import { Note } from "@/components/ui/primitives";
 
 export async function DcVision() {
-  const [
-    forecast,
-    crosssell,
-    performance,
-    salespeople,
-    forecastAnalysis,
-    crosssellAnalysis,
-    performanceAnalysis,
-    briefing,
-  ] = await Promise.all([
+  // Les narrations LLM (`get*Analysis`) sont volontairement ABSENTES de ce
+  // Promise.all : chacune coûte 10-20 s au premier appel et bloquerait tout le
+  // HTML de la vue. Elles sont chargées en parallèle du rendu par
+  // <AnalysisSlot> et arrivent en streaming (cf. components/ui/analysis-slot.tsx).
+  const [forecast, crosssell, performance, salespeople, briefing] = await Promise.all([
     getForecastPipelineWeighted(),
     getCrossSellSignals(),
     getPerformanceSummary(),
     getRevenueBySalesperson(),
-    getForecastAnalysis(),
-    getCrossSellAnalysis(),
-    getPerformanceAnalysis(),
     getBriefing(),
   ]);
 
@@ -247,11 +240,7 @@ export async function DcVision() {
         </Tile>
 
         <Tile span={12} title="Crédibilité du forecast" kick="narration · M5">
-          {forecastAnalysis ? (
-            <AnalysisNarr text={forecastAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getForecastAnalysis} />
           <FootNote>
             Amplitude bas/haut : {spreadPct !== null ? `${formatPct(spreadPct, 0)} %` : "—"} du scénario réaliste. Le
             calibrage de fiabilité par commercial démarre sa collecte de snapshots — un taux individuel sera disponible
@@ -260,11 +249,7 @@ export async function DcVision() {
         </Tile>
 
         <Tile span={12} title="Ciblage cross-sell et renouvellement" kick="M1 · narration">
-          {crosssellAnalysis ? (
-            <AnalysisNarr text={crosssellAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getCrossSellAnalysis} />
           {crosssell && (
             <div style={{ marginTop: 18 }}>
               <HintLine>Cliquez un compte pour le signal détaillé</HintLine>
@@ -316,11 +301,7 @@ export async function DcVision() {
         </Tile>
 
         <Tile span={12} title="Analyse des motifs de perte" kick="narration">
-          {performanceAnalysis ? (
-            <AnalysisNarr text={performanceAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getPerformanceAnalysis} />
         </Tile>
 
         {performance && (

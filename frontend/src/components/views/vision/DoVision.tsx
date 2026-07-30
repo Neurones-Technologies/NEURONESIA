@@ -3,7 +3,8 @@ import { getKpis, getMargins, getMarginsAnalysis } from "@/lib/api/dashboard";
 import { getPartnersAnalysis, getSupplierIntelligence } from "@/lib/api/partners";
 import { formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
 import { Bars, Bento, Brief, FootNote, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
-import { AnalysisNarr, Note } from "@/components/ui/primitives";
+import { AnalysisSlot } from "@/components/ui/analysis-slot";
+import { Note } from "@/components/ui/primitives";
 
 interface TopDossier {
   ref: string;
@@ -16,12 +17,12 @@ interface TopDossier {
 }
 
 export async function DoVision() {
-  const [margins, kpis, suppliers, marginsAnalysis, partnersAnalysis, briefing] = await Promise.all([
+  // Narrations LLM exclues du Promise.all — voir components/ui/analysis-slot.tsx :
+  // 10-20 s au premier appel, elles bloquaient l'affichage des chiffres.
+  const [margins, kpis, suppliers, briefing] = await Promise.all([
     getMargins(undefined, 30),
     getKpis(),
     getSupplierIntelligence(15),
-    getMarginsAnalysis(),
-    getPartnersAnalysis(),
     getBriefing(),
   ]);
 
@@ -161,11 +162,7 @@ export async function DoVision() {
         />
 
         <Tile span={12} title="Consommation du backlog vs plan" kick="narration">
-          {marginsAnalysis ? (
-            <AnalysisNarr text={marginsAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getMarginsAnalysis} />
           <FootNote>
             Proxy assumé · l&apos;écart entre CA provisoire et définitif signale un décalage réel mais n&apos;en donne
             pas la cause (staffing, périmètre, fournisseur).
@@ -251,11 +248,7 @@ export async function DoVision() {
         </Tile>
 
         <Tile span={12} title="Fiabilité fournisseurs" kick="narration">
-          {partnersAnalysis ? (
-            <AnalysisNarr text={partnersAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getPartnersAnalysis} />
         </Tile>
 
         {suppliers && suppliers.length > 0 && (

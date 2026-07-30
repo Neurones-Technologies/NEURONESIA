@@ -3,15 +3,16 @@ import { getDso, getMargins, getMarginsAnalysis, getUnpaid, getUnpaidAnalysis } 
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, Brief, FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
-import { AnalysisNarr, Note, Tag } from "@/components/ui/primitives";
+import { AnalysisSlot } from "@/components/ui/analysis-slot";
+import { Note, Tag } from "@/components/ui/primitives";
 
 export async function DfVision() {
-  const [dso, unpaid, margins, unpaidAnalysis, marginsAnalysis, briefing] = await Promise.all([
+  // Narrations LLM exclues du Promise.all — voir components/ui/analysis-slot.tsx :
+  // 10-20 s au premier appel, elles bloquaient l'affichage des chiffres.
+  const [dso, unpaid, margins, briefing] = await Promise.all([
     getDso(),
     getUnpaid(15),
     getMargins(),
-    getUnpaidAnalysis(),
-    getMarginsAnalysis(),
     getBriefing(),
   ]);
 
@@ -166,11 +167,7 @@ export async function DfVision() {
         />
 
         <Tile span={12} title="Dérive du délai de paiement" kick="narration">
-          {unpaidAnalysis ? (
-            <AnalysisNarr text={unpaidAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getUnpaidAnalysis} />
         </Tile>
 
         <Tile span={7} title="Où se loge le retard" kick="par débiteur">
@@ -233,11 +230,7 @@ export async function DfVision() {
         )}
 
         <Tile span={12} title="Érosion de marge" kick="narration · proxy">
-          {marginsAnalysis ? (
-            <AnalysisNarr text={marginsAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getMarginsAnalysis} />
           <FootNote>
             Proxy assumé · le détail des lignes de commandes fournisseurs par référence n&apos;est pas accessible depuis
             ce profil. La comparaison marge provisoire / définitive est le signal d&apos;érosion le plus proche

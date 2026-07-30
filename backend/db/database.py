@@ -156,6 +156,12 @@ _DECISION_NEW_COLUMNS = {
     "review_date": "DATETIME",
     "review_verdict": "VARCHAR(20) NOT NULL DEFAULT ''",
     "review_comment": "TEXT NOT NULL DEFAULT ''",
+    # Recommandation de l'outil au moment de trancher, motif du mandataire, et
+    # classe de payeur qui a servi de lecture — cf. DecisionModel pour le détail
+    # de ce que chacune de ces trois colonnes rend enfin mesurable.
+    "option_recommandee": "TEXT NOT NULL DEFAULT ''",
+    "motif_decision": "TEXT NOT NULL DEFAULT ''",
+    "profil_payeur_classe": "VARCHAR(40) NOT NULL DEFAULT ''",
 }
 
 

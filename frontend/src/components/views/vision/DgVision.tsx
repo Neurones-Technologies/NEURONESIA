@@ -6,12 +6,12 @@ import {
   getKpis,
   getMonthlyClients,
   getTopClients,
-  getTrendAnalysis,
 } from "@/lib/api/dashboard";
 import { formatDate, formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
 import { Bars, Bento, Brief, FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
-import { Narr, Scen, ScenGrid, Section } from "@/components/ui/primitives";
+import { Narr, Section } from "@/components/ui/primitives";
+import { ScenPanel } from "@/components/ui/scen-panel";
 
 // Les libellés du menu de sections vivent dans lib/data/sections.ts (importés
 // par l'en-tête) ; ici seuls les `id` des <Section> doivent y correspondre.
@@ -46,7 +46,6 @@ export async function DgVision() {
   const nbAtRisque = oppsAtRisque.length;
   const pondereAtRisque = oppsAtRisque.reduce((sum, o) => sum + o.weighted_xof, 0);
   const bonusHaut = forecast.scenarios.optimiste_xof - forecast.scenarios.realiste_xof;
-  const trendAnalysis = monthLabels.length >= 2 ? await getTrendAnalysis(monthLabels, monthValuesM) : null;
   const spark = toSpark(monthValuesM);
 
   // Comparaison à date comparable (même jour calendaire dans les deux années)
@@ -225,72 +224,71 @@ export async function DgVision() {
       <Section id="trajectoire" title="Trajectoire financière" subtitle="Où atterrit l'exercice, et pourquoi">
         <Bento>
           <Tile span={7} title="Atterrissage et scénarios" kick="pipeline pondéré Odoo">
-            <ScenGrid>
-              <Scen
-                label="Scénario bas"
-                value={formatMFcfa(forecast.scenarios.pessimiste_xof)}
-                detail={<>M FCFA · hors opportunités à risque</>}
-                narrative={{
-                  kicker: "Méthode de calcul · scénario bas",
-                  title: "Scénario bas",
-                  tag: "plancher",
-                  tagVariant: "w",
-                  body: [
-                    `Ce scénario ne retient que les opportunités dont la probabilité de conversion Odoo est d'au moins 50 %, pondérées par cette probabilité. Les ${formatNumber(nbAtRisque)} opportunités sous ce seuil (${formatMFcfa(pondereAtRisque)} M FCFA pondérés dans le scénario réaliste) en sont entièrement exclues, pas seulement décotées.`,
-                    "C'est un plancher volontairement pessimiste : si aucune opportunité incertaine n'aboutit, c'est le chiffre qu'on peut sécuriser sans hypothèse supplémentaire.",
-                  ],
-                  kv: [
-                    ["Opportunités retenues (≥ 50 %)", formatNumber(forecast.scenarios.nb_opportunites - nbAtRisque)],
-                    ["Opportunités exclues (< 50 %)", formatNumber(nbAtRisque)],
-                    ["Écart avec le réaliste", `-${formatMFcfa(forecast.scenarios.realiste_xof - forecast.scenarios.pessimiste_xof)} M FCFA`],
-                  ],
-                  // note: "Calcul : Σ (valeur × probabilité) des opportunités à probabilité ≥ 50 % uniquement.",
-                }}
-              />
-              <Scen
-                mid
-                label="Réaliste · retenu"
-                value={formatMFcfa(forecast.scenarios.realiste_xof)}
-                detail={<>M FCFA · probabilité moyenne {formatPct(forecast.scenarios.avg_probability_pct, 0)} %</>}
-                narrative={{
-                  kicker: "Méthode de calcul · scénario retenu",
-                  title: "Scénario réaliste",
-                  tag: "retenu en comité",
-                  tagVariant: "a",
-                  body: [
-                    `Chaque opportunité ouverte pèse pour sa valeur multipliée par sa probabilité de conversion Odoo — sans exclusion ni bonus. C'est la somme pondérée sur les ${formatNumber(forecast.scenarios.nb_opportunites)} opportunités du pipeline, probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %.`,
-                    "C'est ce chiffre qui sert de référence d'atterrissage, parce qu'il ne fait ni l'hypothèse optimiste que les dossiers incertains se débloquent, ni l'hypothèse pessimiste qu'ils n'aboutiront jamais.",
-                  ],
-                  kv: [
-                    ["Pipeline brut (non pondéré)", `${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA`],
-                    ["Pipeline pondéré retenu", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
-                    ["Taux de pondération global", forecast.scenarios.total_pipeline_xof ? `${formatPct((forecast.scenarios.realiste_xof / forecast.scenarios.total_pipeline_xof) * 100, 0)} %` : "—"],
-                  ],
-                  // note: "Calcul : Σ (valeur × probabilité) sur la totalité du pipeline ouvert.",
-                }}
-              />
-              <Scen
-                label="Scénario haut"
-                value={formatMFcfa(forecast.scenarios.optimiste_xof)}
-                detail={<>M FCFA · {formatNumber(forecast.scenarios.nb_opportunites)} opportunités</>}
-                narrative={{
-                  kicker: "Méthode de calcul · scénario haut",
-                  title: "Scénario haut",
-                  tag: "hypothèse optimiste",
-                  tagVariant: "n",
-                  body: [
-                    `Part du même socle que le scénario réaliste (${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA), puis ajoute un bonus sur les ${formatNumber(nbAtRisque)} opportunités sous 50 % de probabilité : chacune est recomptée à 50 % de sa valeur au lieu de sa probabilité réelle, souvent plus faible.`,
-                    "Ce n'est pas une probabilité mesurée qui remonte à 50 % — c'est une hypothèse forfaitaire volontairement optimiste sur les dossiers incertains, à ne pas annoncer comme un chiffre plus fiable que le réaliste.",
-                  ],
-                  kv: [
-                    ["Socle réaliste", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
-                    ["Bonus opportunités < 50 %", `+${formatMFcfa(bonusHaut)} M FCFA`],
-                    ["Opportunités concernées", formatNumber(nbAtRisque)],
-                  ],
-                  // note: "Calcul : réaliste + Σ (valeur × 0,5) des opportunités à probabilité < 50 %.",
-                }}
-              />
-            </ScenGrid>
+            <ScenPanel
+              items={[
+                {
+                  label: "Scénario bas",
+                  value: formatMFcfa(forecast.scenarios.pessimiste_xof),
+                  detail: <>M FCFA · hors opportunités à risque</>,
+                  narrative: {
+                    kicker: "Méthode de calcul · scénario bas",
+                    title: "Scénario bas",
+                    tag: "plancher",
+                    tagVariant: "w",
+                    body: [
+                      `Ce scénario ne retient que les opportunités dont la probabilité de conversion Odoo est d'au moins 50 %, pondérées par cette probabilité. Les ${formatNumber(nbAtRisque)} opportunités sous ce seuil (${formatMFcfa(pondereAtRisque)} M FCFA pondérés dans le scénario réaliste) en sont entièrement exclues, pas seulement décotées.`,
+                      "C'est un plancher volontairement pessimiste : si aucune opportunité incertaine n'aboutit, c'est le chiffre qu'on peut sécuriser sans hypothèse supplémentaire.",
+                    ],
+                    kv: [
+                      ["Opportunités retenues (≥ 50 %)", formatNumber(forecast.scenarios.nb_opportunites - nbAtRisque)],
+                      ["Opportunités exclues (< 50 %)", formatNumber(nbAtRisque)],
+                      ["Écart avec le réaliste", `-${formatMFcfa(forecast.scenarios.realiste_xof - forecast.scenarios.pessimiste_xof)} M FCFA`],
+                    ],
+                  },
+                },
+                {
+                  mid: true,
+                  label: "Réaliste · retenu",
+                  value: formatMFcfa(forecast.scenarios.realiste_xof),
+                  detail: <>M FCFA · probabilité moyenne {formatPct(forecast.scenarios.avg_probability_pct, 0)} %</>,
+                  narrative: {
+                    kicker: "Méthode de calcul · scénario retenu",
+                    title: "Scénario réaliste",
+                    tag: "retenu en comité",
+                    tagVariant: "a",
+                    body: [
+                      `Chaque opportunité ouverte pèse pour sa valeur multipliée par sa probabilité de conversion Odoo — sans exclusion ni bonus. C'est la somme pondérée sur les ${formatNumber(forecast.scenarios.nb_opportunites)} opportunités du pipeline, probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %.`,
+                      "C'est ce chiffre qui sert de référence d'atterrissage, parce qu'il ne fait ni l'hypothèse optimiste que les dossiers incertains se débloquent, ni l'hypothèse pessimiste qu'ils n'aboutiront jamais.",
+                    ],
+                    kv: [
+                      ["Pipeline brut (non pondéré)", `${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA`],
+                      ["Pipeline pondéré retenu", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
+                      ["Taux de pondération global", forecast.scenarios.total_pipeline_xof ? `${formatPct((forecast.scenarios.realiste_xof / forecast.scenarios.total_pipeline_xof) * 100, 0)} %` : "—"],
+                    ],
+                  },
+                },
+                {
+                  label: "Scénario haut",
+                  value: formatMFcfa(forecast.scenarios.optimiste_xof),
+                  detail: <>M FCFA · {formatNumber(forecast.scenarios.nb_opportunites)} opportunités</>,
+                  narrative: {
+                    kicker: "Méthode de calcul · scénario haut",
+                    title: "Scénario haut",
+                    tag: "hypothèse optimiste",
+                    tagVariant: "n",
+                    body: [
+                      `Part du même socle que le scénario réaliste (${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA), puis ajoute un bonus sur les ${formatNumber(nbAtRisque)} opportunités sous 50 % de probabilité : chacune est recomptée à 50 % de sa valeur au lieu de sa probabilité réelle, souvent plus faible.`,
+                      "Ce n'est pas une probabilité mesurée qui remonte à 50 % — c'est une hypothèse forfaitaire volontairement optimiste sur les dossiers incertains, à ne pas annoncer comme un chiffre plus fiable que le réaliste.",
+                    ],
+                    kv: [
+                      ["Socle réaliste", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
+                      ["Bonus opportunités < 50 %", `+${formatMFcfa(bonusHaut)} M FCFA`],
+                      ["Opportunités concernées", formatNumber(nbAtRisque)],
+                    ],
+                  },
+                },
+              ]}
+            />
             {/* <FootNote>
               Pipeline total non pondéré : {formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA. Le scénario bas
               exclut les opportunités dont l&apos;échéance est déjà dépassée.
@@ -304,7 +302,7 @@ export async function DgVision() {
                 const clients = monthlyClients.months[String(m.mois)] ?? [];
                 return {
                   name: monthLabels[i],
-                  sub: `${formatMFcfa(m.ca_xof)} M FCFA commandés`,
+                  sub: `${formatNumber(m.nb_commandes)} commande${m.nb_commandes > 1 ? "s" : ""} · ${formatMFcfa(m.ca_xof)} M FCFA commandés`,
                   value: `${formatMFcfa(m.ca_xof)} M`,
                   pct: maxMonth ? (m.ca_xof / 1_000_000 / maxMonth) * 100 : 0,
                   detail: {
@@ -316,7 +314,7 @@ export async function DgVision() {
                       `Le mois de ${monthLabels[i].toLowerCase()} totalise ${formatMFcfa(m.ca_xof)} M FCFA de commandes confirmées, soit ${maxMonth ? formatPct((m.ca_xof / 1_000_000 / maxMonth) * 100, 0) : "0"} % du meilleur mois de l'exercice.`,
                     ],
                     kv: clients.length
-                      ? clients.map((c) => [`${c.nb_commandes} commande${c.nb_commandes > 1 ? "s" : ""}`, c.client] as const)
+                      ? clients.map((c) => [c.client, `${formatMFcfa(c.ca_xof)} M FCFA`] as const)
                       : [["Aucune commande", "—"] as const],
                     note: "Top clients du mois par nombre de commandes confirmées (sale.order), miroir Odoo.",
                   },
@@ -325,12 +323,16 @@ export async function DgVision() {
             />
           </Tile>
 
+          {/* Tuile désactivée. Pour la remettre, décommenter tel quel : l'appel
+              LLM (12 s au premier passage) vit dans <AnalysisSlot>, donc il ne
+              retarde plus l'affichage du reste du cockpit. Ne PAS revenir à un
+              `await getTrendAnalysis(...)` dans le corps de la vue — c'est ce
+              qui faisait mettre 12 s à la page pour un texte non affiché. */}
           {/* <Tile span={12} title="Lecture de la trajectoire" kick="narration · M5">
-            {trendAnalysis ? (
-              <AnalysisNarr text={trendAnalysis.analysis} />
-            ) : (
-              <Note style={{ marginTop: 0 }}>Historique mensuel insuffisant pour une analyse de tendance.</Note>
-            )}
+            <AnalysisSlot
+              load={() => getTrendAnalysis(monthLabels, monthValuesM)}
+              empty="Historique mensuel insuffisant pour une analyse de tendance."
+            />
           </Tile> */}
 
           <Tile span={12} title="Explication d'écart budgétaire" kick={`${variance.annee} vs ${variance.annee_precedente}`}>
