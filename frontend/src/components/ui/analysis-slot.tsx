@@ -36,16 +36,22 @@ async function AnalysisBody({
 /**
  * Narration LLM rendue HORS du chemin critique de la page.
  *
- * Les endpoints `.../analysis` appellent Claude Sonnet : 10 à 20 s au premier
- * appel (le TTL de 15 min côté backend ne couvre que les suivants, cf.
- * core/services/ttl_cache.py). Attendre ce résultat dans le `Promise.all` de la
- * vue bloquait TOUT le HTML de la page : le cockpit mettait 12 à 18 s à
- * s'afficher alors que ses données chiffrées sont prêtes en 0,3 s. Mesuré sur
- * /dg /dc /df /do /am avant correction.
+ * En régime normal, ces endpoints ne coûtent plus qu'une lecture SQLite : la
+ * narration est écrite une fois par jour à 6h00 par
+ * `jobs/scheduler.py::_daily_analyses_job` et figée en base (table
+ * `daily_analyses`, cf. modules/uc_daily_analysis) — le squelette ci-dessous
+ * n'apparaît donc plus à l'usage.
  *
- * Ici l'appel vit dans sa propre frontière Suspense : la page part
- * immédiatement avec les chiffres, chaque narration se pose dès qu'elle
- * arrive. `load` est une closure exécutée côté serveur uniquement (deux Server
+ * La frontière Suspense reste néanmoins nécessaire, pour le seul cas où la
+ * narration du jour manque (tout premier démarrage, job du matin en échec,
+ * variante de période inédite) : le backend la calcule alors en secours, ce qui
+ * reprend 10 à 20 s de Claude Sonnet. Sans cette frontière, ces secondes
+ * bloqueraient TOUT le HTML de la page comme avant : le cockpit mettait 12 à
+ * 18 s à s'afficher alors que ses données chiffrées sont prêtes en 0,3 s
+ * (mesuré sur /dg /dc /df /do /am). Ne PAS remettre ces appels dans le
+ * `Promise.all` des vues sous prétexte qu'ils sont devenus rapides.
+ *
+ * `load` est une closure exécutée côté serveur uniquement (deux Server
  * Components de part et d'autre : aucune sérialisation en jeu).
  *
  * ATTENTION : le streaming n'atteint le navigateur que si le proxy ne

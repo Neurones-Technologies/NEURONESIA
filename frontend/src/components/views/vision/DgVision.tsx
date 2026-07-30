@@ -480,7 +480,7 @@ export async function DgVision() {
                       ["Commandes", formatNumber(c.nb_commandes)],
                       ["Pays", c.pays],
                     ],
-                    note: "Chiffres issus des bons de commande du miroir Odoo. Le détail par dossier est accessible depuis le Copilote.",
+                    // note: "Chiffres issus des bons de commande du miroir Odoo. Le détail par dossier est accessible depuis le Copilote.",
                   },
                 };
               })}

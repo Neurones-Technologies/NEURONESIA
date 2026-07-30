@@ -5,18 +5,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request
 
-from core.services.ttl_cache import cached
-from modules.uc_partners.narratif import build_partners_analysis
+from modules.uc_daily_analysis import computations as daily_comp
+from modules.uc_daily_analysis.store import daily_cached
 
 router = APIRouter(prefix="/partners", tags=["Partners"])
 
 
 def _crm(request: Request):
     return request.app.state.container.crm_repo
-
-
-def _m(xof: float) -> int:
-    return round(xof / 1_000_000)
 
 
 @router.get("/top")
@@ -35,25 +31,11 @@ async def supplier_intelligence(request: Request, limit: int = Query(default=20,
 @router.post("/analysis")
 async def partners_analysis(request: Request):
     """Analyse de concentration fournisseurs, rédigée par Claude à partir des
-    vrais agrégats déjà calculés (jamais recalculés par le LLM)."""
-    suppliers = await _crm(request).get_top_suppliers(limit=50)
-    if not suppliers:
-        return {"analysis": "Aucune commande fournisseur enregistrée actuellement."}
-
-    async def _compute():
-        total = sum(s["montant_total_xof"] for s in suppliers)
-        top = suppliers[0]
-        ctx = {
-            "total_m": _m(total),
-            "nb_fournisseurs": len(suppliers),
-            "top_nom": top["name"],
-            "top_montant_m": _m(top["montant_total_xof"]),
-            "top_part_pct": round(top["montant_total_xof"] / total * 100) if total else 0,
-            "top_nb_commandes": top["nb_commandes"],
-            "top_derniere_commande": top["derniere_commande"] or "non renseignée",
-        }
-        llm = getattr(request.app.state.container, "llm_sonnet", None)
-        analysis = await build_partners_analysis(llm, ctx)
-        return {"analysis": analysis, "context": ctx}
-
-    return await cached(("partners_analysis",), 900.0, _compute)
+    vrais agrégats déjà calculés (jamais recalculés par le LLM) — figée pour la
+    journée par le job du matin (cf. modules/uc_daily_analysis)."""
+    llm = getattr(request.app.state.container, "llm_sonnet", None)
+    return await daily_cached(
+        daily_comp.KEY_PARTNERS,
+        "",
+        lambda: daily_comp.partners_analysis(_crm(request), llm),
+    )

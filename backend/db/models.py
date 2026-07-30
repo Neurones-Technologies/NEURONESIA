@@ -733,6 +733,47 @@ class DecisionModel(Base):
     profil_payeur_classe: Mapped[str] = mapped_column(String(40), default="")
 
 
+class DailyAnalysisModel(Base):
+    """Narration IA d'une section de cockpit, calculée une fois par jour et figée.
+
+    Les endpoints `.../analysis` appelaient Claude à chaque affichage de cockpit
+    (10 à 20 s de squelette de chargement), amortis par un simple cache mémoire
+    de 15 min — perdu à chaque redémarrage, soit ~96 générations identiques par
+    jour et par section. Cette table est le réceptacle du calcul quotidien : le
+    job planifié du matin (`jobs/scheduler.py::_daily_analyses_job`) écrit une
+    ligne par section, les endpoints ne font plus que la relire.
+
+    `variant` distingue deux lectures d'une même section qui ne doivent jamais
+    partager un texte (période affichée pour la tendance CA, exercice pour les
+    marges) ; vide quand la section n'a qu'une seule lecture possible.
+
+    `source` : "llm" (rédigé par Claude) | "repli" (repli déterministe des
+    `build_*_analysis`). Seul un "llm" est enregistré — figer un repli produit
+    pendant une indisponibilité du modèle ferait durer l'incident toute la
+    journée (même principe que le `store_if` de core/services/ttl_cache.py).
+    """
+    __tablename__ = "daily_analyses"
+    __table_args__ = (
+        Index(
+            "ix_daily_analyses_key_variant_date",
+            "analysis_key", "variant", "snapshot_date",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    analysis_key: Mapped[str] = mapped_column(String(60), index=True)
+    variant: Mapped[str] = mapped_column(String(160), default="")
+    snapshot_date: Mapped[date] = mapped_column(Date, index=True)
+    analysis: Mapped[str] = mapped_column(Text, default="")
+    # Chiffres réels passés au modèle — conservés pour pouvoir vérifier après coup
+    # sur quoi le texte figé s'appuyait (les agrégats bougent avec la sync Odoo).
+    context: Mapped[dict] = mapped_column(JSON, default=dict)
+    source: Mapped[str] = mapped_column(String(20), default="llm")
+    triggered_by: Mapped[str] = mapped_column(String(20), default="schedule")
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class ArbitrageContexteModel(Base):
     """Contexte terrain d'un dossier d'arbitrage — la contribution du commercial
     du compte, saisie AVANT que le dossier soit tranché.

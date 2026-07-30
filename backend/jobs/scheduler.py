@@ -88,10 +88,25 @@ def build_scheduler(
         max_instances=1,
     )
 
+    # 6h00 : après plusieurs sync Odoo de la nuit et du petit matin, donc sur des
+    # chiffres frais, et avant l'arrivée des utilisateurs — ils trouvent les
+    # narrations déjà écrites au lieu d'un squelette de 10 à 20 s.
+    scheduler.add_job(
+        _daily_analyses_job,
+        args=[container],
+        trigger=CronTrigger(hour=6, minute=0),
+        id="daily_analyses",
+        name="Analyses IA quotidiennes du cockpit (7 sections, figées en base)",
+        replace_existing=True,
+        misfire_grace_time=1800,
+        coalesce=True,
+        max_instances=1,
+    )
+
     logger.info(
         "Scheduler configuré : sync Odoo toutes les %d min (coalesce, max 1), scan GED à 2h00, "
         "purge quarantaine à 3h30 (rétention %d j), briefing quotidien à 0h00, "
-        "snapshot pipeline/backlog à 1h00",
+        "snapshot pipeline/backlog à 1h00, analyses IA du cockpit à 6h00",
         sync_interval, settings.quarantine_retention_days,
     )
     return scheduler
@@ -119,6 +134,17 @@ async def _daily_briefing_job(container=None):
         return
     llm = getattr(container, "llm_sonnet", None)
     await service.generate(container.crm_repo, llm, triggered_by="schedule")
+
+
+async def _daily_analyses_job(container=None):
+    """Régénère les 7 narrations IA du cockpit — gelées en base jusqu'au run de
+    demain matin (cf. modules/uc_daily_analysis/store.py)."""
+    from modules.uc_daily_analysis import service
+    if container is None:
+        logger.warning("Analyses IA quotidiennes — container absent, run ignoré")
+        return
+    llm = getattr(container, "llm_sonnet", None)
+    await service.generate_all(container.crm_repo, llm, triggered_by="schedule")
 
 
 async def _quarantine_purge_job():

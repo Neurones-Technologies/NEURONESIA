@@ -18,7 +18,7 @@ interface TopDossier {
 
 export async function DoVision() {
   // Narrations LLM exclues du Promise.all — voir components/ui/analysis-slot.tsx :
-  // 10-20 s au premier appel, elles bloquaient l'affichage des chiffres.
+  // figées à la journée, mais 10-20 s si le calcul de secours se déclenche.
   const [margins, kpis, suppliers, briefing] = await Promise.all([
     getMargins(undefined, 30),
     getKpis(),

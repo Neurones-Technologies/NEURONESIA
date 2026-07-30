@@ -17,6 +17,7 @@ from api.v1.dependencies import get_current_user, require_views
 from modules.uc_arbitrage.router import router as arbitrage_router
 from modules.uc_briefing.router import router as briefing_router
 from modules.uc_clients.router import router as clients_router
+from modules.uc_daily_analysis.router import router as daily_analysis_router
 from modules.uc_crosssell.router import router as crosssell_router
 from modules.uc_partners.router import router as partners_router
 
@@ -105,6 +106,9 @@ app.include_router(clients_router, prefix="/v1", dependencies=[Depends(require_v
 app.include_router(partners_router, prefix="/v1", dependencies=[Depends(require_views("partenaires", "portefeuille"))])
 # Arbitrages : gated par la matrice module × rôle (vue "arbitrage")
 app.include_router(arbitrage_router, prefix="/v1", dependencies=[Depends(require_views("arbitrage"))])
+# Analyses IA quotidiennes du cockpit : statut/relance (le contenu lui-même est
+# servi par les endpoints de section, cf. modules/uc_daily_analysis/router.py)
+app.include_router(daily_analysis_router, prefix="/v1", dependencies=_auth)
 
 # Webhooks Odoo : protégés par HMAC secret séparé (pas JWT)
 app.include_router(webhooks.router, prefix="/v1")

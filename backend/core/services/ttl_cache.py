@@ -1,10 +1,13 @@
-"""Cache mémoire TTL générique pour les endpoints d'analyse LLM.
+"""Cache mémoire TTL générique pour les calculs répétés d'un même affichage.
 
-Les endpoints `.../analysis` rappellent Claude à chaque appel (15-20s de
-latence avec les prompts enrichis) alors que les chiffres sous-jacents ne
-changent qu'au rythme de la sync Odoo (5-10 min, cf. jobs/scheduler.py). Sans
-cache, chaque ouverture de page cockpit refait un appel LLM identique — ce
-helper évite l'appel répété tant que la fenêtre TTL n'est pas expirée.
+Sert les lectures dont le résultat ne change qu'au rythme de la sync Odoo
+(5-10 min, cf. jobs/scheduler.py) mais que plusieurs consommateurs redemandent
+dans la même seconde : signaux de montée en valeur, file d'arbitrage, profil
+client, narration de dossier.
+
+Les narrations de cockpit (`.../analysis`) ne passent PLUS par ici : figées à la
+journée et persistées en base, elles survivent aux redémarrages — voir
+modules/uc_daily_analysis/store.py.
 
 Process-local (pas de Redis) : suffisant pour un seul worker uvicorn ; à
 remplacer par un cache partagé si le déploiement passe multi-worker.
