@@ -27,8 +27,10 @@ ROLE_LABELS = {
 # que ce rôle doit prendre n'a pas de valeur ajoutée).
 ROLE_FOCUS = {
     "dg": (
-        "l'atterrissage de l'exercice, les arbitrages inter-directions et les dépendances qui menacent "
-        "l'entreprise dans son ensemble (concentration client, trésorerie, pipeline)"
+        "l'arbitrage et l'atterrissage de l'exercice : les comptes nommés dont le rythme de commande "
+        "décroche et ce que leur silence coûte à date, la position nette de trésorerie (fournisseurs à "
+        "payer contre clients à encaisser, l'entreprise payant ses achats avant d'être payée), la "
+        "concentration du portefeuille, et les dossiers qu'aucune direction ne peut trancher seule"
     ),
     "dir_commercial": (
         "la fiabilité du forecast, les opportunités qui glissent ou perdent leur sponsor, et la couverture "
@@ -60,7 +62,9 @@ _SYSTEM_TEMPLATE = (
     "entre deux faits qui constitue l'analyse, pas la liste des faits.\n"
     "3. Une recommandation concrète et datée pour aujourd'hui : quoi faire, et si possible par qui.\n"
     "Ton direct, factuel, sans emphase artificielle. Chaque phrase doit contenir soit un chiffre soit une "
-    "action — jamais une phrase de transition vide."
+    "action — jamais une phrase de transition vide. Nomme les comptes concernés quand les faits les "
+    "nomment : un briefing de direction qui parle d'« exposition totale » sans dire à qui elle est due "
+    "ne permet aucune décision."
 )
 
 
@@ -77,7 +81,13 @@ _SYSTEM_RESUME = (
     "de transition, jamais de généralité.\n"
     "- Pas de puce, pas de tiret, pas de numéro en début de ligne, pas de markdown, pas de titre.\n"
     "- N'invente aucun chiffre : utilise uniquement ceux des faits fournis, sans les recalculer.\n"
-    "- Ordre : de ce qui engage le plus à ce qui engage le moins. La 5e ligne est l'action du jour."
+    "- Quand un fait nomme un compte, une date ou un nombre de jours de silence, reprends-les tels quels : "
+    "un compte nommé et daté vaut mieux qu'un total anonyme. Ne cite jamais un agrégat sous forme anonyme "
+    "quand les faits en donnent le nom.\n"
+    "- Un pourcentage ne se cite qu'accompagné de son point de comparaison fourni dans les faits (seuil, "
+    "période, ou valeur N-1). Un pourcentage nu est interdit.\n"
+    "- Ordre : de ce qui engage le plus à ce qui engage le moins. La 5e ligne est l'action du jour — si "
+    "une action est fournie ci-dessous, c'est celle-là, reformulée en 20 mots maximum, jamais une autre."
 )
 
 _MAX_RESUME_LIGNES = 5
@@ -99,29 +109,38 @@ def _clean_ligne(ligne: str) -> str:
     return _LIST_PREFIX_RE.sub("", ligne).strip()
 
 
-def _fallback_resume(bullets: list[str]) -> list[str]:
-    return [b.strip() for b in bullets if b.strip()][:_MAX_RESUME_LIGNES]
+def _fallback_resume(bullets: list[str], action: str | None = None) -> list[str]:
+    """Repli déterministe. L'action du jour, quand elle existe, occupe toujours
+    la 5e ligne : sans ça le repli produit 5 constats et aucune décision, en
+    contradiction avec la contrainte de format du résumé."""
+    lignes = [b.strip() for b in bullets if b.strip()]
+    if action:
+        return lignes[: _MAX_RESUME_LIGNES - 1] + [action.strip()]
+    return lignes[:_MAX_RESUME_LIGNES]
 
 
-async def build_brief_resume(llm, role: str, bullets: list[str]) -> list[str]:
+async def build_brief_resume(llm, role: str, bullets: list[str], action: str | None = None) -> list[str]:
     """Résumé en 5 lignes affiché en tête de cockpit. Repli sur les faits bruts
     si l'IA échoue — jamais de panneau vide."""
     if not bullets:
         return []
     if llm is None:
-        return _fallback_resume(bullets)
+        return _fallback_resume(bullets, action)
     try:
         role_label = ROLE_LABELS.get(role, role)
         role_focus = ROLE_FOCUS.get(role, "la performance globale de l'entreprise")
         system = _SYSTEM_RESUME.format(role_label=role_label, role_focus=role_focus)
-        user = "Faits du jour :\n- " + "\n- ".join(bullets) + "\n\nRédige les 5 lignes."
+        user = "Faits du jour :\n- " + "\n- ".join(bullets)
+        if action:
+            user += f"\n\nAction du jour déjà arbitrée (à reformuler en 20 mots max, jamais à remplacer) : {action}"
+        user += "\n\nRédige les 5 lignes."
         text = await llm.generate(system=system, user=user, max_tokens=400, temperature=0.4)
         lignes = [_clean_ligne(l) for l in (text or "").splitlines()]
         lignes = [l for l in lignes if l]
-        return lignes[:_MAX_RESUME_LIGNES] or _fallback_resume(bullets)
+        return lignes[:_MAX_RESUME_LIGNES] or _fallback_resume(bullets, action)
     except Exception as exc:
         logger.warning("Résumé de briefing IA échoué pour le rôle '%s' (repli faits bruts) : %s", role, exc)
-        return _fallback_resume(bullets)
+        return _fallback_resume(bullets, action)
 
 
 async def build_daily_analysis(llm, role: str, bullets: list[str]) -> str:

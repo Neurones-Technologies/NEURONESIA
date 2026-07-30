@@ -14,6 +14,5 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     { id: "tableau-de-bord", label: "Tableau de bord" },
     { id: "trajectoire", label: "Trajectoire financière" },
     { id: "risques", label: "Dépendances et risques" },
-    { id: "copilote", label: "Copilote" },
   ],
 };

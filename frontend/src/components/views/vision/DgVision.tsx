@@ -4,13 +4,14 @@ import {
   getBudgetVariance,
   getForecastPipelineWeighted,
   getKpis,
+  getMonthlyClients,
   getTopClients,
   getTrendAnalysis,
 } from "@/lib/api/dashboard";
-import { formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
+import { formatDate, formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
 import { Bars, Bento, Brief, FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
-import { AnalysisNarr, Narr, Note, Scen, ScenGrid, Section } from "@/components/ui/primitives";
+import { Narr, Scen, ScenGrid, Section } from "@/components/ui/primitives";
 
 // Les libellés du menu de sections vivent dans lib/data/sections.ts (importés
 // par l'en-tête) ; ici seuls les `id` des <Section> doivent y correspondre.
@@ -25,30 +26,59 @@ function toSpark(values: number[]): number[] {
 }
 
 export async function DgVision() {
-  const [briefing, kpis, forecast, topClients, variance] = await Promise.all([
+  const year = new Date().getFullYear();
+  const [briefing, kpis, forecast, topClients, variance, monthlyClients] = await Promise.all([
     getBriefing(),
-    getKpis(),
+    getKpis(year),
     getForecastPipelineWeighted(),
-    getTopClients(undefined, 10),
-    getBudgetVariance(),
+    getTopClients(year, 10),
+    getBudgetVariance(year),
+    getMonthlyClients(year, 10),
   ]);
 
   const monthLabels = kpis.monthly.map((m) => MOIS_ABREV[m.mois - 1] ?? String(m.mois));
   const monthValuesM = kpis.monthly.map((m) => m.ca_xof / 1_000_000);
+
+  // Détail des scénarios (Trajectoire financière) : recalculé côté vue pour donner
+  // un "pourquoi" chiffré au clic, à partir des mêmes opportunités que le backend
+  // (uc_forecast/aggregation.py) — jamais une approximation inventée dans la vue.
+  const oppsAtRisque = forecast.opportunities.filter((o) => o.probability_pct < 50);
+  const nbAtRisque = oppsAtRisque.length;
+  const pondereAtRisque = oppsAtRisque.reduce((sum, o) => sum + o.weighted_xof, 0);
+  const bonusHaut = forecast.scenarios.optimiste_xof - forecast.scenarios.realiste_xof;
   const trendAnalysis = monthLabels.length >= 2 ? await getTrendAnalysis(monthLabels, monthValuesM) : null;
   const spark = toSpark(monthValuesM);
 
-  const revenueDeltaPct = kpis.previous_year.revenue_xof
-    ? ((kpis.year.revenue_xof - kpis.previous_year.revenue_xof) / kpis.previous_year.revenue_xof) * 100
+  // Comparaison à date comparable (même jour calendaire dans les deux années)
+  // — kpis.year/previous_year comparent une année en cours à une année pleine,
+  // ce qui produit un écart artificiel tant que l'exercice n'est pas clos.
+  const revenueDeltaPct = kpis.previous_ytd.revenue_xof
+    ? ((kpis.ytd.revenue_xof - kpis.previous_ytd.revenue_xof) / kpis.previous_ytd.revenue_xof) * 100
     : null;
+
+  // Le titre lit le fait figé par le briefing (même source que ses puces),
+  // avec repli sur le direct : titre et puces ne peuvent plus afficher deux
+  // chiffres différents pour le même indicateur.
+  const dgFacts = (briefing?.section?.facts ?? {}) as Record<string, unknown>;
+  const caArrete = typeof dgFacts.ca_ytd_xof === "number" ? dgFacts.ca_ytd_xof : kpis.ytd.revenue_xof;
+  const dateArret = typeof dgFacts.date_arret === "string" ? dgFacts.date_arret : kpis.ytd.as_of;
 
   const totalRevenue = kpis.year.revenue_xof;
   const top1 = topClients?.[0];
-  const top5Sum = (topClients ?? []).slice(0, 5).reduce((s, c) => s + c.ca_total_xof, 0);
+  const top5 = (topClients ?? []).slice(0, 5);
+  const top5Sum = top5.reduce((s, c) => s + c.ca_total_xof, 0);
   const top10Sum = (topClients ?? []).reduce((s, c) => s + c.ca_total_xof, 0);
   const top1Pct = top1 && totalRevenue ? (top1.ca_total_xof / totalRevenue) * 100 : null;
   const top5Pct = totalRevenue ? (top5Sum / totalRevenue) * 100 : null;
   const top10Pct = totalRevenue ? (top10Sum / totalRevenue) * 100 : null;
+
+  // Combien des 5 premiers comptes de l'exercice sont de nouveaux clients (pas
+  // de commande l'année précédente) — un top5 gagné par la CA la plus haute
+  // parmi les clients gagnés (top_clients_gagnes) contient nécessairement tout
+  // client du top5 global qui est nouveau, donc ce chiffre est exact, pas une
+  // estimation.
+  const newClientNames = new Set(variance.top_clients_gagnes.map((c) => c.client));
+  const nbTop5Nouveaux = top5.filter((c) => newClientNames.has(c.client)).length;
 
   // Résumé IA en 5 lignes en tête ; repli sur les faits bruts si le briefing
   // du jour a été généré avant l'ajout du résumé.
@@ -64,16 +94,22 @@ export async function DgVision() {
         <Brief
           kicker={
             briefing?.generated_at
-              ? `Briefing · ${new Date(briefing.generated_at).toLocaleString("fr-FR")}`
+              ? `Briefing du ${formatDate(briefing.generated_at)} · chiffres arrêtés au ${formatDate(dateArret)}`
               : "Briefing de direction"
           }
-          headline={`Exercice ${kpis.year.year} — ${formatMFcfa(kpis.year.revenue_xof)} M FCFA facturés à ce jour.`}
+          headline={
+            `Exercice ${year} au ${formatDate(dateArret)} — ${formatMFcfa(caArrete)} M FCFA commandés`
+            + (revenueDeltaPct !== null
+              ? `, ${revenueDeltaPct >= 0 ? "+" : ""}${formatPct(revenueDeltaPct, 0)} % vs ${year - 1} à date comparable`
+              : "")
+            + "."
+          }
           lines={briefLines}
           paragraphs={
             briefLines.length ? undefined : ["Briefing pas encore généré pour ce profil."]
           }
           pills={[
-            { label: `${formatNumber(kpis.year.orders_count)} commandes`, hot: false },
+            { label: `${formatNumber(kpis.ytd.orders_count)} commandes`, hot: false },
             { label: `${formatNumber(forecast.scenarios.nb_opportunites)} opportunités ouvertes`, hot: false },
             {
               label: top5Pct !== null ? `Top 5 · ${formatPct(top5Pct, 0)} % du CA` : "Concentration inconnue",
@@ -86,35 +122,35 @@ export async function DgVision() {
         <Bento>
           <StatTile
             span={4}
-            label={`CA facturé ${kpis.year.year}`}
-            value={formatMFcfa(kpis.year.revenue_xof)}
+            label={`CA commandé ${year} au ${formatDate(dateArret)}`}
+            value={formatMFcfa(kpis.ytd.revenue_xof)}
             unit="M FCFA"
             reading={
               revenueDeltaPct === null
                 ? "pas de référence N-1"
-                : `${revenueDeltaPct >= 0 ? "+" : ""}${formatPct(revenueDeltaPct)} % vs ${kpis.previous_year.year}`
+                : `${revenueDeltaPct >= 0 ? "+" : ""}${formatPct(revenueDeltaPct)} % vs ${year - 1} à date comparable`
             }
             readingVariant={revenueDeltaPct === null ? undefined : revenueDeltaPct >= 0 ? "pos" : "neg"}
             spark={spark}
             sparkAxis={monthLabels}
             detail={{
               kicker: "Indicateur · chiffre d'affaires",
-              title: `CA facturé ${kpis.year.year}`,
+              title: `CA commandé ${year} au ${formatDate(dateArret)}`,
               tag: revenueDeltaPct === null ? "sans référence" : revenueDeltaPct >= 0 ? "en hausse" : "en baisse",
               tagVariant: revenueDeltaPct === null ? "n" : revenueDeltaPct >= 0 ? "s" : "r",
               body: [
-                `Cumul facturé sur l'exercice ${kpis.year.year} : ${formatMFcfa(kpis.year.revenue_xof)} M FCFA, sur ${formatNumber(kpis.year.orders_count)} commandes et ${formatNumber(kpis.year.clients_with_orders)} clients ayant commandé.`,
+                `Cumul commandé au ${formatDate(dateArret)} : ${formatMFcfa(kpis.ytd.revenue_xof)} M FCFA, sur ${formatNumber(kpis.ytd.orders_count)} commandes et ${formatNumber(kpis.ytd.clients_with_orders)} clients ayant commandé.`,
                 revenueDeltaPct === null
                   ? "Aucun exercice précédent comparable dans le miroir, la variation ne peut pas être calculée."
-                  : `L'exercice ${kpis.previous_year.year} s'était établi à ${formatMFcfa(kpis.previous_year.revenue_xof)} M FCFA, soit un écart de ${signed(mFcfa(kpis.year.revenue_xof - kpis.previous_year.revenue_xof))} M FCFA.`,
+                  : `À la même date en ${year - 1}, le cumul était de ${formatMFcfa(kpis.previous_ytd.revenue_xof)} M FCFA, soit un écart de ${signed(mFcfa(kpis.ytd.revenue_xof - kpis.previous_ytd.revenue_xof))} M FCFA.`,
               ],
               kv: [
-                ["CA facturé", `${formatMFcfa(kpis.year.revenue_xof)} M FCFA`],
-                ["Exercice précédent", `${formatMFcfa(kpis.previous_year.revenue_xof)} M FCFA`],
-                ["Commandes", formatNumber(kpis.year.orders_count)],
-                ["Clients actifs", formatNumber(kpis.year.clients_with_orders)],
+                ["CA commandé", `${formatMFcfa(kpis.ytd.revenue_xof)} M FCFA`],
+                [`${year - 1} à date comparable`, `${formatMFcfa(kpis.previous_ytd.revenue_xof)} M FCFA`],
+                ["Commandes", formatNumber(kpis.ytd.orders_count)],
+                ["Clients actifs", formatNumber(kpis.ytd.clients_with_orders)],
               ],
-              note: "Somme des factures émises dans le miroir Odoo. Le cockpit lit, il n'écrit jamais.",
+              note: "Somme des bons de commande confirmés (sale.order en état sale/done) du miroir Odoo, arrêtée au même jour calendaire que l'année précédente. Ce n'est pas du CA facturé : la facturation se suit en vue Trésorerie. Le cockpit lit, il n'écrit jamais.",
             }}
           />
           <StatTile
@@ -162,36 +198,27 @@ export async function DgVision() {
               tagVariant: top5Pct !== null && top5Pct > 50 ? "r" : "w",
               body: [
                 top1 && top1Pct !== null
-                  ? `${top1.client} pèse à lui seul ${formatPct(top1Pct, 0)} % du CA facturé de l'exercice, pour ${formatMFcfa(top1.ca_total_xof)} M FCFA sur ${formatNumber(top1.nb_commandes)} commandes.`
-                  : "Aucun client facturé sur l'exercice.",
+                  ? `${top1.client} pèse à lui seul ${formatPct(top1Pct, 0)} % du CA commandé de l'exercice, pour ${formatMFcfa(top1.ca_total_xof)} M FCFA sur ${formatNumber(top1.nb_commandes)} commandes.`
+                  : "Aucun client n'a commandé sur l'exercice.",
                 top5Pct !== null && top5Pct > 50
                   ? "Plus de la moitié du chiffre d'affaires dépend de cinq comptes. À ce niveau, la perte d'un seul client déplace l'atterrissage de l'exercice : c'est une exposition à arbitrer, pas une statistique à consulter."
                   : "La concentration reste sous le seuil de 50 %, mais mérite un suivi à chaque renouvellement de contrat cadre.",
+                ...(nbTop5Nouveaux > 0
+                  ? [
+                      `${nbTop5Nouveaux} des ${top5.length} premiers comptes sont de nouveaux clients en ${year} : la concentration est faible parce que le portefeuille historique s'est arrêté, pas parce qu'il s'est élargi.`,
+                    ]
+                  : []),
               ],
               kv: [
                 ["Top 1", top1Pct !== null ? `${formatPct(top1Pct, 0)} %` : "—"],
                 ["Top 5 cumulé", top5Pct !== null ? `${formatPct(top5Pct, 0)} %` : "—"],
                 ["Top 10 cumulé", top10Pct !== null ? `${formatPct(top10Pct, 0)} %` : "—"],
-                ["Base de calcul", `${formatMFcfa(totalRevenue)} M FCFA facturés`],
+                ["Base de calcul", `${formatMFcfa(totalRevenue)} M FCFA commandés`],
               ],
-              note: "Part calculée sur le CA facturé de l'exercice en cours, pas sur le carnet de commandes.",
+              note: "Part calculée sur le CA commandé de l'exercice en cours, pas sur le carnet de commandes.",
             }}
           />
 
-          <Tile span={12} title="Briefing de direction" kick="narration">
-            {briefing?.section?.analysis ? (
-              <AnalysisNarr text={briefing.section.analysis} />
-            ) : (
-              <Note style={{ marginTop: 0 }}>
-                Briefing non disponible pour ce profil ou pas encore généré.
-              </Note>
-            )}
-            {/* <FootNote>
-              Généré le{" "}
-              {briefing?.generated_at ? new Date(briefing.generated_at).toLocaleString("fr-FR") : "—"} (
-              {briefing?.triggered_by ?? "—"}) et figé jusqu&apos;à la prochaine régénération planifiée.
-            </FootNote> */}
-          </Tile>
         </Bento>
       </Section>
 
@@ -203,17 +230,65 @@ export async function DgVision() {
                 label="Scénario bas"
                 value={formatMFcfa(forecast.scenarios.pessimiste_xof)}
                 detail={<>M FCFA · hors opportunités à risque</>}
+                narrative={{
+                  kicker: "Méthode de calcul · scénario bas",
+                  title: "Scénario bas",
+                  tag: "plancher",
+                  tagVariant: "w",
+                  body: [
+                    `Ce scénario ne retient que les opportunités dont la probabilité de conversion Odoo est d'au moins 50 %, pondérées par cette probabilité. Les ${formatNumber(nbAtRisque)} opportunités sous ce seuil (${formatMFcfa(pondereAtRisque)} M FCFA pondérés dans le scénario réaliste) en sont entièrement exclues, pas seulement décotées.`,
+                    "C'est un plancher volontairement pessimiste : si aucune opportunité incertaine n'aboutit, c'est le chiffre qu'on peut sécuriser sans hypothèse supplémentaire.",
+                  ],
+                  kv: [
+                    ["Opportunités retenues (≥ 50 %)", formatNumber(forecast.scenarios.nb_opportunites - nbAtRisque)],
+                    ["Opportunités exclues (< 50 %)", formatNumber(nbAtRisque)],
+                    ["Écart avec le réaliste", `-${formatMFcfa(forecast.scenarios.realiste_xof - forecast.scenarios.pessimiste_xof)} M FCFA`],
+                  ],
+                  // note: "Calcul : Σ (valeur × probabilité) des opportunités à probabilité ≥ 50 % uniquement.",
+                }}
               />
               <Scen
                 mid
                 label="Réaliste · retenu"
                 value={formatMFcfa(forecast.scenarios.realiste_xof)}
                 detail={<>M FCFA · probabilité moyenne {formatPct(forecast.scenarios.avg_probability_pct, 0)} %</>}
+                narrative={{
+                  kicker: "Méthode de calcul · scénario retenu",
+                  title: "Scénario réaliste",
+                  tag: "retenu en comité",
+                  tagVariant: "a",
+                  body: [
+                    `Chaque opportunité ouverte pèse pour sa valeur multipliée par sa probabilité de conversion Odoo — sans exclusion ni bonus. C'est la somme pondérée sur les ${formatNumber(forecast.scenarios.nb_opportunites)} opportunités du pipeline, probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %.`,
+                    "C'est ce chiffre qui sert de référence d'atterrissage, parce qu'il ne fait ni l'hypothèse optimiste que les dossiers incertains se débloquent, ni l'hypothèse pessimiste qu'ils n'aboutiront jamais.",
+                  ],
+                  kv: [
+                    ["Pipeline brut (non pondéré)", `${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA`],
+                    ["Pipeline pondéré retenu", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
+                    ["Taux de pondération global", forecast.scenarios.total_pipeline_xof ? `${formatPct((forecast.scenarios.realiste_xof / forecast.scenarios.total_pipeline_xof) * 100, 0)} %` : "—"],
+                  ],
+                  // note: "Calcul : Σ (valeur × probabilité) sur la totalité du pipeline ouvert.",
+                }}
               />
               <Scen
                 label="Scénario haut"
                 value={formatMFcfa(forecast.scenarios.optimiste_xof)}
                 detail={<>M FCFA · {formatNumber(forecast.scenarios.nb_opportunites)} opportunités</>}
+                narrative={{
+                  kicker: "Méthode de calcul · scénario haut",
+                  title: "Scénario haut",
+                  tag: "hypothèse optimiste",
+                  tagVariant: "n",
+                  body: [
+                    `Part du même socle que le scénario réaliste (${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA), puis ajoute un bonus sur les ${formatNumber(nbAtRisque)} opportunités sous 50 % de probabilité : chacune est recomptée à 50 % de sa valeur au lieu de sa probabilité réelle, souvent plus faible.`,
+                    "Ce n'est pas une probabilité mesurée qui remonte à 50 % — c'est une hypothèse forfaitaire volontairement optimiste sur les dossiers incertains, à ne pas annoncer comme un chiffre plus fiable que le réaliste.",
+                  ],
+                  kv: [
+                    ["Socle réaliste", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
+                    ["Bonus opportunités < 50 %", `+${formatMFcfa(bonusHaut)} M FCFA`],
+                    ["Opportunités concernées", formatNumber(nbAtRisque)],
+                  ],
+                  // note: "Calcul : réaliste + Σ (valeur × 0,5) des opportunités à probabilité < 50 %.",
+                }}
               />
             </ScenGrid>
             {/* <FootNote>
@@ -222,30 +297,31 @@ export async function DgVision() {
             </FootNote> */}
           </Tile>
 
-          <Tile span={5} title="Facturation par mois" kick={`exercice ${kpis.year.year}`}>
+          <Tile span={5} title="Commandes par mois" kick={`exercice ${year}`}>
             <HintLine>Cliquez un mois pour son détail</HintLine>
             <Bars
-              rows={kpis.monthly.map((m, i) => ({
-                name: monthLabels[i],
-                sub: `${formatMFcfa(m.ca_xof)} M FCFA facturés`,
-                value: `${formatMFcfa(m.ca_xof)} M`,
-                pct: maxMonth ? (m.ca_xof / 1_000_000 / maxMonth) * 100 : 0,
-                detail: {
-                  kicker: `Facturation · ${monthLabels[i]} ${kpis.year.year}`,
-                  title: `${monthLabels[i]} ${kpis.year.year}`,
-                  tag: `${formatMFcfa(m.ca_xof)} M FCFA`,
-                  tagVariant: "a" as const,
-                  body: [
-                    `Le mois de ${monthLabels[i].toLowerCase()} totalise ${formatMFcfa(m.ca_xof)} M FCFA de facturation émise, soit ${maxMonth ? formatPct((m.ca_xof / 1_000_000 / maxMonth) * 100, 0) : "0"} % du meilleur mois de l'exercice.`,
-                    `Cumul de l'exercice à ce jour : ${formatMFcfa(kpis.year.revenue_xof)} M FCFA.`,
-                  ],
-                  kv: [
-                    ["Facturé", `${formatMFcfa(m.ca_xof)} M FCFA`],
-                    ["Part du meilleur mois", maxMonth ? `${formatPct((m.ca_xof / 1_000_000 / maxMonth) * 100, 0)} %` : "—"],
-                  ],
-                  note: "Somme des factures dont la date d'émission tombe dans le mois, miroir Odoo.",
-                },
-              }))}
+              rows={kpis.monthly.map((m, i) => {
+                const clients = monthlyClients.months[String(m.mois)] ?? [];
+                return {
+                  name: monthLabels[i],
+                  sub: `${formatMFcfa(m.ca_xof)} M FCFA commandés`,
+                  value: `${formatMFcfa(m.ca_xof)} M`,
+                  pct: maxMonth ? (m.ca_xof / 1_000_000 / maxMonth) * 100 : 0,
+                  detail: {
+                    kicker: `Commandes · ${monthLabels[i]} ${year}`,
+                    title: `${monthLabels[i]} ${year}`,
+                    tag: `${formatMFcfa(m.ca_xof)} M FCFA`,
+                    tagVariant: "a" as const,
+                    body: [
+                      `Le mois de ${monthLabels[i].toLowerCase()} totalise ${formatMFcfa(m.ca_xof)} M FCFA de commandes confirmées, soit ${maxMonth ? formatPct((m.ca_xof / 1_000_000 / maxMonth) * 100, 0) : "0"} % du meilleur mois de l'exercice.`,
+                    ],
+                    kv: clients.length
+                      ? clients.map((c) => [`${c.nb_commandes} commande${c.nb_commandes > 1 ? "s" : ""}`, c.client] as const)
+                      : [["Aucune commande", "—"] as const],
+                    note: "Top clients du mois par nombre de commandes confirmées (sale.order), miroir Odoo.",
+                  },
+                };
+              })}
             />
           </Tile>
 
@@ -374,7 +450,7 @@ export async function DgVision() {
 
       <Section id="risques" title="Dépendances et risques" subtitle="Ce qui fragilise l'entreprise">
         <Bento>
-          <Tile span={7} title="Où se concentre le risque client" kick="part du CA facturé">
+          <Tile span={7} title="Où se concentre le risque client" kick="part du CA commandé">
             <HintLine>Cliquez un compte pour son exposition</HintLine>
             <Bars
               rows={(topClients ?? []).slice(0, 5).map((c) => {
@@ -391,18 +467,18 @@ export async function DgVision() {
                     tag: part > 20 ? "dépendance forte" : part > 10 ? "à surveiller" : "exposition mesurée",
                     tagVariant: part > 20 ? ("r" as const) : part > 10 ? ("w" as const) : ("n" as const),
                     body: [
-                      `${c.client} a été facturé de ${formatMFcfa(c.ca_total_xof)} M FCFA sur l'exercice, réparti sur ${formatNumber(c.nb_commandes)} commandes, soit ${formatPct(part, 0)} % du chiffre d'affaires total.`,
+                      `${c.client} a commandé pour ${formatMFcfa(c.ca_total_xof)} M FCFA sur l'exercice, réparti sur ${formatNumber(c.nb_commandes)} commandes, soit ${formatPct(part, 0)} % du chiffre d'affaires total.`,
                       part > 20
                         ? "À ce niveau de poids, ce compte n'est plus un client parmi d'autres : son renouvellement conditionne l'atterrissage. Toute négociation le concernant est un arbitrage de direction, pas une décision commerciale."
                         : "Le poids de ce compte reste absorbable, mais il entre dans le calcul de concentration du top 5 suivi en tableau de bord.",
                     ],
                     kv: [
-                      ["CA facturé", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
+                      ["CA commandé", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
                       ["Part du CA", `${formatPct(part, 0)} %`],
                       ["Commandes", formatNumber(c.nb_commandes)],
                       ["Pays", c.pays],
                     ],
-                    note: "Chiffres issus des factures du miroir Odoo. Le détail par dossier est accessible depuis le Copilote.",
+                    note: "Chiffres issus des bons de commande du miroir Odoo. Le détail par dossier est accessible depuis le Copilote.",
                   },
                 };
               })}
