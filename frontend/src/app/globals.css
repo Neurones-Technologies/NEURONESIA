@@ -192,6 +192,113 @@ table{border-spacing:0}
 .ans-q i{font-family:var(--mono);font-style:normal;font-size:10px;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;flex:0 0 auto}
 .lim{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;box-shadow:var(--shadow-xs)}
 
+/* ---------- historique du copilote (sidebar rétractable) ---------- */
+.cop-wrap{
+  display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px;align-items:start;
+  /* La coque (.canvas) réserve 76px sous le contenu de chaque vue. Le Copilote
+     les reprend : la barre de saisie doit toucher le bas de la fenêtre, pas
+     flotter 76px au-dessus. Il ne reste que --cop-gap sous elle. */
+  --cop-gap:20px;
+  margin-bottom:calc(var(--cop-gap) - 76px)
+}
+.cop-wrap--closed{grid-template-columns:minmax(0,1fr)}
+/* Le volet de chat occupe une hauteur d'écran fixe : le fil défile à
+   l'intérieur, la barre de saisie reste ancrée en bas et toujours visible.
+   100px ≈ en-tête collant (68) + padding haut du canvas (30), arrondi au
+   supérieur pour absorber les fractions de pixel et éviter un filet de
+   défilement sur la page entière. */
+.cop-main{
+  min-width:0;display:flex;flex-direction:column;
+  height:calc(100vh - 100px - var(--cop-gap))
+}
+.cop-side{
+  position:sticky;top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:14px 12px;box-shadow:var(--shadow-xs);max-height:calc(100vh - 44px);overflow-y:auto
+}
+.cop-side-h{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;padding:0 4px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)
+}
+.cop-new{
+  border:1px solid var(--line);border-radius:999px;background:var(--paper-2);padding:4px 10px;cursor:pointer;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--t2);
+  transition:border-color .18s ease,color .18s ease
+}
+.cop-new:hover{border-color:var(--accent-strong);color:var(--accent)}
+.cop-new:focus-visible{outline:2px solid var(--accent-strong);outline-offset:1px}
+.cop-side-empty{margin:0;padding:6px 4px;font-size:12px;line-height:1.5;color:var(--t3)}
+.conv-list{display:flex;flex-direction:column;gap:2px}
+.conv{display:flex;align-items:stretch;gap:2px;border-radius:10px;transition:background .18s ease}
+.conv:hover{background:var(--paper-2)}
+.conv[aria-current="true"]{background:var(--accent-soft)}
+.conv-b{
+  flex:1;min-width:0;text-align:left;border:0;background:transparent;cursor:pointer;padding:8px 6px 8px 10px;
+  font-family:var(--sans);color:var(--t1);border-radius:10px
+}
+.conv-b b{display:block;font-size:12.5px;font-weight:500;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv-b span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:var(--t3);margin-top:2px}
+.conv[aria-current="true"] .conv-b b{color:var(--accent)}
+.conv-x{
+  flex:0 0 24px;border:0;background:transparent;cursor:pointer;color:var(--t3);font-size:17px;line-height:1;
+  border-radius:8px;opacity:0;transition:opacity .18s ease,color .18s ease
+}
+.conv:hover .conv-x,.conv-x:focus-visible{opacity:1}
+.conv-x:hover{color:var(--alert)}
+.conv-x:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
+.conv--del{
+  flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;background:var(--alert-soft);
+  border:1px solid var(--alert-border);font-size:11.5px;color:var(--alert)
+}
+.conv--del > span{flex:1 0 100%}
+.conv-yes,.conv-no{
+  border:1px solid var(--alert-border);border-radius:999px;background:var(--card);padding:3px 10px;cursor:pointer;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em
+}
+.conv-yes{color:var(--alert);border-color:var(--alert)}
+.conv-no{color:var(--t2);border-color:var(--line)}
+.conv-yes:focus-visible,.conv-no:focus-visible{outline:2px solid var(--accent-strong);outline-offset:1px}
+/* `align-self` : sans lui la barre s'étirerait sur toute la largeur du volet
+   (conteneur flex) et son contenu se retrouverait centré. */
+.cop-bar{align-self:flex-start;flex:0 0 auto;display:flex;align-items:center;gap:12px;padding-bottom:10px}
+.cop-toggle{
+  border:0;background:transparent;cursor:pointer;padding:0;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--t3);transition:color .18s ease
+}
+/* Fil de conversation en haut, barre de saisie en bas : `.ask` porte une marge
+   basse pensée pour l'ancienne disposition (saisie en tête), on la neutralise. */
+.cop-thread{flex:1;min-height:0;overflow-y:auto;padding:2px 10px 10px 2px}
+/* Rail de défilement discret : le rail natif de Windows (large, avec flèches)
+   coupe la page en deux. `scrollbar-*` couvre Firefox et Chrome ≥ 121, les
+   pseudo-éléments WebKit prennent le relais sur les versions antérieures. */
+.cop-thread,.cop-side{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.cop-thread::-webkit-scrollbar,.cop-side::-webkit-scrollbar{width:5px}
+.cop-thread::-webkit-scrollbar-track,.cop-side::-webkit-scrollbar-track{background:transparent}
+.cop-thread::-webkit-scrollbar-thumb,.cop-side::-webkit-scrollbar-thumb{
+  background:var(--line-2);border-radius:999px
+}
+.cop-thread:hover::-webkit-scrollbar-thumb,.cop-side:hover::-webkit-scrollbar-thumb{background:var(--t3)}
+.cop-thread-in{display:flex;flex-direction:column;gap:18px}
+/* `margin-top:auto` ne joue que sur un fil vide (pas de bloc extensible
+   au-dessus) : la saisie descend alors au bas du volet au lieu de flotter.
+   La saisie colle au fil : rien ne s'intercale entre les deux (20px en tout,
+   moitié ici, moitié en bas du fil). */
+.cop-compose{margin-top:auto;padding-top:10px;background:var(--paper)}
+.cop-compose .chips{margin-bottom:10px}
+.ask--bottom{margin:0}
+.cop-toggle:hover{color:var(--accent)}
+.cop-toggle:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
+@media (max-width:900px){
+  .cop-wrap{grid-template-columns:minmax(0,1fr)}
+  .cop-side{position:static;max-height:320px}
+  /* Sur petit écran l'historique passe au-dessus : un volet de hauteur fixe
+     n'aurait plus de place. Le fil reprend le défilement de la page et la
+     saisie reste visible en se collant au bas de la fenêtre. */
+  .cop-wrap{margin-bottom:0}
+  .cop-main{height:auto}
+  .cop-thread{overflow:visible;flex:none;padding-bottom:0}
+  .cop-compose{position:sticky;bottom:0;padding-bottom:12px}
+}
+
 /* question posée / réponse du copilote (forme maquette) */
 .bq{display:flex;gap:13px;align-items:flex-start;margin-bottom:16px}
 .bq-av{

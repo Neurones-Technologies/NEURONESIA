@@ -201,11 +201,18 @@ class ConversationModel(Base):
     __tablename__ = "conversations"
     __table_args__ = (
         Index("ix_conv_session_user_time", "session_id", "user_id", "created_at"),
+        # Liste de l'historique du Copilote : toujours filtrée (user, profil) et
+        # triée par date — cet index couvre exactement cette lecture.
+        Index("ix_conv_user_profile_time", "user_id", "profile", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(String(64))
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Profil cockpit d'où part la conversation ("dg" | "dc" | "do" | "df" | "am").
+    # L'historique est cloisonné par profil : un DG ne retrouve pas dans son
+    # Copilote les conversations qu'il a menées côté profil commercial.
+    profile: Mapped[str] = mapped_column(String(20), default="")
     role: Mapped[str] = mapped_column(String(20))        # "user" | "assistant"
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
