@@ -1,17 +1,9 @@
 import { Suspense } from "react";
 import { apiFetch } from "@/lib/api/client";
 import { META } from "@/lib/data/profiles";
-import { ROLE_LABELS } from "@/lib/auth/roles";
 import { ProfileKey } from "@/lib/types";
-import { Note, ScopeBar, ViewHeader } from "@/components/ui/primitives";
 import { ChatBox } from "@/components/copilot/ChatBox";
-
-interface Me {
-  email: string;
-  full_name: string;
-  role: string;
-  allowed_views: string[] | null;
-}
+import { SessionSummary } from "@/components/copilot/ConversationList";
 
 const SUGGESTED: Record<ProfileKey, { title: string; questions: string[] }[]> = {
   dg: [
@@ -45,40 +37,37 @@ const SUGGESTED: Record<ProfileKey, { title: string; questions: string[] }[]> = 
   ],
 };
 
+/** Conversations déjà menées depuis ce profil. Chargé côté serveur pour que la
+ * sidebar soit peuplée au premier rendu ; le client ne la rafraîchit ensuite
+ * qu'après un échange ou une suppression. Une panne de l'historique ne doit pas
+ * empêcher de poser une question : on retombe sur une liste vide. */
+async function loadSessions(profile: ProfileKey): Promise<SessionSummary[]> {
+  try {
+    const data = await apiFetch<{ sessions: SessionSummary[] }>(
+      `/v1/chat/sessions?profile=${profile}`
+    );
+    return data.sessions ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function CopilotView({ profile }: { profile: ProfileKey }) {
   const meta = META[profile];
-  const me = await apiFetch<Me>("/v1/auth/me");
+  const sessions = await loadSessions(profile);
   const groups = SUGGESTED[profile];
 
   return (
     <>
-      <ViewHeader
-        title="Interroger les données"
-        subtitle="Le Copilote interroge directement le miroir Odoo avec les mêmes outils que le reste du cockpit (CRM, factures, statistiques) — jamais de donnée inventée."
-      />
-
-      <ScopeBar
-        items={[
-          ["Connecté comme", `${me.full_name} · ${ROLE_LABELS[me.role] ?? me.role}`],
-          [
-            "Accès",
-            me.allowed_views === null ? "Administrateur · accès complet" : `${me.allowed_views.length} module(s) autorisé(s)`,
-          ],
-        ]}
-      />
-
       <Suspense fallback={null}>
         <ChatBox
+          profile={profile}
+          initialSessions={sessions}
           placeholder="Posez une question sur vos données…"
           suggested={groups.flatMap((g) => g.questions)}
           avatar={meta.code}
         />
       </Suspense>
-
-      <Note accent style={{ marginTop: 20 }}>
-        Le Copilote répond à partir des mêmes tables que le reste du cockpit. Si une donnée n&apos;est pas dans le
-        miroir (feuilles de temps, échanges clients, marge sur prestation), il le signale plutôt que d&apos;estimer.
-      </Note>
     </>
   );
 }

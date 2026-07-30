@@ -770,7 +770,23 @@ _TOOL_LABELS = {
 
 # ─── Mémoire persistante ──────────────────────────────────────────────────────
 
-async def _load_history(session_id: str, user_id: int | None = None, limit: int = 12) -> list[dict]:
+# Profils cockpit (frontend/src/lib/types.ts::PROFILE_KEYS). Une valeur inconnue
+# est normalisée en "" plutôt que rejetée : le chat doit répondre même si le
+# profil est absent ou farfelu, il ne sera simplement rattaché à aucune liste.
+_PROFILE_KEYS = {"dg", "dc", "do", "df", "am"}
+
+
+def _normalize_profile(profile: str | None) -> str:
+    value = (profile or "").strip().lower()
+    return value if value in _PROFILE_KEYS else ""
+
+
+async def _load_history(
+    session_id: str,
+    user_id: int | None = None,
+    profile: str | None = None,
+    limit: int = 12,
+) -> list[dict]:
     """Charge les N derniers tours de conversation depuis SQLite, scopés par user."""
     if not session_id:
         return []
@@ -781,13 +797,20 @@ async def _load_history(session_id: str, user_id: int | None = None, limit: int 
         )
         if user_id is not None:
             q = q.where(ConversationModel.user_id == user_id)
+        if profile:
+            q = q.where(ConversationModel.profile == profile)
         q = q.order_by(ConversationModel.created_at.desc()).limit(limit)
         result = await session.execute(q)
         rows = list(reversed(result.scalars().all()))
         return [{"role": r.role, "content": r.content} for r in rows]
 
 
-async def _save_turns(session_id: str, turns: list[dict], user_id: int | None = None):
+async def _save_turns(
+    session_id: str,
+    turns: list[dict],
+    user_id: int | None = None,
+    profile: str = "",
+):
     """Sauvegarde les nouveaux tours (user + assistant) en base."""
     if not session_id or not turns:
         return
@@ -796,6 +819,7 @@ async def _save_turns(session_id: str, turns: list[dict], user_id: int | None = 
             session.add(ConversationModel(
                 session_id=session_id,
                 user_id=user_id,
+                profile=profile,
                 role=turn["role"],
                 content=turn["content"],
             ))
@@ -1365,6 +1389,7 @@ async def chat_query(
     text: str = Form(...),
     session_id: str = Form(""),
     history: str = Form("[]"),
+    profile: str = Form(""),
     files: list[UploadFile] = File(default=[]),
 ):
     """
@@ -1384,6 +1409,7 @@ async def chat_query(
     # Parser les fichiers joints AVANT de démarrer le streaming
     parsed_docs = await _parse_uploaded_files(files, container.pdf_parser, container.docx_parser)
     history_data = json.loads(history) if history else []
+    profile_val = _normalize_profile(profile)
 
     async def event_stream() -> AsyncIterator[str]:
         import traceback
@@ -1392,7 +1418,9 @@ async def chat_query(
 
             # ── 1. Charger la mémoire persistante ──────────────────────────
             if session_id_val:
-                db_history = await _load_history(session_id_val, user_id=current_user.id)
+                db_history = await _load_history(
+                    session_id_val, user_id=current_user.id, profile=profile_val
+                )
                 if db_history and not history_data:
                     messages = db_history.copy()
                 elif history_data:
@@ -1646,7 +1674,7 @@ async def chat_query(
                 await _save_turns(session_id_val, [
                     {"role": "user", "content": text},
                     {"role": "assistant", "content": full_answer},
-                ], user_id=current_user.id)
+                ], user_id=current_user.id, profile=profile_val)
 
             final_intent = intent_hint or "rag"
             yield f"data: {json.dumps({'type': 'done', 'intent': final_intent})}\n\n"
@@ -1670,8 +1698,16 @@ async def chat_query(
 
 
 @router.get("/sessions")
-async def list_sessions(current_user: CurrentUser, limit: int = 30):
-    """Liste les conversations récentes de l'utilisateur (groupées par session)."""
+async def list_sessions(current_user: CurrentUser, profile: str = "", limit: int = 30):
+    """Liste les conversations récentes de l'utilisateur (groupées par session).
+
+    Cloisonné par profil cockpit : sans `profile` valide, la liste est vide
+    plutôt que globale — deux profils ne doivent jamais se voir l'un l'autre.
+    """
+    profile_val = _normalize_profile(profile)
+    if not profile_val:
+        return {"sessions": []}
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(
@@ -1680,7 +1716,10 @@ async def list_sessions(current_user: CurrentUser, limit: int = 30):
                 func.max(ConversationModel.created_at).label("last_at"),
                 func.count(ConversationModel.id).label("turn_count"),
             )
-            .where(ConversationModel.user_id == current_user.id)
+            .where(
+                ConversationModel.user_id == current_user.id,
+                ConversationModel.profile == profile_val,
+            )
             .group_by(ConversationModel.session_id)
             .order_by(func.max(ConversationModel.created_at).desc())
             .limit(limit)
@@ -1697,6 +1736,7 @@ async def list_sessions(current_user: CurrentUser, limit: int = 30):
             select(ConversationModel.session_id, ConversationModel.content)
             .where(
                 ConversationModel.user_id == current_user.id,
+                ConversationModel.profile == profile_val,
                 ConversationModel.session_id.in_(session_ids),
                 ConversationModel.role == "user",
             )
@@ -1724,22 +1764,29 @@ async def list_sessions(current_user: CurrentUser, limit: int = 30):
 
 
 @router.get("/sessions/{session_id}")
-async def get_session_history(session_id: str, current_user: CurrentUser):
+async def get_session_history(session_id: str, current_user: CurrentUser, profile: str = ""):
     """Retourne l'historique complet d'une session pour la reprendre."""
-    db_history = await _load_history(session_id, user_id=current_user.id, limit=100)
+    profile_val = _normalize_profile(profile)
+    if not profile_val:
+        return {"session_id": session_id, "messages": []}
+    db_history = await _load_history(
+        session_id, user_id=current_user.id, profile=profile_val, limit=100
+    )
     return {"session_id": session_id, "messages": db_history}
 
 
 @router.delete("/session/{session_id}")
-async def clear_session(session_id: str, current_user: CurrentUser):
-    """Efface l'historique d'une session (bouton 'Nouvelle conversation')."""
+async def clear_session(session_id: str, current_user: CurrentUser, profile: str = ""):
+    """Supprime une conversation de l'historique de l'utilisateur."""
+    conditions = [
+        ConversationModel.session_id == session_id,
+        ConversationModel.user_id == current_user.id,
+    ]
+    profile_val = _normalize_profile(profile)
+    if profile_val:
+        conditions.append(ConversationModel.profile == profile_val)
     async with AsyncSessionLocal() as session:
-        await session.execute(
-            delete(ConversationModel).where(
-                ConversationModel.session_id == session_id,
-                ConversationModel.user_id == current_user.id,
-            )
-        )
+        await session.execute(delete(ConversationModel).where(*conditions))
         await session.commit()
     return {"status": "cleared", "session_id": session_id}
 

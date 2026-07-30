@@ -48,6 +48,7 @@ async def init_db():
         await conn.run_sync(_migrate_opportunities)
         await conn.run_sync(_migrate_purchase_orders)
         await conn.run_sync(_migrate_decisions)
+        await conn.run_sync(_migrate_conversations)
 
 
 # Colonnes IA S2I ajoutées après coup au Watch-Tracker. `create_all` ne modifie
@@ -176,6 +177,34 @@ def _migrate_decisions(sync_conn):
                 f"ALTER TABLE decisions ADD COLUMN {name} {ddl}"
             )
             logger.info("Migration decisions : colonne '%s' ajoutée", name)
+
+
+# Historique du Copilote cloisonné par profil cockpit — colonne ajoutée après
+# coup. Les conversations antérieures gardent profile='' : elles restent en base
+# (et purgées à 30 jours comme les autres) mais ne remontent dans aucune des cinq
+# listes, faute de savoir depuis quel profil elles ont été menées.
+_CONVERSATION_NEW_COLUMNS = {
+    "profile": "VARCHAR(20) NOT NULL DEFAULT ''",
+}
+
+
+def _migrate_conversations(sync_conn):
+    inspector = inspect(sync_conn)
+    if "conversations" not in inspector.get_table_names():
+        return
+    existing = {c["name"] for c in inspector.get_columns("conversations")}
+    for name, ddl in _CONVERSATION_NEW_COLUMNS.items():
+        if name not in existing:
+            sync_conn.exec_driver_sql(
+                f"ALTER TABLE conversations ADD COLUMN {name} {ddl}"
+            )
+            logger.info("Migration conversations : colonne '%s' ajoutée", name)
+    # `create_all` ne touche pas aux index d'une table existante : on crée
+    # explicitement celui qui couvre la liste des conversations.
+    sync_conn.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_conv_user_profile_time "
+        "ON conversations (user_id, profile, created_at)"
+    )
 
 
 async def get_session() -> AsyncSession:
