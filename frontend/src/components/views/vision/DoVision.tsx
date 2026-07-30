@@ -2,7 +2,7 @@ import { getBriefing } from "@/lib/api/briefing";
 import { getKpis, getMargins, getMarginsAnalysis } from "@/lib/api/dashboard";
 import { getPartnersAnalysis, getSupplierIntelligence } from "@/lib/api/partners";
 import { formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
-import { Bars, Bento, Brief, FootNote, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
 
@@ -100,7 +100,7 @@ export async function DoVision() {
               ["Taux de matérialisation", `${formatPct(tauxMaterialisation, 0)} %`],
               ["Dossiers", formatNumber(margins.stats.nb_dossiers)],
             ],
-            note: "Le CA provisoire est la valorisation initiale du dossier commercial, le définitif la valeur réellement facturée à date.",
+            // note: "Le CA provisoire est la valorisation initiale du dossier commercial, le définitif la valeur réellement facturée à date.",
           }}
         />
         <StatTile
@@ -133,7 +133,7 @@ export async function DoVision() {
               ["Visibilité", moisVisibilite !== null ? `${formatPct(moisVisibilite, 1)} mois` : "—"],
               ["Seuil interne", "3,0 mois"],
             ],
-            note: "Calcul global, toutes practices confondues : le détail par practice exigerait un référentiel produit normalisé, absent du miroir.",
+            // note: "Calcul global, toutes practices confondues : le détail par practice exigerait un référentiel produit normalisé, absent du miroir.",
           }}
         />
         <StatTile
@@ -157,16 +157,16 @@ export async function DoVision() {
               ["Reste à encaisser client", `${formatMFcfa(margins.stats.reste_a_encaisser)} M FCFA`],
               ["Déjà encaissé", `${formatMFcfa(margins.stats.total_encaisse)} M FCFA`],
             ],
-            note: "Montants issus des commandes d'achat et factures du miroir Odoo.",
+            // note: "Montants issus des commandes d'achat et factures du miroir Odoo.",
           }}
         />
 
         <Tile span={12} title="Consommation du backlog vs plan" kick="narration">
           <AnalysisSlot load={getMarginsAnalysis} />
-          <FootNote>
+          {/* <FootNote>
             Proxy assumé · l&apos;écart entre CA provisoire et définitif signale un décalage réel mais n&apos;en donne
             pas la cause (staffing, périmètre, fournisseur).
-          </FootNote>
+          </FootNote> */}
         </Tile>
 
         <Tile span={5} title="Cycle de la valeur" kick="du devis à l'encaissement">
@@ -205,7 +205,7 @@ export async function DoVision() {
               },
             ]}
           />
-          <FootNote>Toutes les barres sont exprimées en part du CA provisoire cumulé.</FootNote>
+          {/* <FootNote>Toutes les barres sont exprimées en part du CA provisoire cumulé.</FootNote> */}
         </Tile>
 
         <Tile span={7} title="Dossiers en dérive" kick="CA définitif < 50 % du provisoire">
@@ -236,7 +236,7 @@ export async function DoVision() {
                         ["Marge prévue", `${formatPct(d.perc_marge_prov, 1)} %`],
                         ["Marge constatée", `${formatPct(d.perc_marge_def, 1)} %`],
                       ],
-                      note: "Proxy assumé : le cockpit ne distingue pas un retard de facturation d'une baisse de périmètre.",
+                      // note: "Proxy assumé : le cockpit ne distingue pas un retard de facturation d'une baisse de périmètre.",
                     },
                   };
                 })}
@@ -298,7 +298,7 @@ export async function DoVision() {
                     ],
                     ["Marge de sous-traitance", `${signed(mFcfa(s.marge_sous_traitance_xof))} M FCFA`],
                   ],
-                  note: "Calculé sur les commandes d'achat réelles. Le retard n'est mesurable que si la date de réception est renseignée.",
+                  // note: "Calculé sur les commandes d'achat réelles. Le retard n'est mesurable que si la date de réception est renseignée.",
                 },
               }))}
             />
@@ -330,7 +330,7 @@ export async function DoVision() {
                     ["Dossiers mono-source", formatNumber(s.dossiers_a_risque_fournisseur_unique)],
                     ["Marge de sous-traitance", `${signed(mFcfa(s.marge_sous_traitance_xof))} M FCFA`],
                   ],
-                  note: "Seuil de dépendance retenu : 10 % des achats, ou présence d'au moins un dossier mono-source.",
+                  // note: "Seuil de dépendance retenu : 10 % des achats, ou présence d'au moins un dossier mono-source.",
                 },
               }))}
             />

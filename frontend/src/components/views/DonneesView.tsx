@@ -3,7 +3,7 @@ import type { MirrorSnapshotStat, MirrorTableStat } from "@/lib/api/donnees";
 import { DOMAINS, engineFiability, ENGINES_BY_PROFILE, GAPS } from "@/lib/data/donnees";
 import { formatDate, formatNumber } from "@/lib/format";
 import { ProfileKey, Variant } from "@/lib/types";
-import { Bento, FootNote, HintLine, Lst, Tile } from "@/components/ui/bento";
+import { Bento, /* FootNote, */ HintLine, Lst, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Tag } from "@/components/ui/primitives";
 
@@ -95,7 +95,7 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
                       ["État", r.etat],
                       ["Mode d'accès", r.table === null ? "non instrumenté" : "lecture seule"],
                     ],
-                    note: "Une ligne absente du miroir n'est pas une ligne à zéro : le cockpit préfère se taire plutôt qu'estimer.",
+                    // note: "Une ligne absente du miroir n'est pas une ligne à zéro : le cockpit préfère se taire plutôt qu'estimer.",
                   }}
                 >
                   <td>{r.label}</td>
@@ -109,10 +109,10 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
             </tbody>
           </table>
         </div>
-        <FootNote>
+        {/* <FootNote>
           Effectif et fraîcheur lus en direct sur le miroir SQLite (`/v1/stats/mirror`). Aucune écriture, aucun accès
           direct à la base de production Odoo.
-        </FootNote>
+        </FootNote> */}
       </Tile>
 
       <Tile span={5} title="Ce que le cockpit ne peut pas dire" kick={`${gaps.length} limites`}>
@@ -132,7 +132,7 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
                 ["Statut", "non instrumentée"],
                 ["Cause", "donnée absente ou partielle du miroir"],
               ],
-              note: "Le cockpit expose ses limites plutôt que de produire une estimation non sourçable.",
+              // note: "Le cockpit expose ses limites plutôt que de produire une estimation non sourçable.",
             },
           }))}
         />
@@ -168,7 +168,7 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
                         ["Fiabilité", fiab.label],
                         ["Sortie", "chiffrée, horodatée"],
                       ],
-                      note: "Tous les moteurs tournent sur le miroir répliqué, jamais en direct sur la production Odoo.",
+                      // note: "Tous les moteurs tournent sur le miroir répliqué, jamais en direct sur la production Odoo.",
                     }}
                   >
                     <td style={{ fontWeight: 500 }}>{e.nom}</td>
@@ -185,10 +185,10 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
             </tbody>
           </table>
         </div>
-        <FootNote>
+        {/* <FootNote>
           Seul le moteur de narration est génératif, et il ne calcule rien : il rédige à partir des sorties chiffrées
           des autres moteurs.
-        </FootNote>
+        </FootNote> */}
       </Tile>
     </Bento>
   );

@@ -8,7 +8,7 @@ import {
   getTopClients,
 } from "@/lib/api/dashboard";
 import { formatDate, formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
-import { Bars, Bento, Brief, FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, /* FootNote, */ HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Narr, Section } from "@/components/ui/primitives";
 import { ScenPanel } from "@/components/ui/scen-panel";
@@ -149,7 +149,7 @@ export async function DgVision() {
                 ["Commandes", formatNumber(kpis.ytd.orders_count)],
                 ["Clients actifs", formatNumber(kpis.ytd.clients_with_orders)],
               ],
-              note: "Somme des bons de commande confirmés (sale.order en état sale/done) du miroir Odoo, arrêtée au même jour calendaire que l'année précédente. Ce n'est pas du CA facturé : la facturation se suit en vue Trésorerie. Le cockpit lit, il n'écrit jamais.",
+              // note: "Somme des bons de commande confirmés (sale.order en état sale/done) du miroir Odoo, arrêtée au même jour calendaire que l'année précédente. Ce n'est pas du CA facturé : la facturation se suit en vue Trésorerie. Le cockpit lit, il n'écrit jamais.",
             }}
           />
           <StatTile
@@ -174,7 +174,7 @@ export async function DgVision() {
                 ["Scénario haut", `${formatMFcfa(forecast.scenarios.optimiste_xof)} M FCFA`],
                 ["Probabilité moyenne", `${formatPct(forecast.scenarios.avg_probability_pct, 0)} %`],
               ],
-              note: "Probabilité issue du champ renseigné sur l'opportunité Odoo (crm.lead), jamais recalculée par le cockpit.",
+              // note: "Probabilité issue du champ renseigné sur l'opportunité Odoo (crm.lead), jamais recalculée par le cockpit.",
             }}
           />
           <StatTile
@@ -214,7 +214,7 @@ export async function DgVision() {
                 ["Top 10 cumulé", top10Pct !== null ? `${formatPct(top10Pct, 0)} %` : "—"],
                 ["Base de calcul", `${formatMFcfa(totalRevenue)} M FCFA commandés`],
               ],
-              note: "Part calculée sur le CA commandé de l'exercice en cours, pas sur le carnet de commandes.",
+              // note: "Part calculée sur le CA commandé de l'exercice en cours, pas sur le carnet de commandes.",
             }}
           />
 
@@ -316,7 +316,7 @@ export async function DgVision() {
                     kv: clients.length
                       ? clients.map((c) => [c.client, `${formatMFcfa(c.ca_xof)} M FCFA`] as const)
                       : [["Aucune commande", "—"] as const],
-                    note: "Top clients du mois par nombre de commandes confirmées (sale.order), miroir Odoo.",
+                    // note: "Top clients du mois par nombre de commandes confirmées (sale.order), miroir Odoo.",
                   },
                 };
               })}
@@ -362,7 +362,7 @@ export async function DgVision() {
                         ["Effet net", `${signed(mFcfa(variance.effet_clients_retenus_xof))} M FCFA`],
                         ["Clients concernés", formatNumber(variance.nb_clients_retenus)],
                       ],
-                      note: variance.note,
+                      // note: variance.note,
                     }}
                   >
                     <td>Clients retenus</td>
@@ -391,7 +391,7 @@ export async function DgVision() {
                           (c) => [c.client, `${formatMFcfa(c.ca_xof)} M FCFA`] as [string, string]
                         ),
                       ],
-                      note: variance.note,
+                      // note: variance.note,
                     }}
                   >
                     <td>Clients gagnés</td>
@@ -420,7 +420,7 @@ export async function DgVision() {
                           (c) => [c.client, `${formatMFcfa(c.ca_xof)} M FCFA`] as [string, string]
                         ),
                       ],
-                      note: variance.note,
+                      // note: variance.note,
                     }}
                   >
                     <td>Clients perdus</td>

@@ -1,7 +1,7 @@
 import { getBriefing } from "@/lib/api/briefing";
 import { getDso, getMargins, getMarginsAnalysis, getUnpaid, getUnpaidAnalysis } from "@/lib/api/dashboard";
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, Brief, FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, /* FootNote, */ HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note, Tag } from "@/components/ui/primitives";
@@ -88,7 +88,7 @@ export async function DfVision() {
               ["Échu > 90 jours", `${formatMFcfa(retard90)} M FCFA`],
               ["Part > 90 jours", `${formatPct(part90, 0)} %`],
             ],
-            note: "Factures non réglées du miroir Odoo, hors litiges déclarés.",
+            // note: "Factures non réglées du miroir Odoo, hors litiges déclarés.",
           }}
         />
         <StatTile
@@ -134,7 +134,7 @@ export async function DfVision() {
               ["Montant en attente", `${formatMFcfa(dso?.montant_en_attente_xof)} M FCFA`],
               ["Factures suivies", formatNumber(dso?.total_factures ?? 0)],
             ],
-            note: dso?.note ?? "Calculé sur les factures et règlements du miroir Odoo.",
+            // note: dso?.note ?? "Calculé sur les factures et règlements du miroir Odoo.",
           }}
         />
         <StatTile
@@ -162,7 +162,7 @@ export async function DfVision() {
               ["Dossiers", formatNumber(margins.stats.nb_dossiers)],
               ["Reste fournisseurs à payer", `${formatMFcfa(margins.stats.fournisseurs_restant)} M FCFA`],
             ],
-            note: "Proxy assumé : comparaison provisoire/définitif, faute d'accès au détail des lignes de commandes fournisseurs depuis ce profil.",
+            // note: "Proxy assumé : comparaison provisoire/définitif, faute d'accès au détail des lignes de commandes fournisseurs depuis ce profil.",
           }}
         />
 
@@ -200,7 +200,7 @@ export async function DfVision() {
                         ["Retard maximal", `${formatNumber(d.retard_max_jours)} jours`],
                         ["Part de l'encours", `${formatPct(part, 0)} %`],
                       ],
-                      note: "Retard calculé entre la date d'échéance de la facture et la date du jour, miroir Odoo.",
+                      // note: "Retard calculé entre la date d'échéance de la facture et la date du jour, miroir Odoo.",
                     },
                   };
                 })}
@@ -222,20 +222,20 @@ export async function DfVision() {
                 variant: "w" as const,
               }))}
             />
-            <FootNote>
+            {/* <FootNote>
               {formatMFcfa(retard90)} M FCFA sur {formatNumber(unpaid.exposure.retard_90j_nb_factures)} facture(s) sont
               échus depuis plus de 90 jours, soit {formatPct(part90, 0)} % de l&apos;exposition totale.
-            </FootNote>
+            </FootNote> */}
           </Tile>
         )}
 
         <Tile span={12} title="Érosion de marge" kick="narration · proxy">
           <AnalysisSlot load={getMarginsAnalysis} />
-          <FootNote>
+          {/* <FootNote>
             Proxy assumé · le détail des lignes de commandes fournisseurs par référence n&apos;est pas accessible depuis
             ce profil. La comparaison marge provisoire / définitive est le signal d&apos;érosion le plus proche
             disponible ici.
-          </FootNote>
+          </FootNote> */}
         </Tile>
 
         <Tile span={12} title="Factures à investiguer" kick={`${formatNumber(topInvoices.length)} plus gros encours`}>
@@ -272,7 +272,7 @@ export async function DfVision() {
                             ["Échéance", String(inv["échéance"] ?? "—")],
                             ["Statut", String(inv.statut)],
                           ],
-                          note: "Détection par montant, sans modèle statistique : chaque ligne est vérifiable directement dans Odoo.",
+                          // note: "Détection par montant, sans modèle statistique : chaque ligne est vérifiable directement dans Odoo.",
                         }}
                       >
                         <td>{String(inv.client)}</td>
@@ -286,11 +286,11 @@ export async function DfVision() {
                   </tbody>
                 </table>
               </div>
-              <FootNote>
+              {/* <FootNote>
                 Ces {formatNumber(topInvoices.length)} factures représentent {formatMFcfa(totalTopInvoices)} M FCFA
                 d&apos;encours. La détection d&apos;anomalies fines (doublons, écarts commande/facture) reste à
                 construire côté backend.
-              </FootNote>
+              </FootNote> */}
             </>
           ) : (
             <Note style={{ marginTop: 0 }}>Aucune facture impayée à afficher.</Note>
