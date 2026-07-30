@@ -29,6 +29,25 @@ def cache_vide():
     ttl_cache._STORE.clear()
 
 
+@pytest.fixture(autouse=True)
+def registre(monkeypatch):
+    """Registre de décisions en mémoire, appliqué à tout le module.
+
+    `compute_file` lit les décisions ouvertes en base. Sans ce doublon, un test
+    d'assemblage ouvrirait le vrai miroir SQLite — il passe sur un poste qui l'a
+    déjà synchronisé et échoue en CI, qui n'en a pas. Le compteur sert au test
+    qui vérifie que ce registre n'est jamais servi depuis le cache.
+    """
+    lectures: list[str | None] = []
+
+    async def _list_decisions(status=None, subject_ref=None):
+        lectures.append(status)
+        return []
+
+    monkeypatch.setattr(service.store, "list_decisions", _list_decisions)
+    return lectures
+
+
 class CRMSimule:
     """Journalise les appels et mesure le recouvrement des lectures."""
 
@@ -142,24 +161,19 @@ def test_file_puis_dossier_ne_calcule_qu_une_fois():
     assert crm.appels.count("unpaid") == 1
 
 
-def test_le_registre_de_decisions_n_est_pas_mis_en_cache(monkeypatch):
+def test_le_registre_de_decisions_n_est_pas_mis_en_cache(registre):
     """La file peut venir du cache, les décisions ouvertes jamais : elles changent
     au moment où un mandataire tranche."""
     crm = CRMSimule()
-    lectures = {"n": 0}
-
-    async def _list_decisions(status=None, subject_ref=None):
-        lectures["n"] += 1
-        return []
-
-    monkeypatch.setattr(service.store, "list_decisions", _list_decisions)
 
     async def _scenario():
         await service.compute_file(crm)
         await service.compute_file(crm)
 
     asyncio.run(_scenario())
-    assert lectures["n"] == 2, "les décisions ouvertes ont été servies depuis le cache"
+    assert registre == ["en_cours", "en_cours"], (
+        "les décisions ouvertes ont été servies depuis le cache"
+    )
     assert crm.appels.count("unpaid") == 1, "la file, elle, a été recalculée"
 
 
