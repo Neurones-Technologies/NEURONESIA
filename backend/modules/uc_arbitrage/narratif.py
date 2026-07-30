@@ -139,7 +139,7 @@ def _fallback_raisons(dossier: dict, option: dict) -> list[str]:
         ]
     if classe == "paiements_stoppes":
         return [
-            f"L'arrêt des encaissements peut refléter un blocage administratif de notre côté (facture "
+            "L'arrêt des encaissements peut refléter un blocage administratif de notre côté (facture "
             "contestée, pièce manquante, changement de circuit) autant qu'une difficulté du client.",
             f"Bloquer les {enjeu_m} M FCFA sans avoir appelé le client fait porter la décision sur une "
             f"absence de donnée : le miroir constate le silence, il ne l'explique pas.",
