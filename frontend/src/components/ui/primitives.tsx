@@ -1,6 +1,5 @@
 import { ReactNode, Fragment } from "react";
 import { Variant } from "@/lib/types";
-import { Clickable, DetailCard } from "./detail";
 
 export function ViewHeader({
   eyebrow,
@@ -189,40 +188,6 @@ export function Btn({
     <button className={`btn${primary ? " btn--p" : ""}`} type="button" {...props}>
       {children}
     </button>
-  );
-}
-
-export function ScenGrid({ children }: { children: ReactNode }) {
-  return <div className="scen">{children}</div>;
-}
-
-export function Scen({
-  label,
-  value,
-  detail,
-  narrative,
-  mid,
-}: {
-  label: string;
-  value: string;
-  detail: ReactNode;
-  narrative?: DetailCard;
-  mid?: boolean;
-}) {
-  const body = (
-    <>
-      <div className="sc-l">{label}</div>
-      <div className="sc-v">{value}</div>
-      <div className="sc-p">{detail}</div>
-    </>
-  );
-  const cls = `sc${mid ? " mid" : ""}`;
-  return narrative ? (
-    <Clickable className={cls} detail={narrative}>
-      {body}
-    </Clickable>
-  ) : (
-    <div className={cls}>{body}</div>
   );
 }
 

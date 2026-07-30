@@ -5,7 +5,8 @@ import { getCrossSellAnalysis, getCrossSellSignals } from "@/lib/api/crosssell";
 import { getNextActions } from "@/lib/api/dashboard";
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, Brief, FootNote, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
-import { AnalysisNarr, Narr, Note } from "@/components/ui/primitives";
+import { AnalysisSlot } from "@/components/ui/analysis-slot";
+import { Narr, Note } from "@/components/ui/primitives";
 
 function daysSince(dateStr: string | null): number | null {
   if (!dateStr) return null;
@@ -14,11 +15,12 @@ function daysSince(dateStr: string | null): number | null {
 }
 
 export async function AmVision() {
-  const [portfolio, actions, crosssell, crosssellAnalysis, briefing] = await Promise.all([
+  // Narration LLM exclue du Promise.all — voir components/ui/analysis-slot.tsx :
+  // 10-20 s au premier appel, elle bloquait l'affichage des chiffres.
+  const [portfolio, actions, crosssell, briefing] = await Promise.all([
     getClientPortfolio(50),
     getNextActions(8),
     getCrossSellSignals(),
-    getCrossSellAnalysis(),
     getBriefing(),
   ]);
 
@@ -342,11 +344,7 @@ export async function AmVision() {
         </Tile>
 
         <Tile span={12} title="Radar renouvellement et obsolescence" kick="narration">
-          {crosssellAnalysis ? (
-            <AnalysisNarr text={crosssellAnalysis.analysis} />
-          ) : (
-            <Note style={{ marginTop: 0 }}>Analyse non disponible pour ce profil.</Note>
-          )}
+          <AnalysisSlot load={getCrossSellAnalysis} />
           {crosssell && (
             <div style={{ marginTop: 18 }}>
               <HintLine>Cliquez un signal pour son détail</HintLine>
