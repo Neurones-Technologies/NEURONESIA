@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Btn } from "@/components/ui/primitives";
+import { ChartBlock } from "@/components/copilot/ChartBlock";
+import { splitMessage } from "@/components/copilot/chart-spec";
 import { ConversationList, SessionSummary } from "@/components/copilot/ConversationList";
 import { useSidebarPref } from "@/components/copilot/useSidebarPref";
 
@@ -312,7 +314,20 @@ export function ChatBox({
                   )}
                   {m.content ? (
                     <div className="ba-md">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                      {/* Le message est découpé AVANT le markdown : les blocs
+                          ```chart deviennent des graphiques, le reste passe par
+                          ReactMarkdown. Sans ce découpage, react-markdown rend le
+                          bloc en `<pre>` et le lecteur voit la spec JSON brute
+                          (cf. components/copilot/chart-spec.ts). */}
+                      {splitMessage(m.content).map((seg, s) =>
+                        seg.kind === "chart" ? (
+                          <ChartBlock key={s} source={seg.source} complete={seg.complete} />
+                        ) : (
+                          <ReactMarkdown key={s} remarkPlugins={[remarkGfm]}>
+                            {seg.text}
+                          </ReactMarkdown>
+                        )
+                      )}
                     </div>
                   ) : (
                     busy && i === messages.length - 1 && <p>…</p>
