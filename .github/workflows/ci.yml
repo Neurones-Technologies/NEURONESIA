@@ -84,6 +84,12 @@ jobs:
         run: |
           mkdir -p "$CI_DATA_DIR"/{ged,templates,uploads,chromadb,bm25_index,local_db}
 
+      - name: Generate ephemeral SECRET_KEY
+        # main.py refuse de démarrer hors APP_ENV=development avec la clé JWT
+        # par défaut codée en dur (garde-fou anti-prod) — il en faut une vraie,
+        # même jetable, pour APP_ENV=test.
+        run: echo "SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
       - name: Start backend
         working-directory: backend
         env:
