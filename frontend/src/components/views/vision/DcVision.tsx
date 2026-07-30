@@ -8,7 +8,7 @@ import {
   getRevenueBySalesperson,
 } from "@/lib/api/dashboard";
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, Brief, FootNote, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
 
@@ -47,9 +47,11 @@ export async function DcVision() {
     .slice()
     .sort((a, b) => Number(b.ca_total_xof) - Number(a.ca_total_xof));
   const totalCaEquipe = topSalespeople.reduce((s, p) => s + Number(p.ca_total_xof), 0);
-  const top1Part =
-    topSalespeople[0] && totalCaEquipe ? (Number(topSalespeople[0].ca_total_xof) / totalCaEquipe) * 100 : null;
-  const bottomSalesperson = topSalespeople[topSalespeople.length - 1];
+  // Ne servaient que la <FootNote> du classement commerciaux, commentée plus bas :
+  // à décommenter avec elle.
+  // const top1Part =
+  //   topSalespeople[0] && totalCaEquipe ? (Number(topSalespeople[0].ca_total_xof) / totalCaEquipe) * 100 : null;
+  // const bottomSalesperson = topSalespeople[topSalespeople.length - 1];
   const topSalesCa = topSalespeople[0] ? Number(topSalespeople[0].ca_total_xof) : 0;
 
   const byStage = forecast.by_stage ?? [];
@@ -106,7 +108,7 @@ export async function DcVision() {
               ["Scénario haut", `${formatMFcfa(forecast.scenarios.optimiste_xof)} M FCFA`],
               ["Amplitude", spreadPct !== null ? `${formatPct(spreadPct, 0)} % du réaliste` : "—"],
             ],
-            note: "Probabilité issue du champ Odoo de l'opportunité (crm.lead), jamais recalculée par le cockpit.",
+            // note: "Probabilité issue du champ Odoo de l'opportunité (crm.lead), jamais recalculée par le cockpit.",
           }}
         />
         <StatTile
@@ -135,7 +137,7 @@ export async function DcVision() {
                   ]
                 : []),
             ],
-            note: "Calculé sur les opportunités closes du miroir Odoo, gagnées comme perdues.",
+            // note: "Calculé sur les opportunités closes du miroir Odoo, gagnées comme perdues.",
           }}
         />
         <StatTile
@@ -160,7 +162,7 @@ export async function DcVision() {
               ["Opportunités concernées", formatNumber(forecast.opportunities.filter((o) => o.at_risk).length)],
               ["Valeur pondérée", `${formatMFcfa(atRiskTotal)} M FCFA`],
             ],
-            note: "Comparaison entre la date de clôture prévue dans Odoo et la date du jour.",
+            // note: "Comparaison entre la date de clôture prévue dans Odoo et la date du jour.",
           }}
         />
 
@@ -195,7 +197,7 @@ export async function DcVision() {
                         ["Opportunités", formatNumber(stageCounts[s.stage] ?? 0)],
                         ["Part du forecast", `${formatPct(part, 0)} %`],
                       ],
-                      note: "Étapes telles que définies dans le pipeline Odoo, sans regroupement par le cockpit.",
+                      // note: "Étapes telles que définies dans le pipeline Odoo, sans regroupement par le cockpit.",
                     },
                   };
                 })}
@@ -229,7 +231,7 @@ export async function DcVision() {
                     ["Étape", o.stage],
                     ["Valeur pondérée", `${formatMFcfa(o.weighted_xof)} M FCFA`],
                   ],
-                  note: "Requalifier la date dans Odoo met à jour le forecast au prochain instantané. Le cockpit n'écrit jamais.",
+                  // note: "Requalifier la date dans Odoo met à jour le forecast au prochain instantané. Le cockpit n'écrit jamais.",
                 },
               }))}
             />
@@ -242,11 +244,11 @@ export async function DcVision() {
 
         <Tile span={12} title="Crédibilité du forecast" kick="narration · M5">
           <AnalysisSlot load={getForecastAnalysis} />
-          <FootNote>
+          {/* <FootNote>
             Amplitude bas/haut : {spreadPct !== null ? `${formatPct(spreadPct, 0)} %` : "—"} du scénario réaliste. Le
             calibrage de fiabilité par commercial démarre sa collecte de snapshots — un taux individuel sera disponible
             après quelques semaines d&apos;historique.
-          </FootNote>
+          </FootNote> */}
         </Tile>
 
         <Tile span={12} title="Ciblage cross-sell et renouvellement" kick="M1 · narration">
@@ -271,7 +273,7 @@ export async function DcVision() {
                         ["Montant", `${formatMFcfa(it.montant_xof)} M FCFA`],
                         ["Type de signal", it.titre],
                       ],
-                      note: "Signal calculé sur les lignes de commande réelles (catégories déjà achetées et ancienneté).",
+                      // note: "Signal calculé sur les lignes de commande réelles (catégories déjà achetées et ancienneté).",
                     },
                   })),
                   ...[...crosssell.cross_sell, ...crosssell.up_sell]
@@ -292,7 +294,7 @@ export async function DcVision() {
                           ["Montant", `${formatMFcfa(it.montant_xof)} M FCFA`],
                           ["Type de signal", it.titre],
                         ],
-                        note: "Comparaison de catégories achetées entre comptes de profil voisin, sur les commandes réelles.",
+                        // note: "Comparaison de catégories achetées entre comptes de profil voisin, sur les commandes réelles.",
                       },
                     })),
                 ]}
@@ -333,7 +335,7 @@ export async function DcVision() {
                         ["Valeur perdue", `${formatMFcfa(c.montant_xof)} M FCFA`],
                         ["Part du total perdu", `${formatPct(part, 0)} %`],
                       ],
-                      note: "Opportunités marquées perdues dans Odoo, historique complet du miroir.",
+                      // note: "Opportunités marquées perdues dans Odoo, historique complet du miroir.",
                     },
                   };
                 })}
@@ -361,7 +363,7 @@ export async function DcVision() {
                       ["Commercial", String(d.commercial)],
                       ["Montant", `${formatMFcfa(Number(d.montant_xof))} M FCFA`],
                     ],
-                    note: "Opportunité close en perte dans le miroir Odoo.",
+                    // note: "Opportunité close en perte dans le miroir Odoo.",
                   },
                 }))}
               />
@@ -400,18 +402,18 @@ export async function DcVision() {
                       ["Clients distincts", formatNumber(Number(s.nb_clients_distincts))],
                       ["Panier moyen", `${formatMFcfa(Number(s.panier_moyen_xof))} M FCFA`],
                     ],
-                    note: "CA rattaché au commercial renseigné sur la commande Odoo.",
+                    // note: "CA rattaché au commercial renseigné sur la commande Odoo.",
                   },
                 };
               })}
             />
-            <FootNote>
+            {/* <FootNote>
               {topSalespeople[0].commercial} porte{" "}
               {top1Part !== null ? `${formatPct(top1Part, 0)} %` : "une large part"} du CA de l&apos;équipe
               {bottomSalesperson && bottomSalesperson.commercial !== topSalespeople[0].commercial
                 ? ` ; ${bottomSalesperson.commercial} ferme le classement avec ${formatMFcfa(Number(bottomSalesperson.ca_total_xof))} M FCFA — à vérifier si c'est un portefeuille plus petit par construction ou une couverture insuffisante.`
                 : "."}
-            </FootNote>
+            </FootNote> */}
           </Tile>
         )}
       </Bento>

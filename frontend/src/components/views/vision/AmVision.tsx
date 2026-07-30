@@ -4,7 +4,7 @@ import { getClientPortfolio, getClientProfile, ClientProfile } from "@/lib/api/c
 import { getCrossSellAnalysis, getCrossSellSignals } from "@/lib/api/crosssell";
 import { getNextActions } from "@/lib/api/dashboard";
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, Brief, FootNote, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Narr, Note } from "@/components/ui/primitives";
 
@@ -99,7 +99,7 @@ export async function AmVision() {
               ["Comptes", formatNumber((portfolio ?? []).length)],
               ["Reste à encaisser", `${formatMFcfa(totalReste)} M FCFA`],
             ],
-            note: "Somme des factures rattachées aux comptes de votre portefeuille dans le miroir Odoo.",
+            // note: "Somme des factures rattachées aux comptes de votre portefeuille dans le miroir Odoo.",
           }}
         />
         <StatTile
@@ -126,7 +126,7 @@ export async function AmVision() {
                 totalCa ? `${formatPct((totalReste / totalCa) * 100, 0)} %` : "—",
               ],
             ],
-            note: "Le détail par facture est réservé aux profils financiers.",
+            // note: "Le détail par facture est réservé aux profils financiers.",
           }}
         />
         <StatTile
@@ -163,7 +163,7 @@ export async function AmVision() {
                   ]
                 : []),
             ],
-            note: "Écart entre la date de dernière commande et la date du jour. L'historique d'intervalle individuel n'est pas instrumenté.",
+            // note: "Écart entre la date de dernière commande et la date du jour. L'historique d'intervalle individuel n'est pas instrumenté.",
           }}
         />
 
@@ -235,11 +235,11 @@ export async function AmVision() {
                       ["Type", a.type],
                       ["Montant engagé", `${formatMFcfa(a.montant_xof)} M FCFA`],
                     ],
-                    note: actions.note ?? "Signaux issus des modules Portefeuille, Montée en valeur et Trésorerie.",
+                    // note: actions.note ?? "Signaux issus des modules Portefeuille, Montée en valeur et Trésorerie.",
                   },
                 }))}
               />
-              <FootNote>{actions.note}</FootNote>
+              {/* <FootNote>{actions.note}</FootNote> */}
             </>
           ) : (
             <Note style={{ marginTop: 0 }}>Aucune action prioritaire détectée actuellement.</Note>
@@ -297,7 +297,7 @@ export async function AmVision() {
                         ["Dernière commande", c.derniere_commande ?? "—"],
                         ["Dernier projet", c.dernier_projet ?? "—"],
                       ],
-                      note: "Fiche assemblée à partir des commandes et factures réelles du compte.",
+                      // note: "Fiche assemblée à partir des commandes et factures réelles du compte.",
                     },
                   };
                 })}
@@ -332,7 +332,7 @@ export async function AmVision() {
                     ["Dossiers", formatNumber(c.nb_dossiers)],
                     ["Reste à encaisser", `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA`],
                   ],
-                  note: "Seuil de 90 jours, sans historique d'intervalle individuel (feuilles de temps hors périmètre).",
+                  // note: "Seuil de 90 jours, sans historique d'intervalle individuel (feuilles de temps hors périmètre).",
                 },
               }))}
             />
@@ -375,7 +375,7 @@ export async function AmVision() {
                           ["Montant", `${formatMFcfa(it.montant_xof)} M FCFA`],
                           ["Type de signal", it.titre],
                         ],
-                        note: "Calculé sur les vraies lignes de commande (catégories achetées et ancienneté).",
+                        // note: "Calculé sur les vraies lignes de commande (catégories achetées et ancienneté).",
                       },
                     };
                   })}

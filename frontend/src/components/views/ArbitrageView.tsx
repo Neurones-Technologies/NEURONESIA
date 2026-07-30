@@ -13,7 +13,7 @@ import { isAdminRole, ROLE_LABELS, roleToProfile } from "@/lib/auth/roles";
 import { META } from "@/lib/data/profiles";
 import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey, Variant } from "@/lib/types";
-import { FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
+import { /* FootNote, */ HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable, DetailCard } from "@/components/ui/detail";
 import { Acts, Btn, MiniLabel, Note, Tag } from "@/components/ui/primitives";
 import { ArbitrageScopeToggle } from "@/components/views/ArbitrageScopeToggle";
@@ -180,7 +180,7 @@ function payeurDetail(p: PayeurProfile, subjectRef: string): DetailCard {
       ["Retard le plus ancien (hors classement)", `${formatNumber(p.retard_max_jours)} jours`],
       ["Coût du report retenu", `${(p.cout_report_ratio_semaine * 100).toFixed(1)} % de l'enjeu / semaine`],
     ],
-    note: "Fenêtre de comparaison : 18 mois. Sous 2 règlements dans l'une des deux fenêtres, la tendance n'est pas calculée du tout plutôt que présentée comme stable.",
+    // note: "Fenêtre de comparaison : 18 mois. Sous 2 règlements dans l'une des deux fenêtres, la tendance n'est pas calculée du tout plutôt que présentée comme stable.",
   };
 }
 
@@ -293,11 +293,11 @@ function ContexteTerrain({ dossier, profile }: { dossier: ArbitrageDossier; prof
           <Btn type="submit">Verser au dossier</Btn>
         </Acts>
       </form>
-      <FootNote>
+      {/* <FootNote>
         Les contributions ne s&apos;écrasent pas : chacune est datée et signée. Un motif qui change entre deux
         comités est lui-même une information — c&apos;est ce qui permet de juger, à la relecture, si la décision
         avait été prise sur un contexte encore valable.
-      </FootNote>
+      </FootNote> */}
     </div>
   );
 }
@@ -386,7 +386,7 @@ function candidateDetail(c: ArbitrageCandidate, seuilM: number): DetailCard {
         ? [["Reste à encaisser", `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA`]]
         : []),
     ],
-    note: "Conflit obtenu par recoupement des sorties de moteurs (impayés, cross-sell, portefeuille) — aucune saisie manuelle. Ouvrir cette fiche n'écrit rien dans Odoo.",
+    // note: "Conflit obtenu par recoupement des sorties de moteurs (impayés, cross-sell, portefeuille) — aucune saisie manuelle. Ouvrir cette fiche n'écrit rien dans Odoo.",
   };
 }
 
@@ -418,7 +418,7 @@ function decisionDetail(d: Decision): DetailCard {
       ["Revue", d.review_verdict ? VERDICT_LABELS[d.review_verdict] ?? d.review_verdict : "à faire"],
       ...(d.outcome ? [["Issue constatée", d.outcome]] : []),
     ],
-    note: "Chaque décision est relue à échéance : c'est cette relecture qui recalibre les recommandations suivantes.",
+    // note: "Chaque décision est relue à échéance : c'est cette relecture qui recalibre les recommandations suivantes.",
   };
 }
 
@@ -500,7 +500,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
               ["Décisions ouvertes", formatNumber(file.decisions_ouvertes.length)],
               ["Enjeu cumulé (tous profils)", `${formatNumber(file.kpi.enjeu_cumule_m_fcfa)} M FCFA`],
             ],
-            note: "Recoupement des sorties de moteurs, recalculé à chaque chargement — pas une liste tenue à la main.",
+            // note: "Recoupement des sorties de moteurs, recalculé à chaque chargement — pas une liste tenue à la main.",
           }}
         />
         <StatTile
@@ -529,7 +529,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
               ["Impayé de votre périmètre", `${formatNumber(monImpayeM)} M FCFA`],
               ["Seuil de mandat DG", `${formatNumber(seuilM)} M FCFA`],
             ],
-            note: "Montants issus des factures et commandes du miroir Odoo, convertis en M FCFA.",
+            // note: "Montants issus des factures et commandes du miroir Odoo, convertis en M FCFA.",
           }}
         />
         <StatTile
@@ -568,7 +568,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
               ["Seuil de vigilance", "15 jours"],
               ["Délai de relecture par défaut", "30 jours"],
             ],
-            note: "Échéance lue sur les décisions ouvertes du registre (date butoir, sinon date de relecture).",
+            // note: "Échéance lue sur les décisions ouvertes du registre (date butoir, sinon date de relecture).",
           }}
         />
         <StatTile
@@ -597,7 +597,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
               ["Dossiers concernés", formatNumber(file.kpi.dossiers_ouverts)],
               ["Nature", "estimation, pas une mesure"],
             ],
-            note: "Le cockpit préfère afficher une estimation signalée comme telle plutôt qu'un chiffre présenté comme exact. Le taux retenu pour chaque dossier est visible dans sa fiche.",
+            // note: "Le cockpit préfère afficher une estimation signalée comme telle plutôt qu'un chiffre présenté comme exact. Le taux retenu pour chaque dossier est visible dans sa fiche.",
           }}
         />
         <StatTile
@@ -633,7 +633,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
               ["Revues faites", formatNumber(registre.filter((d) => Boolean(d.review_verdict)).length)],
               ["Sans date de relecture", formatNumber(registre.filter((d) => !d.review_date).length)],
             ],
-            note: "Le registre conserve tout, y compris les décisions antérieures à ce module (qui n'ont pas de date de relecture).",
+            // note: "Le registre conserve tout, y compris les décisions antérieures à ce module (qui n'ont pas de date de relecture).",
           }}
         />
       </div>
@@ -743,10 +743,10 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
                           ]
                         : []),
                     ],
-                    note:
-                      opt.code === "C"
-                        ? `Dossier ${dossier.subject_ref}. Les montants, le nombre d'échéances et l'horizon sont calculés à partir du délai de règlement réellement observé chez ce client — l'IA n'en modifie aucun, elle ne rédige que la formulation négociable.`
-                        : `Dossier ${dossier.subject_ref}. Options A et B : structures de compromis déterministes, seuls les montants varient d'un dossier à l'autre. L'option C, quand elle existe, est calculée sur le comportement de paiement du client.`,
+                    // note:
+                    //   opt.code === "C"
+                    //     ? `Dossier ${dossier.subject_ref}. Les montants, le nombre d'échéances et l'horizon sont calculés à partir du délai de règlement réellement observé chez ce client — l'IA n'en modifie aucun, elle ne rédige que la formulation négociable.`
+                    //     : `Dossier ${dossier.subject_ref}. Options A et B : structures de compromis déterministes, seuls les montants varient d'un dossier à l'autre. L'option C, quand elle existe, est calculée sur le comportement de paiement du client.`,
                   }}
                 >
                   <div className="opt-h">
@@ -835,13 +835,13 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
 
             <ContexteTerrain dossier={dossier} profile={profile} />
 
-            <FootNote>
+            {/* <FootNote>
               Le cockpit classe les options, il ne tranche pas : vous retenez celle que vous voulez, y compris
               contre la recommandation — l&apos;écart entre les deux est enregistré et alimente le taux de suivi.
               La décision est journalisée au nom du profil qui la prend, avec une échéance de relecture à 30
               jours. Reporter ou escalader est aussi une décision : c&apos;est journalisé comme tel, avec son
               motif, plutôt que de laisser le dossier sans trace.
-            </FootNote>
+            </FootNote> */}
 
             {hasMandate ? (
               <form action={createDecisionAction}>
@@ -1033,7 +1033,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
                 </tbody>
               </table>
             </div>
-            <FootNote>
+            {/* <FootNote>
               Un dossier est détecté quand un client cumule des factures échues ET un signal commercial actif
               (renouvellement, cross-sell) — recoupement automatique, pas une liste saisie à la main. Le
               classement croise l&apos;enjeu ET le comportement de paiement du client : trier par montant seul
@@ -1041,7 +1041,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
               reléguant des dossiers plus petits où quelque chose venait réellement de changer. Aucun dossier
               n&apos;est masqué, seul son rang change — et la priorité ne touche pas au mandat, qui reste fondé
               sur le montant et bascule à la Direction générale au-delà de {formatNumber(seuilM)} M FCFA.
-            </FootNote>
+            </FootNote> */}
           </ArbitrageScopeToggle>
         </Tile>
       </div>
