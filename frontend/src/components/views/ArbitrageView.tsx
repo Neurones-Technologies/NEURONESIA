@@ -1,4 +1,4 @@
-import { getArbitrageDossier, getArbitrageFile, getReliability, listDecisions } from "@/lib/api/arbitrage";
+import { getArbitrageDossier, getArbitrageFile, listDecisions } from "@/lib/api/arbitrage";
 import type {
   ArbitrageCandidate,
   ArbitrageDossier,
@@ -7,13 +7,13 @@ import type {
   PayeurProfile,
   SignalNature,
 } from "@/lib/api/arbitrage";
-import { addContexteAction, createDecisionAction, markReviewedAction } from "@/lib/actions/arbitrage";
+import { addContexteAction, createDecisionAction } from "@/lib/actions/arbitrage";
 import { apiFetch } from "@/lib/api/client";
 import { isAdminRole, ROLE_LABELS, roleToProfile } from "@/lib/auth/roles";
 import { META } from "@/lib/data/profiles";
 import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey, Variant } from "@/lib/types";
-import { Bars, FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
+import { FootNote, HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable, DetailCard } from "@/components/ui/detail";
 import { Acts, Btn, MiniLabel, Note, Tag } from "@/components/ui/primitives";
 import { ArbitrageScopeToggle } from "@/components/views/ArbitrageScopeToggle";
@@ -439,10 +439,12 @@ function isRowRelevant(profile: ProfileKey, isAdmin: boolean, mandatRole: string
 }
 
 export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
-  const [file, decisions, reliability, me] = await Promise.all([
+  // `listDecisions` reste appelé sans que le registre soit affiché : le KPI
+  // « Revues en retard » a besoin du compte réel de décisions et de revues faites
+  // pour être lisible autrement qu'en valeur brute.
+  const [file, decisions, me] = await Promise.all([
     getArbitrageFile(),
     listDecisions(),
-    getReliability(),
     apiFetch<Me>("/v1/auth/me"),
   ]);
 
@@ -465,16 +467,7 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
   const hasMandate = dossier ? isAdmin || roleToProfile(dossier.mandat_role) === profile : false;
 
   const registre = decisions ?? [];
-  // Une revue n'est proposée qu'à qui a le mandat : le backend refuse désormais un
-  // PATCH hors mandat (403), autant ne pas afficher un bouton qui sera rejeté.
-  const aRelire = registre.filter(
-    (d) =>
-      d.status === "en_cours" &&
-      !d.review_verdict &&
-      (isAdmin || !d.mandat_role || roleToProfile(d.mandat_role) === profile)
-  );
   const urgent = file.kpi.echeance_plus_proche_jours !== null && file.kpi.echeance_plus_proche_jours < 15;
-  const tauxConfirmation = reliability?.taux_confirmation_pct ?? null;
 
   return (
     <>
@@ -628,8 +621,11 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
                 ? `${formatNumber(
                     file.kpi.revues_en_retard
                   )} décision(s) ont dépassé leur échéance de relecture sans verdict enregistré. Tant qu'elles ne sont pas relues, elles ne recalibrent rien.`
-                : "Aucune décision n'a dépassé son échéance de relecture. À ne pas lire comme « tout a été relu » : voir le nombre de revues réellement faites ci-dessous.",
+                : `Aucune décision n'a dépassé son échéance de relecture. À ne pas lire comme « tout a été relu » : ${formatNumber(
+                    registre.filter((d) => Boolean(d.review_verdict)).length
+                  )} revue(s) ont été réellement faites sur ${formatNumber(registre.length)} décision(s) au registre.`,
               "La revue est le seul mécanisme qui rend l'outil vérifiable après coup : elle compare l'issue constatée à ce qui avait été recommandé. Son verdict est choisi par celui qui a le mandat, jamais imposé par l'outil.",
+              "Cet écran n'affiche plus le registre ni le formulaire de revue : cet indicateur signale l'encours, il ne permet pas de le traiter ici.",
             ],
             kv: [
               ["Revues en retard", formatNumber(file.kpi.revues_en_retard)],
@@ -1048,157 +1044,6 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
             </FootNote>
           </ArbitrageScopeToggle>
         </Tile>
-
-        <Tile span={7} title="Registre des décisions" kick="toutes décisions, revues comprises">
-          <HintLine>Cliquez une décision pour sa fiche</HintLine>
-          <div style={{ overflowX: "auto" }}>
-            <table className="tb">
-              <thead>
-                <tr>
-                  <th>Créée le</th>
-                  <th>Décision</th>
-                  <th>Option retenue</th>
-                  <th>Relecture due</th>
-                  <th>Revue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {registre.map((d) => (
-                  <Clickable as="tr" key={d.id} detail={decisionDetail(d)}>
-                    <td className="mono">{d.created_at ? d.created_at.slice(0, 10) : "—"}</td>
-                    <td>
-                      <b style={{ fontWeight: 500 }}>{d.title}</b>
-                      <div style={{ color: "var(--t2)", fontSize: 12, marginTop: 2 }}>
-                        {d.owner || d.created_by || "—"}
-                      </div>
-                    </td>
-                    <td style={{ color: "var(--t2)", fontSize: 12.5 }}>{d.option_retenue || "—"}</td>
-                    <td className="mono">{d.review_date ? formatDate(d.review_date) : "—"}</td>
-                    <td>
-                      {d.review_verdict ? (
-                        <Tag
-                          variant={
-                            d.review_verdict === "confirme" ? "s" : d.review_verdict === "infirme" ? "r" : "w"
-                          }
-                        >
-                          {VERDICT_LABELS[d.review_verdict] ?? d.review_verdict}
-                        </Tag>
-                      ) : (
-                        <span className="ro">à faire</span>
-                      )}
-                    </td>
-                  </Clickable>
-                ))}
-                {registre.length === 0 && (
-                  <tr>
-                    <td colSpan={5} style={{ color: "var(--t2)" }}>
-                      Aucune décision enregistrée.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <FootNote>
-            Chaque décision est relue à son échéance : c&apos;est cette relecture qui recalibre les recommandations
-            suivantes. Le registre conserve tout, y compris les décisions antérieures à ce module — celles-ci
-            n&apos;ont pas de date de relecture.
-          </FootNote>
-        </Tile>
-
-        <Tile span={5} title="Fiabilité des recommandations" kick="registre · décisions revues">
-          {reliability ? (
-            <>
-              <Bars
-                rows={[
-                  {
-                    name: "Recommandations suivies",
-                    sub:
-                      reliability.taux_suivi_pct !== null
-                        ? `${formatNumber(reliability.nb_reco_suivies)} suivie(s) sur ${formatNumber(
-                            reliability.nb_decisions_tracees
-                          )} décision(s) tracée(s)`
-                        : "aucune décision ne porte encore la recommandation de l'outil",
-                    value: reliability.taux_suivi_pct !== null ? `${reliability.taux_suivi_pct} %` : "—",
-                    pct: Math.min(reliability.taux_suivi_pct ?? 0, 100),
-                    // Volontairement sans teinte de jugement quand le taux existe : un
-                    // taux de suivi bas n'est ni bon ni mauvais en soi — il peut dire que
-                    // l'outil se trompe, ou que les mandataires ont un contexte qu'il
-                    // n'a pas. C'est une mesure à interpréter, pas un score à atteindre.
-                    variant: reliability.taux_suivi_pct === null ? "w" : undefined,
-                  },
-                  {
-                    name: "Taux de confirmation",
-                    sub:
-                      tauxConfirmation !== null
-                        ? `${formatNumber(reliability.nb_confirmees)} confirmées sur ${formatNumber(
-                            reliability.nb_decisions_revues
-                          )} revues`
-                        : "historique insuffisant pour un taux",
-                    value: tauxConfirmation !== null ? `${tauxConfirmation} %` : "—",
-                    pct: Math.min(tauxConfirmation ?? 0, 100),
-                    variant: reliability.historique_suffisant ? "s" : "w",
-                  },
-                  {
-                    name: "Décisions revues",
-                    sub: "seuil de représentativité : 5 revues",
-                    value: formatNumber(reliability.nb_decisions_revues),
-                    pct: Math.min((reliability.nb_decisions_revues / 5) * 100, 100),
-                    variant: reliability.historique_suffisant ? "s" : "w",
-                  },
-                ]}
-              />
-              <Note>{reliability.note_suivi}</Note>
-              <FootNote>
-                Deux mesures distinctes, et non une seule : le taux de suivi dit si les mandataires retiennent
-                l&apos;option recommandée, le taux de confirmation dit si elle se vérifie ensuite. Confondre les
-                deux flattait l&apos;outil — une décision où le mandataire avait écarté la recommandation puis
-                réussi comptait comme une recommandation vérifiée. Le verdict de chaque revue est choisi par le
-                mandataire (confirmée / infirmée / partiellement), jamais imposé, et tant que l&apos;historique
-                est insuffisant aucun taux n&apos;est affiché comme définitif. {reliability.note}
-              </FootNote>
-            </>
-          ) : (
-            <Note style={{ marginTop: 0 }}>Score de fiabilité non accessible depuis ce profil.</Note>
-          )}
-        </Tile>
-
-        {aRelire.length > 0 && (
-          <Tile span={12} title="Revues à faire" kick={`${aRelire.length} décision(s) de votre mandat`}>
-            <div className="rows">
-              {aRelire.map((d) => (
-                <div className="row-m" key={d.id}>
-                  <div>
-                    <div className="row-n">{d.title}</div>
-                    <div className="row-s">
-                      {d.owner || d.created_by || "—"} · créée le {formatDate(d.created_at)}
-                      {d.option_retenue ? ` · ${d.option_retenue}` : ""}
-                      {d.review_date ? ` · relecture due le ${formatDate(d.review_date)}` : " · sans date de relecture"}
-                    </div>
-                  </div>
-                  <div />
-                  <form action={markReviewedAction} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input type="hidden" name="profile" value={profile} />
-                    <input type="hidden" name="decision_id" value={d.id} />
-                    <select className="sel" name="review_verdict" defaultValue="" aria-label="Verdict de la revue">
-                      <option value="" disabled>
-                        Verdict…
-                      </option>
-                      <option value="confirme">La recommandation s&apos;est vérifiée</option>
-                      <option value="partiel">Partiellement vérifiée</option>
-                      <option value="infirme">La recommandation était fausse</option>
-                    </select>
-                    <Btn type="submit">Enregistrer la revue</Btn>
-                  </form>
-                </div>
-              ))}
-            </div>
-            <FootNote>
-              Enregistrer une revue exige de choisir un verdict : c&apos;est lui qui alimente le score de fiabilité
-              ci-dessus. Seul le mandataire du dossier peut le faire — le serveur refuse les autres (403).
-            </FootNote>
-          </Tile>
-        )}
       </div>
     </>
   );

@@ -15,9 +15,12 @@ indisponible comme la réponse mal formée.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
+
+from core.services.ttl_cache import cached
 
 logger = logging.getLogger(__name__)
 
@@ -152,8 +155,12 @@ def _fallback_raisons(dossier: dict, option: dict) -> list[str]:
 
 async def build_counter_argument(
     llm, dossier: dict, option: dict, decisions_passees: list[dict] | None = None
-) -> list[str]:
-    fallback = _fallback_raisons(dossier, option)
+) -> dict:
+    """Renvoie `{"raisons", "redige_par"}` — `redige_par` valant "ia" ou "repli",
+    comme `write_echeancier`. Le drapeau sert à ne jamais mettre en cache un
+    repli déterministe (cf. `build_dossier_narration`) : sans lui, une
+    indisponibilité passagère du modèle figeait le repli pour toute la fenêtre."""
+    fallback = {"raisons": _fallback_raisons(dossier, option), "redige_par": "repli"}
     if llm is None:
         return fallback
     try:
@@ -170,7 +177,9 @@ async def build_counter_argument(
         raw = await llm.generate(system=_SYSTEM, user=user, max_tokens=450, temperature=0.3)
         data = json.loads(_clean_json(raw))
         raisons = [str(r).strip() for r in data.get("raisons", []) if str(r).strip()]
-        return raisons if len(raisons) >= 1 else fallback
+        if not raisons:
+            return fallback
+        return {"raisons": raisons, "redige_par": "ia"}
     except Exception as exc:
         logger.warning("Avocat du contraire IA échoué (repli déterministe) : %s", exc)
         return fallback
@@ -229,3 +238,92 @@ async def write_echeancier(llm, dossier: dict, plan: dict) -> dict:
     except Exception as exc:
         logger.warning("Rédaction de l'échéancier IA échouée (repli déterministe) : %s", exc)
         return fallback
+
+
+# Rédactions d'un dossier déjà ouvert. Même fenêtre que les autres analyses LLM du
+# projet (cf. api/v1/dashboard.py, uc_clients) : rouvrir un dossier est le geste le
+# plus courant de l'écran et repayait deux appels modèle à chaque fois.
+_NARRATION_TTL_SECONDES = 900.0
+
+
+def _empreinte(dossier: dict, option: dict, decisions_passees: list[dict] | None, plan: dict | None) -> tuple:
+    """Tout ce que les deux prompts consomment réellement, et rien d'autre.
+
+    C'est la clé de cache : elle doit bouger dès qu'un chiffre cité change (une
+    sync qui déplace l'impayé, une décision revue qui alimente la mémoire) et
+    rester stable sinon. Bâtie sur les champs lus par les gabarits plutôt que sur
+    le dossier entier, qui contient des clés sans effet sur la rédaction.
+    """
+    profil = dossier.get("profil_payeur") or {}
+    # Mêmes 5 décisions que `_format_memoire`, réduites aux deux champs qu'elle lit.
+    memoire = tuple(
+        (d.get("option_retenue") or "", d.get("review_verdict") or "")
+        for d in (decisions_passees or [])[:5]
+    )
+    # Champs du plan cités dans `_USER_ECHEANCIER`, énumérés un par un plutôt que
+    # `plan.items()` : la clé reste juste si `payeur.echeancier` gagne un champ
+    # non cité, et ne casse pas s'il en gagne un non hachable.
+    echeancier = tuple(
+        plan.get(champ) for champ in (
+            "nb_echeances", "tranche_xof", "pas_jours", "horizon_jours",
+            "delai_reference_jours", "declencheur",
+        )
+    ) if plan else None
+    return (
+        "arbitrage_narration",
+        dossier["subject_ref"],
+        dossier["subject_label"],
+        _m(dossier["enjeu_xof"]),
+        _m(dossier.get("impaye_xof")),
+        profil.get("lecture"),
+        profil.get("delai_habituel_jours"),
+        option["code"],
+        option["titre"],
+        option["description"],
+        memoire,
+        echeancier,
+    )
+
+
+async def build_dossier_narration(
+    llm,
+    dossier: dict,
+    option: dict,
+    decisions_passees: list[dict] | None,
+    plan: dict | None,
+) -> tuple[list[str], dict | None]:
+    """Les deux parties rédigées d'un dossier : `(raisons_du_contre, redaction_c)`.
+
+    `redaction_c` vaut None quand le dossier n'a pas d'échéancier calculable (il
+    n'y a alors pas d'option C à formuler).
+
+    Les deux appels partent ENSEMBLE : ils ne se lisent pas l'un l'autre, et les
+    enchaîner ajoutait la latence du second à celle du premier — c'est ce qui
+    dominait le temps d'ouverture d'un dossier.
+
+    Le résultat n'est mis en cache que si le modèle a effectivement répondu pour
+    les deux parties attendues. Mettre un repli déterministe en cache
+    reviendrait à faire durer une panne de quelques secondes pendant toute la
+    fenêtre, alors que le repli n'a de sens que le temps de l'incident.
+    """
+    async def _rediger() -> tuple[list[str], dict | None, bool]:
+        taches = [build_counter_argument(llm, dossier, option, decisions_passees)]
+        if plan:
+            taches.append(write_echeancier(llm, dossier, plan))
+        resultats = await asyncio.gather(*taches)
+
+        contre = resultats[0]
+        redaction = resultats[1] if plan else None
+        tout_redige = contre["redige_par"] == "ia" and (
+            redaction is None or redaction["redige_par"] == "ia"
+        )
+        return contre["raisons"], redaction, tout_redige
+
+    raisons, redaction, _ = await cached(
+        _empreinte(dossier, option, decisions_passees, plan),
+        _NARRATION_TTL_SECONDES,
+        _rediger,
+        store_if=lambda resultat: resultat[2],
+    )
+    # Copies : le triplet vient du cache et est partagé entre requêtes.
+    return list(raisons), (dict(redaction) if redaction else None)

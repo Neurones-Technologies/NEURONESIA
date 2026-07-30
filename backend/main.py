@@ -12,14 +12,13 @@ from config.rate_limit import limiter
 from config.settings import settings
 from config.container import Container
 from db.database import init_db
-from api.v1 import health, chat, presales, stats, crm, webhooks, ged, auth, dashboard, insights
+from api.v1 import health, chat, stats, crm, webhooks, ged, auth, dashboard, insights
 from api.v1.dependencies import get_current_user, require_views
 from modules.uc_arbitrage.router import router as arbitrage_router
 from modules.uc_briefing.router import router as briefing_router
 from modules.uc_clients.router import router as clients_router
 from modules.uc_crosssell.router import router as crosssell_router
 from modules.uc_partners.router import router as partners_router
-from modules.uc_veille.router import router as veille_router
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
@@ -91,14 +90,11 @@ app.include_router(auth.router, prefix="/v1")
 
 # Endpoints protégés
 app.include_router(chat.router, prefix="/v1", dependencies=_auth)
-# Presales : gated par la matrice module × rôle (vue "presales", éditable depuis l'Administration)
-app.include_router(presales.router, prefix="/v1", dependencies=[Depends(require_views("presales"))])
 app.include_router(stats.router, prefix="/v1", dependencies=_auth)
 app.include_router(dashboard.router, prefix="/v1", dependencies=_auth)
 app.include_router(insights.router, prefix="/v1", dependencies=_auth)
 app.include_router(crm.router, prefix="/v1", dependencies=_auth)
 app.include_router(ged.router, prefix="/v1", dependencies=_auth)
-app.include_router(veille_router, prefix="/v1", dependencies=_auth)
 # Briefing quotidien : gated par la matrice module × rôle (vue "briefing")
 app.include_router(briefing_router, prefix="/v1", dependencies=[Depends(require_views("briefing"))])
 # Montée en valeur : gated par la matrice module × rôle (vue "crosssell")

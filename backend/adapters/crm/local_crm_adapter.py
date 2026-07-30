@@ -1498,7 +1498,13 @@ class LocalCRMAdapter(CRMRepository):
     async def get_order_lines(self, limit: int = 20000) -> list[dict]:
         """Lignes de commande réelles (sale_orders non annulées). Pas de tri par
         date/LIMIT restrictif utile ici : les analyses transversales (montée en
-        valeur) ont besoin de voir aussi les commandes anciennes (obsolescence)."""
+        valeur) ont besoin de voir aussi les commandes anciennes (obsolescence).
+
+        Volontairement PAS de filtre par client : `build_montee_valeur` tronque
+        chaque liste de signaux à un top 20 calculé sur l'ensemble des clients,
+        donc restreindre la lecture en amont ne réduirait pas le travail, il
+        changerait le résultat (cf. `modules/uc_crosssell/signals.py`, qui met
+        ce calcul en cache au lieu de le rétrécir)."""
         from sqlalchemy import text
         sql = """
             SELECT o.client_id, o.client_name,
@@ -1717,14 +1723,42 @@ class LocalCRMAdapter(CRMRepository):
                 })
         return result
 
-    async def get_client_portfolio(self, limit: int = 50) -> list[dict]:
+    async def get_client_portfolio(self, limit: int = 50, clients: list[str] | None = None) -> list[dict]:
         """Portefeuille clients réel, agrégé sur la table dossiers (CA, backlog,
         reste à encaisser, nb dossiers) — enrichi du secteur/contact quand la
-        fiche client correspondante existe (jointure par nom, best-effort)."""
+        fiche client correspondante existe (jointure par nom, best-effort).
+
+        `clients` restreint l'agrégat à des noms exacts au lieu du top `limit`
+        par CA. Les appelants qui ne lisent que quelques comptes (cf.
+        `uc_arbitrage`, ≤ 10 débiteurs) payaient l'agrégat des 200 premiers
+        clients pour en exploiter dix — et perdaient silencieusement ceux qui
+        tombaient hors de ce top CA, dont le dossier s'affichait alors sans
+        commercial de compte ni backlog.
+
+        L'enrichissement (fiche client, dernier projet, dernier commercial) se
+        fait en trois requêtes pour l'ensemble des clients retenus, et non en
+        trois requêtes PAR client : à `limit=200` cela faisait 600 allers-retours
+        SQLite en série, de loin le poste le plus coûteux de cette méthode.
+        """
         from sqlalchemy import text
         # CA par dossier = définitif s'il est arrêté, sinon provisoire (estimation) —
         # jamais les deux additionnés (même dossier, pas deux CA distincts à cumuler).
         ca_expr = "CASE WHEN ca_definitif > 0 THEN ca_definitif ELSE ca_provisoire END"
+        params: dict = {}
+        filtre, borne = "", " LIMIT :limit"
+        if clients is not None:
+            noms = sorted({c for c in clients if c})
+            if not noms:
+                return []
+            binds = {f"n{i}": nom for i, nom in enumerate(noms)}
+            filtre = f" AND client_name IN ({', '.join(':' + k for k in binds)})"
+            # La liste demandée EST la borne : lui appliquer `limit` en plus
+            # tronquerait un jeu de clients explicitement nommés.
+            borne = ""
+            params.update(binds)
+        else:
+            params["limit"] = limit
+
         sql = f"""
             SELECT client_name,
                    COUNT(*) as nb_dossiers,
@@ -1734,54 +1768,67 @@ class LocalCRMAdapter(CRMRepository):
                    MIN(date_creation) as premiere_commande,
                    MAX(date_creation) as derniere_commande
             FROM dossiers
-            WHERE client_name IS NOT NULL AND client_name != ''
+            WHERE client_name IS NOT NULL AND client_name != ''{filtre}
             GROUP BY client_name
-            ORDER BY SUM({ca_expr}) DESC
-            LIMIT :limit
+            ORDER BY SUM({ca_expr}) DESC{borne}
         """
         async with AsyncSessionLocal() as session:
-            rows = (await session.execute(text(sql), {"limit": limit})).fetchall()
-            result = []
-            for r in rows:
-                client_row = (await session.execute(
-                    text("SELECT sector, contact_email, phone FROM clients WHERE name = :name LIMIT 1"),
-                    {"name": r[0]},
-                )).fetchone()
-                proj_row = (await session.execute(
-                    text("""
-                        SELECT project_name FROM dossiers
-                        WHERE client_name = :name AND project_name IS NOT NULL AND project_name != ''
-                        ORDER BY date_creation DESC LIMIT 1
-                    """),
-                    {"name": r[0]},
-                )).fetchone()
-                # Commercial du dossier le PLUS RÉCENT — le seul rattachement
-                # compte → commercial disponible dans le miroir (dossiers.salesperson).
-                # Un client peut avoir été suivi par plusieurs commerciaux : on prend
-                # le dernier en date plutôt qu'un agrégat qui ne voudrait rien dire.
-                sales_row = (await session.execute(
-                    text("""
-                        SELECT salesperson FROM dossiers
-                        WHERE client_name = :name AND salesperson IS NOT NULL AND salesperson != ''
-                        ORDER BY date_creation DESC LIMIT 1
-                    """),
-                    {"name": r[0]},
-                )).fetchone()
-                result.append({
-                    "client": r[0],
-                    "nb_dossiers": r[1],
-                    "ca_total_xof": round(r[2] or 0),
-                    "reste_a_encaisser_xof": round(r[3] or 0),
-                    "backlog_xof": round(r[4] or 0),
-                    "premiere_commande": r[5][:10] if r[5] else None,
-                    "derniere_commande": r[6][:10] if r[6] else None,
-                    "secteur": client_row[0] if client_row else None,
-                    "contact_email": client_row[1] if client_row else None,
-                    "telephone": client_row[2] if client_row else None,
-                    "dernier_projet": proj_row[0] if proj_row else None,
-                    "salesperson": sales_row[0] if sales_row else None,
-                })
-        return result
+            rows = (await session.execute(text(sql), params)).fetchall()
+            if not rows:
+                return []
+
+            retenus = {f"c{i}": r[0] for i, r in enumerate(rows)}
+            in_clause = ", ".join(":" + k for k in retenus)
+
+            fiches = {
+                row[0]: row
+                for row in (await session.execute(
+                    text(f"SELECT name, sector, contact_email, phone FROM clients WHERE name IN ({in_clause})"),
+                    retenus,
+                )).fetchall()
+            }
+
+            # Dernier projet et dernier commercial du client, chacun pris sur le
+            # dossier le PLUS RÉCENT qui le renseigne — deux fenêtres distinctes
+            # et non une seule, car le dossier le plus récent peut porter l'un
+            # sans l'autre. Pour `salesperson` : un client peut avoir été suivi
+            # par plusieurs commerciaux, on prend le dernier en date plutôt qu'un
+            # agrégat qui ne voudrait rien dire.
+            derniers: dict[str, dict[str, str]] = {}
+            for colonne in ("project_name", "salesperson"):
+                fenetre = f"""
+                    SELECT client_name, {colonne} FROM (
+                        SELECT client_name, {colonne},
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY client_name ORDER BY date_creation DESC
+                               ) AS rang
+                        FROM dossiers
+                        WHERE client_name IN ({in_clause})
+                          AND {colonne} IS NOT NULL AND {colonne} != ''
+                    ) WHERE rang = 1
+                """
+                derniers[colonne] = {
+                    row[0]: row[1]
+                    for row in (await session.execute(text(fenetre), retenus)).fetchall()
+                }
+
+        return [
+            {
+                "client": r[0],
+                "nb_dossiers": r[1],
+                "ca_total_xof": round(r[2] or 0),
+                "reste_a_encaisser_xof": round(r[3] or 0),
+                "backlog_xof": round(r[4] or 0),
+                "premiere_commande": r[5][:10] if r[5] else None,
+                "derniere_commande": r[6][:10] if r[6] else None,
+                "secteur": fiches[r[0]][1] if r[0] in fiches else None,
+                "contact_email": fiches[r[0]][2] if r[0] in fiches else None,
+                "telephone": fiches[r[0]][3] if r[0] in fiches else None,
+                "dernier_projet": derniers["project_name"].get(r[0]),
+                "salesperson": derniers["salesperson"].get(r[0]),
+            }
+            for r in rows
+        ]
 
     async def get_clients_by_country(self) -> list[dict]:
         """Répartition des clients par pays (le cockpit affiche le nb de clients)."""

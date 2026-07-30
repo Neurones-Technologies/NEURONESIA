@@ -710,7 +710,7 @@ class OdooAdapter(CRMRepository):
     async def get_supplier_intelligence(self, limit: int = 20) -> list[dict]:
         return []
 
-    async def get_client_portfolio(self, limit: int = 50) -> list[dict]:
+    async def get_client_portfolio(self, limit: int = 50, clients: list[str] | None = None) -> list[dict]:
         return []
 
     async def get_cross_sell_opportunities(self, product_anchor: str, product_target: str | None = None, limit: int = 20) -> list[dict]:

@@ -125,9 +125,12 @@ class CRMRepository(ABC):
         le lien achat→dossier (purchase_orders.dossier_id), synchronisés depuis ce soir."""
 
     @abstractmethod
-    async def get_client_portfolio(self, limit: int = 50) -> list[dict]:
+    async def get_client_portfolio(self, limit: int = 50, clients: list[str] | None = None) -> list[dict]:
         """Portefeuille clients réel (table dossiers) : CA, backlog, reste à
-        encaisser, nb dossiers, enrichi du secteur/contact quand disponibles."""
+        encaisser, nb dossiers, enrichi du secteur/contact quand disponibles.
+
+        `clients` (noms exacts) remplace le top `limit` par CA par la liste
+        demandée — un compte hors du top CA reste alors visible."""
 
     @abstractmethod
     async def get_cross_sell_opportunities(self, product_anchor: str, product_target: str | None = None, limit: int = 20) -> list[dict]:

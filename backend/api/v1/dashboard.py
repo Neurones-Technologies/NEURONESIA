@@ -7,6 +7,7 @@ l'exposition JSON. Chaque endpoint est gated par vue via require_views()
 (matrice config/permissions.py) : la protection est côté serveur, pas un
 simple masquage de menu.
 """
+import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 
 from api.v1.dependencies import require_views
 from core.services.ttl_cache import cached
-from modules.uc_crosssell.aggregation import build_montee_valeur
+from modules.uc_crosssell.signals import get_signals as crosssell_signals
 from modules.uc_forecast.aggregation import build_pipeline_forecast, month_labels
 from modules.uc_forecast.decision_client import build_client_decision
 from modules.uc_forecast.narratif import build_forecast_analysis
@@ -520,10 +521,14 @@ async def next_actions(request: Request, limit: int = Query(default=10, le=50)):
     modules (portefeuille clients, montée en valeur, impayés) — jamais une
     nouvelle heuristique, un simple tri par montant engagé décroissant."""
     crm = _crm(request)
-    portfolio = await crm.get_client_portfolio(limit=200)
-    lines = await crm.get_order_lines()
-    crosssell = build_montee_valeur(lines)
-    unpaid = await crm.get_unpaid_exposure()
+    # Trois lectures indépendantes : simultanées plutôt qu'enchaînées. Les
+    # signaux de montée en valeur passent par le calcul partagé et mis en cache
+    # (cf. uc_crosssell/signals.py) au lieu d'être refaits ici pour ce seul écran.
+    portfolio, crosssell, unpaid = await asyncio.gather(
+        crm.get_client_portfolio(limit=200),
+        crosssell_signals(crm),
+        crm.get_unpaid_exposure(),
+    )
 
     actions: list[dict] = []
     for c in portfolio:

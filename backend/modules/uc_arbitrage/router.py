@@ -9,6 +9,8 @@ contenait déjà une décision réelle avant ce module (cf. db/models.py).
 """
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request
 
 from api.v1.dependencies import CurrentUser
@@ -36,8 +38,8 @@ def _require_mandate(current_user, mandat_role: str | None) -> None:
         )
 
 
-async def _compute_candidates(request: Request) -> list[dict]:
-    return await service.compute_candidates(_crm(request))
+async def _compute_candidates(request: Request, subject_ref: str | None = None) -> list[dict]:
+    return await service.compute_candidates(_crm(request), subject_ref=subject_ref)
 
 
 @router.get("/file")
@@ -52,7 +54,7 @@ async def arbitrage_dossier(subject_ref: str, request: Request):
     """Module 27 — détail d'un dossier : positions réelles, options
     déterministes (dont l'échéancier calibré sur le comportement de paiement
     mesuré du client), avocat du contraire rédigé par le LLM."""
-    candidates = await _compute_candidates(request)
+    candidates = await _compute_candidates(request, subject_ref=subject_ref)
     dossier = next((d for d in candidates if d["subject_ref"] == subject_ref), None)
     if dossier is None:
         raise HTTPException(status_code=404, detail=f"Aucun dossier d'arbitrage actif pour « {subject_ref} »")
@@ -60,21 +62,27 @@ async def arbitrage_dossier(subject_ref: str, request: Request):
     options = aggregation.build_options(dossier)
     recommandee = next(o for o in options if o["recommandee"])
     llm = getattr(request.app.state.container, "llm_sonnet", None)
-    decisions_liees = await store.list_decisions(subject_ref=subject_ref)
-    contextes = await store.list_contextes(subject_ref)
+    decisions_liees, contextes = await asyncio.gather(
+        store.list_decisions(subject_ref=subject_ref),
+        store.list_contextes(subject_ref),
+    )
 
+    # Les deux parties rédigées partent ensemble et passent par le cache de
+    # narration (cf. narratif.build_dossier_narration).
+    #
     # L'avocat du contraire reçoit le profil de payeur ET les décisions déjà
     # prises sur ce client avec le verdict de leur revue : c'est ce qui rend
     # effective la promesse « la relecture recalibre les recommandations
     # suivantes », jusqu'ici affichée sans mécanisme derrière.
-    contre = await narratif.build_counter_argument(llm, dossier, recommandee, decisions_liees)
-
+    #
     # L'option C existe déjà (chiffres calculés par payeur.echeancier) ; le modèle
     # n'y ajoute que sa formulation négociable.
-    plan = dossier.get("echeancier")
     option_c = next((o for o in options if o["code"] == "C"), None)
-    if plan and option_c:
-        redaction = await narratif.write_echeancier(llm, dossier, plan)
+    plan = dossier.get("echeancier") if option_c else None
+    contre, redaction = await narratif.build_dossier_narration(
+        llm, dossier, recommandee, decisions_liees, plan
+    )
+    if redaction and option_c:
         option_c["argumentaire"] = redaction["argumentaire"]
         option_c["redige_par"] = redaction["redige_par"]
         if redaction["titre"]:

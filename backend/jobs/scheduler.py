@@ -55,18 +55,6 @@ def build_scheduler(
     )
 
     scheduler.add_job(
-        _veille_scan_job,
-        args=[container],
-        trigger=IntervalTrigger(hours=6),
-        id="veille_scan",
-        name="Agent Watch-Tracker (veille AO + analyse Claude)",
-        replace_existing=True,
-        misfire_grace_time=300,
-        coalesce=True,
-        max_instances=1,
-    )
-
-    scheduler.add_job(
         _quarantine_purge_job,
         trigger=CronTrigger(hour=3, minute=30),
         id="quarantine_purge",
@@ -90,17 +78,6 @@ def build_scheduler(
     )
 
     scheduler.add_job(
-        _presales_expiry_purge_job,
-        trigger=CronTrigger(hour=4, minute=0),
-        id="presales_expiry_purge",
-        name="Purge dossiers présale dont l'échéance est dépassée",
-        replace_existing=True,
-        misfire_grace_time=600,
-        coalesce=True,
-        max_instances=1,
-    )
-
-    scheduler.add_job(
         _pipeline_snapshot_job,
         trigger=CronTrigger(hour=1, minute=0),
         id="pipeline_snapshot",
@@ -113,8 +90,8 @@ def build_scheduler(
 
     logger.info(
         "Scheduler configuré : sync Odoo toutes les %d min (coalesce, max 1), scan GED à 2h00, "
-        "veille AO toutes les 6h, purge quarantaine à 3h30 (rétention %d j), briefing quotidien à 0h00, "
-        "purge dossiers présale expirés à 4h00, snapshot pipeline/backlog à 1h00",
+        "purge quarantaine à 3h30 (rétention %d j), briefing quotidien à 0h00, "
+        "snapshot pipeline/backlog à 1h00",
         sync_interval, settings.quarantine_retention_days,
     )
     return scheduler
@@ -132,11 +109,6 @@ async def _scan_ged_job(ged_indexer: GEDIndexer):
 
 async def _reset_monthly_budget():
     logger.info("Reset budget tokens mensuel")
-
-
-async def _veille_scan_job(container=None):
-    from modules.uc_veille.router import _run_scan
-    await _run_scan(container)
 
 
 async def _daily_briefing_job(container=None):
@@ -167,12 +139,6 @@ async def _quarantine_purge_job():
             logger.warning("Purge quarantaine — suppression %s impossible : %s", p, e)
     if paths:
         logger.info("Purge quarantaine : %d entrée(s) périmée(s), %d fichier(s) supprimé(s)", len(paths), removed)
-
-
-async def _presales_expiry_purge_job():
-    """Supprime (base + fichier) les dossiers présale dont l'échéance est dépassée."""
-    from modules.uc10_presales import dossier_store
-    await dossier_store.purge_expired()
 
 
 async def _pipeline_snapshot_job():
