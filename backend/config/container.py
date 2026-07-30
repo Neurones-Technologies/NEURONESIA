@@ -332,12 +332,6 @@ class Container:
         return self._rag_engine
 
     @property
-    def presales_vision_ocr(self):
-        """DocumentVisionExtractor (adaptateur Claude direct) réutilisé pour transcrire les
-        AO scannés côté présale via transcribe_pdf_bytes. None si vision désactivée."""
-        return self._vision
-
-    @property
     def rag_engine_fr(self):
         """Moteur RAG FR (CamemBERT) pour le chat + l'inspection documentaire (uc02).
         Identique au moteur legacy si chat_embedding_enabled=False."""

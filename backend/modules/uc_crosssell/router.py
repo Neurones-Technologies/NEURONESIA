@@ -7,8 +7,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 
 from core.services.ttl_cache import cached
-from modules.uc_crosssell.aggregation import build_montee_valeur
 from modules.uc_crosssell.narratif import build_crosssell_analysis
+from modules.uc_crosssell.signals import get_signals
 
 router = APIRouter(prefix="/crosssell", tags=["CrossSell"])
 
@@ -23,16 +23,14 @@ def _m_fcfa(xof: float) -> int:
 
 @router.get("/signals")
 async def crosssell_signals(request: Request):
-    lines = await _crm(request).get_order_lines()
-    return build_montee_valeur(lines)
+    return await get_signals(_crm(request))
 
 
 @router.post("/analysis")
 async def crosssell_analysis(request: Request):
     """Priorisation transversale rédigée par Claude à partir des signaux réels
     déjà calculés (jamais recalculés par le LLM)."""
-    lines = await _crm(request).get_order_lines()
-    signals = build_montee_valeur(lines)
+    signals = await get_signals(_crm(request))
 
     all_signals = []
     for key, label in [
