@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple torch
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: ruff check .
+
+      - name: Tests (pytest)
+        working-directory: backend
+        run: pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  frontend-e2e:
+    needs: frontend
+    runs-on: ubuntu-latest
+    env:
+      CI_DATA_DIR: ${{ github.workspace }}/.ci-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple torch
+          pip install -r requirements.txt
+
+      - name: Prepare ephemeral backend data dirs
+        run: |
+          mkdir -p "$CI_DATA_DIR"/{ged,templates,uploads,chromadb,bm25_index,local_db}
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          GED_PATH: ${{ env.CI_DATA_DIR }}/ged
+          TEMPLATES_PATH: ${{ env.CI_DATA_DIR }}/templates
+          UPLOADS_PATH: ${{ env.CI_DATA_DIR }}/uploads
+          CHROMADB_PATH: ${{ env.CI_DATA_DIR }}/chromadb
+          BM25_INDEX_PATH: ${{ env.CI_DATA_DIR }}/bm25_index
+          LOCAL_DB_PATH: ${{ env.CI_DATA_DIR }}/local_db/neurones.db
+          ANTHROPIC_API_KEY: sk-ant-ci-dummy
+          OPENAI_API_KEY: sk-ci-dummy
+          APP_ENV: test
+          LOG_LEVEL: WARNING
+        run: |
+          nohup uvicorn main:app --host 0.0.0.0 --port 8000 > "$RUNNER_TEMP/backend.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/v1/health > /dev/null; then
+              echo "Backend prêt."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Le backend n'a pas répondu à temps sur /v1/health :"
+          cat "$RUNNER_TEMP/backend.log"
+          exit 1
+
+      - name: Seed demo users
+        working-directory: backend
+        env:
+          LOCAL_DB_PATH: ${{ env.CI_DATA_DIR }}/local_db/neurones.db
+        run: python scripts/seed_demo_users.py
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: /api/v1
+        run: npm run build
+
+      - name: Start frontend
+        working-directory: frontend
+        env:
+          PORT: "3000"
+          BACKEND_URL: http://localhost:8000
+        run: |
+          nohup npm run start > "$RUNNER_TEMP/frontend.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/login > /dev/null; then
+              echo "Frontend prêt."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Le frontend n'a pas répondu à temps sur /login :"
+          cat "$RUNNER_TEMP/frontend.log"
+          exit 1
+
+      - name: Install Playwright (chromium only)
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
