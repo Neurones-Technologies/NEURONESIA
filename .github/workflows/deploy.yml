@@ -116,6 +116,34 @@ jobs:
             echo "$IMAGE_TAG" > .deployed_tag
             docker image prune -f
 
-            sleep 15
-            curl -sf http://localhost:8000/v1/health
-            curl -sf -o /dev/null -w 'frontend HTTP %{http_code}\n' http://localhost:3001/
+            # Le backend charge son modèle d'embeddings au démarrage — c'est
+            # pourquoi docker-compose lui accorde start_period: 60s. Un `sleep 15`
+            # suivi d'un unique curl marquait donc le déploiement en échec par
+            # intermittence alors que le site tournait (curl exit 56, backend
+            # encore en train de démarrer). On attend jusqu'à 90s, en sortant dès
+            # la première réponse.
+            for i in $(seq 1 45); do
+              if curl -sf http://localhost:8000/v1/health > /dev/null; then
+                echo "Backend sain (après $((i * 2))s)."
+                break
+              fi
+              if [ "$i" -eq 45 ]; then
+                echo "Le backend n'a pas répondu sur /v1/health après 90s :"
+                docker compose logs --tail 50 backend
+                exit 1
+              fi
+              sleep 2
+            done
+
+            for i in $(seq 1 15); do
+              if curl -sf -o /dev/null http://localhost:3001/; then
+                echo "Frontend sain (après $((i * 2))s)."
+                break
+              fi
+              if [ "$i" -eq 15 ]; then
+                echo "Le frontend n'a pas répondu après 30s :"
+                docker compose logs --tail 50 frontend
+                exit 1
+              fi
+              sleep 2
+            done
