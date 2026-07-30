@@ -99,11 +99,16 @@ export function Clickable({
   className,
   as = "div",
   children,
+  dataAttrs,
 }: {
   detail: DetailCard;
   className?: string;
   as?: "div" | "tr";
   children: ReactNode;
+  /** Attributs `data-*` bruts (ex. `{ "data-relevant": "false" }`) — permet à
+   * un parent client de filtrer des lignes par CSS sans re-render ni state
+   * porté ici. */
+  dataAttrs?: Record<string, string>;
 }) {
   const ctx = useDetail();
   const cls = `${className ?? ""} clk`.trim();
@@ -118,6 +123,7 @@ export function Clickable({
         ctx?.open(detail);
       }
     },
+    ...dataAttrs,
   };
   return as === "tr" ? <tr {...props}>{children}</tr> : <div {...props}>{children}</div>;
 }

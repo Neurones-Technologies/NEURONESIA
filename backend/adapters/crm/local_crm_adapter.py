@@ -428,6 +428,84 @@ class LocalCRMAdapter(CRMRepository):
             ),
         }
 
+    async def get_payment_behaviour(self, client_name: str, fenetre_mois: int = 18) -> dict:
+        """Tendance du comportement de paiement d'un client : délai moyen sur les
+        factures RÉCENTES contre délai moyen sur les plus anciennes.
+
+        Complète `get_invoice_collection_stats`, qui donne un délai moyen sur tout
+        l'historique — insuffisant pour juger un impayé courant. Un délai moyen de
+        20 j ne dit pas si le client tient encore ce rythme ; sur le miroir réel,
+        BICICI payait à 14 j et paie à 36 j, tandis que MTN CI est passé de 124 j à
+        75 j. Même moyenne globale « rapide » dans les deux cas, dynamique opposée.
+
+        Renvoie aussi `nb_paiements_recents` : à zéro alors que l'historique en
+        compte, le client n'a pas ralenti, il a CESSÉ de payer. C'est le signal le
+        plus fort disponible dans le miroir et aucun module ne l'exploitait
+        (PORT AUTONOME D'ABIDJAN : 12 factures réglées, aucune depuis 18 mois).
+
+        Le délai est compté de `invoice_date` à `payment_date` — dates Odoo
+        réelles, jamais une estimation. Les factures sans l'une des deux sont
+        écartées, et les délais aberrants (> 730 j) filtrés comme dans
+        `get_invoice_collection_stats`, pour rester comparable à celle-ci.
+        """
+        from sqlalchemy import text
+        sql = """
+            SELECT i.invoice_date, i.payment_date
+            FROM invoices i
+            LEFT JOIN clients c ON i.client_id = c.client_id
+            WHERE c.name LIKE :pattern
+              AND i.status = 'paid'
+              AND i.payment_date IS NOT NULL
+              AND i.invoice_date IS NOT NULL
+        """
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(text(sql), {"pattern": f"%{client_name}%"})).fetchall()
+
+        today = datetime.utcnow().replace(tzinfo=None)
+        seuil = today - timedelta(days=round(fenetre_mois * 30.44))
+        recents: list[int] = []
+        anciens: list[int] = []
+        dernier_paiement: datetime | None = None
+
+        for invoice_date, payment_date in rows:
+            inv = self._as_datetime(invoice_date)
+            pay = self._as_datetime(payment_date)
+            if inv is None or pay is None:
+                continue
+            delai = (pay - inv).days
+            if not (0 <= delai <= 730):
+                continue
+            if dernier_paiement is None or pay > dernier_paiement:
+                dernier_paiement = pay
+            (recents if inv >= seuil else anciens).append(delai)
+
+        def _moy(values: list[int]) -> int | None:
+            return round(sum(values) / len(values)) if values else None
+
+        return {
+            "client": client_name,
+            "fenetre_mois": fenetre_mois,
+            "delai_recent_jours": _moy(recents),
+            "nb_paiements_recents": len(recents),
+            "delai_ancien_jours": _moy(anciens),
+            "nb_paiements_anciens": len(anciens),
+            "dernier_paiement": dernier_paiement.date().isoformat() if dernier_paiement else None,
+            "jours_depuis_dernier_paiement": (today - dernier_paiement).days if dernier_paiement else None,
+        }
+
+    @staticmethod
+    def _as_datetime(value) -> datetime | None:
+        """Les dates du miroir arrivent en `datetime` via l'ORM mais en `str` via
+        SQL brut selon le driver — normalise les deux plutôt que de supposer."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.replace(tzinfo=None)
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "")).replace(tzinfo=None)
+        except ValueError:
+            return None
+
     async def get_pipeline_stats(self) -> dict:
         from sqlalchemy import text
         async with AsyncSessionLocal() as session:
@@ -1471,6 +1549,18 @@ class LocalCRMAdapter(CRMRepository):
                     """),
                     {"name": r[0]},
                 )).fetchone()
+                # Commercial du dossier le PLUS RÉCENT — le seul rattachement
+                # compte → commercial disponible dans le miroir (dossiers.salesperson).
+                # Un client peut avoir été suivi par plusieurs commerciaux : on prend
+                # le dernier en date plutôt qu'un agrégat qui ne voudrait rien dire.
+                sales_row = (await session.execute(
+                    text("""
+                        SELECT salesperson FROM dossiers
+                        WHERE client_name = :name AND salesperson IS NOT NULL AND salesperson != ''
+                        ORDER BY date_creation DESC LIMIT 1
+                    """),
+                    {"name": r[0]},
+                )).fetchone()
                 result.append({
                     "client": r[0],
                     "nb_dossiers": r[1],
@@ -1483,6 +1573,7 @@ class LocalCRMAdapter(CRMRepository):
                     "contact_email": client_row[1] if client_row else None,
                     "telephone": client_row[2] if client_row else None,
                     "dernier_projet": proj_row[0] if proj_row else None,
+                    "salesperson": sales_row[0] if sales_row else None,
                 })
         return result
 

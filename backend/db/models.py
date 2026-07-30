@@ -712,3 +712,44 @@ class DecisionModel(Base):
     review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     review_verdict: Mapped[str] = mapped_column(String(20), default="")
     review_comment: Mapped[str] = mapped_column(Text, default="")
+    # Ce que l'outil RECOMMANDAIT au moment de la décision, distinct de ce qui a
+    # été retenu. Sans ce couple, le « taux de confirmation » du module 29 ne
+    # mesurait rien d'interprétable : une décision où le mandataire a écarté la
+    # recommandation puis réussi y était comptée comme une recommandation vérifiée.
+    option_recommandee: Mapped[str] = mapped_column(Text, default="")
+    # Motif écrit par le mandataire quand il tranche, reporte ou escalade. Une
+    # décision reportée sans motif est indistinguable d'un dossier oublié.
+    motif_decision: Mapped[str] = mapped_column(Text, default="")
+    # Classe de payeur du client au moment de la décision (cf. uc_arbitrage/payeur.py).
+    # Le profil évolue à chaque encaissement : sans figer la lecture qui a servi à
+    # trancher, la revue à 30 jours juge la décision sur des faits qui ont changé.
+    profil_payeur_classe: Mapped[str] = mapped_column(String(40), default="")
+
+
+class ArbitrageContexteModel(Base):
+    """Contexte terrain d'un dossier d'arbitrage — la contribution du commercial
+    du compte, saisie AVANT que le dossier soit tranché.
+
+    Le dossier demande explicitement « motif du retard de paiement — seul un
+    appel client le donnerait, owner : Compte » (cf.
+    uc_arbitrage/aggregation.py::missing_info). Il n'existait aucun endroit pour
+    déposer la réponse : l'écran formulait une demande à l'account manager sans
+    réceptacle, et celui qui détient l'information décisive n'avait aucune
+    surface d'action. Cette table est ce réceptacle.
+
+    Rattachée au `subject_ref` (nom du client) et non à une décision : le
+    contexte existe avant la décision, et sert précisément à la préparer.
+    """
+    __tablename__ = "arbitrage_contextes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject_ref: Mapped[str] = mapped_column(String(255), index=True)
+    # Motif du retard tel que rapporté par le terrain — texte libre assumé : c'est
+    # une parole d'account manager, pas une donnée à normaliser.
+    motif_retard: Mapped[str] = mapped_column(Text, default="")
+    # Le dossier commercial est-il toujours d'actualité côté client ? Deuxième
+    # question posée par `missing_info`, à laquelle seul le terrain peut répondre.
+    dossier_toujours_actif: Mapped[str] = mapped_column(String(20), default="")
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_role: Mapped[str] = mapped_column(String(50), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
