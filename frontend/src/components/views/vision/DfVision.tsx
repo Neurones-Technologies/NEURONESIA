@@ -8,7 +8,7 @@ import { Note, Tag } from "@/components/ui/primitives";
 
 export async function DfVision() {
   // Narrations LLM exclues du Promise.all — voir components/ui/analysis-slot.tsx :
-  // 10-20 s au premier appel, elles bloquaient l'affichage des chiffres.
+  // figées à la journée, mais 10-20 s si le calcul de secours se déclenche.
   const [dso, unpaid, margins, briefing] = await Promise.all([
     getDso(),
     getUnpaid(15),

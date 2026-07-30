@@ -14,15 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from api.v1.dependencies import require_views
-from core.services.ttl_cache import cached
 from modules.uc_crosssell.signals import get_signals as crosssell_signals
+from modules.uc_daily_analysis import computations as daily_comp
+from modules.uc_daily_analysis.store import daily_cached
 from modules.uc_forecast.aggregation import build_pipeline_forecast, month_labels
 from modules.uc_forecast.decision_client import build_client_decision
-from modules.uc_forecast.narratif import build_forecast_analysis
-from modules.uc_dashboard.narratif import build_margins_analysis, build_trend_analysis
-from modules.uc_performance.narratif import build_performance_analysis
 from modules.uc_tresorerie.decision_recouvrement import build_recouvrement_decision
-from modules.uc_tresorerie.narratif import build_tresorerie_analysis
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -79,51 +76,26 @@ async def kpis(
     }
 
 
-def _m_fcfa_dashboard(xof: float) -> int:
-    return round((xof or 0) / 1_000_000)
-
-
 class TrendAnalysisRequest(BaseModel):
     months: list[str]
     values_m_fcfa: list[float]
 
 
+def _llm_sonnet(request: Request):
+    return getattr(request.app.state.container, "llm_sonnet", None)
+
+
 @router.post("/analysis", dependencies=[Depends(require_views("dashboard"))])
 async def dashboard_analysis(request: Request, body: TrendAnalysisRequest):
     """Analyse de la courbe CA réellement affichée (mois/valeurs déjà calculés
-    côté client selon le filtre de période actif) — se déclenche automatiquement
-    au chargement/changement de période, jamais recalculée par le LLM."""
+    côté client selon le filtre de période actif) — figée pour la journée par le
+    job du matin, jamais recalculée par le LLM à l'affichage."""
     months, values = body.months, body.values_m_fcfa
-    if not months or not values or all(v == 0 for v in values):
-        return {"analysis": "Pas assez de données sur cette période pour une analyse de tendance."}
-
-    async def _compute():
-        debut, fin = values[0], values[-1]
-        variation_pct = round((fin - debut) / debut * 100, 1) if debut else 0.0
-        pic_idx = max(range(len(values)), key=lambda i: values[i])
-        creux_idx = min(range(len(values)), key=lambda i: values[i])
-
-        ctx = {
-            "nb_mois": len(values),
-            "periode_debut": months[0],
-            "periode_fin": months[-1],
-            "valeur_debut": round(debut),
-            "valeur_fin": round(fin),
-            "variation_pct": variation_pct,
-            "mois_pic": months[pic_idx],
-            "valeur_pic": round(values[pic_idx]),
-            "mois_creux": months[creux_idx],
-            "valeur_creux": round(values[creux_idx]),
-            "moyenne_periode": round(sum(values) / len(values)),
-        }
-        llm = getattr(request.app.state.container, "llm_sonnet", None)
-        analysis = await build_trend_analysis(llm, ctx)
-        return {"analysis": analysis, "context": ctx}
-
-    # Clé de cache sur la série exacte affichée : deux périodes différentes
-    # ne doivent jamais partager un résultat.
-    cache_key = ("dashboard_analysis", tuple(months), tuple(values))
-    return await cached(cache_key, 900.0, _compute)
+    return await daily_cached(
+        daily_comp.KEY_TREND,
+        daily_comp.trend_variant(months),
+        lambda: daily_comp.trend_analysis(_llm_sonnet(request), months, values),
+    )
 
 
 @router.get("/clients-by-country", dependencies=[Depends(require_views("dashboard"))])
@@ -197,29 +169,13 @@ async def performance_summary(request: Request, limit: int = Query(default=20, l
 @router.post("/performance/analysis", dependencies=[Depends(require_views("performance"))])
 async def performance_analysis(request: Request):
     """Lecture qualitative des performances, rédigée par Claude à partir des
-    chiffres réels déjà calculés (jamais recalculés par le LLM)."""
-    crm = _crm(request)
-    win_rate = await crm.get_win_rate()
-    lost = await crm.get_lost_deals(limit=50)
-    if lost["nb_total"] == 0:
-        return {"analysis": "Aucune opportunité perdue enregistrée — pas d'analyse de pertes possible."}
-
-    async def _compute():
-        top_client = lost["by_client"][0]
-        ctx = {
-            "taux_nb": win_rate["taux_nb_pct"],
-            "taux_valeur": win_rate["taux_valeur_pct"],
-            "nb_perdues": lost["nb_total"],
-            "montant_perdu": _m_fcfa(lost["montant_total_xof"]),
-            "top_client_name": top_client["client"],
-            "top_client_montant": _m_fcfa(top_client["montant_xof"]),
-            "top_client_nb": top_client["nb"],
-        }
-        llm = getattr(request.app.state.container, "llm_sonnet", None)
-        analysis = await build_performance_analysis(llm, ctx)
-        return {"analysis": analysis, "context": ctx}
-
-    return await cached(("performance_analysis",), 900.0, _compute)
+    chiffres réels déjà calculés (jamais recalculés par le LLM) — figée pour la
+    journée par le job du matin."""
+    return await daily_cached(
+        daily_comp.KEY_PERFORMANCE,
+        "",
+        lambda: daily_comp.performance_analysis(_crm(request), _llm_sonnet(request)),
+    )
 
 
 # ---------- Pipeline ----------
@@ -245,10 +201,6 @@ async def forecast(request: Request, year: int | None = Query(default=None)):
     return await _crm(request).get_quarterly_forecast(year=year)
 
 
-def _m_fcfa(xof: float) -> int:
-    return round(xof / 1_000_000)
-
-
 @router.get("/forecast/pipeline-weighted", dependencies=[Depends(require_views("forecast"))])
 async def forecast_pipeline_weighted(request: Request):
     """Forecast pondéré à partir des vraies opportunités ouvertes du pipeline
@@ -264,35 +216,13 @@ async def forecast_pipeline_weighted(request: Request):
 @router.post("/forecast/analysis", dependencies=[Depends(require_views("forecast"))])
 async def forecast_analysis(request: Request):
     """Lecture qualitative du forecast pondéré, rédigée par Claude à partir des
-    chiffres réels déjà calculés (jamais recalculés par le LLM)."""
-    opportunities = await _crm(request).list_opportunities(limit=500)
-    agg = build_pipeline_forecast(opportunities)
-    scen = agg["scenarios"]
-    if scen["nb_opportunites"] == 0 or scen["realiste_xof"] == 0:
-        return {"analysis": "Aucune opportunité pondérée dans le pipeline ouvert actuellement — pas de forecast à analyser."}
-
-    async def _compute():
-        top_opp = max(agg["opportunities"], key=lambda o: o["weighted_xof"])
-        top_stage = agg["by_stage"][0]
-        ctx = {
-            "nb_opps": scen["nb_opportunites"],
-            "realiste": _m_fcfa(scen["realiste_xof"]),
-            "pessimiste": _m_fcfa(scen["pessimiste_xof"]),
-            "optimiste": _m_fcfa(scen["optimiste_xof"]),
-            "avg_prob": scen["avg_probability_pct"],
-            "top_opp_name": top_opp["name"],
-            "top_opp_client": top_opp["client"],
-            "top_opp_share": round(top_opp["weighted_xof"] / scen["realiste_xof"] * 100),
-            "top_stage_name": top_stage["stage"],
-            "top_stage_share": round(top_stage["weighted_xof"] / scen["realiste_xof"] * 100),
-            "top_stage_value": _m_fcfa(top_stage["weighted_xof"]),
-            "ecart": _m_fcfa(scen["optimiste_xof"] - scen["pessimiste_xof"]),
-        }
-        llm = getattr(request.app.state.container, "llm_sonnet", None)
-        analysis = await build_forecast_analysis(llm, ctx)
-        return {"analysis": analysis, "context": ctx}
-
-    return await cached(("forecast_analysis",), 900.0, _compute)
+    chiffres réels déjà calculés (jamais recalculés par le LLM) — figée pour la
+    journée par le job du matin."""
+    return await daily_cached(
+        daily_comp.KEY_FORECAST,
+        "",
+        lambda: daily_comp.forecast_analysis(_crm(request), _llm_sonnet(request)),
+    )
 
 
 class ClientDecisionRequest(BaseModel):
@@ -346,35 +276,13 @@ async def margins(
 @router.post("/margins/analysis", dependencies=[Depends(require_views("dashboard", "couts"))])
 async def margins_analysis(request: Request, year: int | None = Query(default=None)):
     """Lecture qualitative de l'écart marge provisoire/définitive (backlog, érosion),
-    rédigée par Claude à partir des agrégats réels déjà calculés (jamais recalculés par le LLM)."""
-    crm = _crm(request)
-    stats = await crm.get_margin_stats(year=year)
-    if stats["nb_dossiers"] == 0:
-        return {"analysis": "Aucun dossier avec marge calculée sur cette période."}
-
-    async def _compute():
-        top_dossiers = await crm.get_top_margin_dossiers(limit=20, year=year)
-        pire = min(top_dossiers, key=lambda d: d.get("perc_marge_def", 0)) if top_dossiers else None
-        taux_materialisation = (
-            round(stats["ca_definitif_total"] / stats["ca_provisoire_total"] * 100, 1)
-            if stats["ca_provisoire_total"] else 0
-        )
-        ctx = {
-            "nb_dossiers": stats["nb_dossiers"],
-            "backlog_m": _m_fcfa(stats["backlog_total"]),
-            "taux_materialisation": taux_materialisation,
-            "marge_provisoire_pct": stats["perc_marge_provisoire_moyen"],
-            "marge_definitive_pct": stats["perc_marge_definitive_moyen"],
-            "ecart_marge_pts": round(stats["perc_marge_definitive_moyen"] - stats["perc_marge_provisoire_moyen"], 1),
-            "pire_dossier_ref": pire["ref"] if pire else "—",
-            "pire_dossier_client": pire["client"] if pire else "—",
-            "pire_dossier_marge": pire["perc_marge_def"] if pire else 0,
-        }
-        llm = getattr(request.app.state.container, "llm_sonnet", None)
-        analysis = await build_margins_analysis(llm, ctx)
-        return {"analysis": analysis, "context": ctx}
-
-    return await cached(("margins_analysis", year), 900.0, _compute)
+    rédigée par Claude à partir des agrégats réels déjà calculés (jamais recalculés
+    par le LLM) — figée pour la journée par le job du matin."""
+    return await daily_cached(
+        daily_comp.KEY_MARGINS,
+        daily_comp.margins_variant(year),
+        lambda: daily_comp.margins_analysis(_crm(request), _llm_sonnet(request), year=year),
+    )
 
 
 # ---------- Trésorerie (rôles finance uniquement) ----------
@@ -392,32 +300,13 @@ async def unpaid(request: Request, limit: int = Query(default=10, le=50)):
 @router.post("/unpaid/analysis", dependencies=[Depends(require_views("tresorerie"))])
 async def unpaid_analysis(request: Request):
     """Lecture qualitative de l'exposition aux impayés, rédigée par Claude à
-    partir des chiffres réels déjà calculés (jamais recalculés par le LLM)."""
-    exposure = await _crm(request).get_unpaid_exposure()
-    if exposure["nb_factures_impayees"] == 0:
-        return {"analysis": "Aucun impayé enregistré actuellement."}
-
-    async def _compute():
-        top3 = exposure["top_10_debiteurs"][:3]
-        top1 = top3[0] if top3 else None
-        ctx = {
-            "exposition_totale": _m_fcfa(exposure["exposition_totale_xof"]),
-            "nb_factures": exposure["nb_factures_impayees"],
-            "retard_90j_montant": _m_fcfa(exposure["retard_90j_montant_xof"]),
-            "retard_90j_nb": exposure["retard_90j_nb_factures"],
-            "top_debiteur_client": top1["client"] if top1 else "—",
-            "top_debiteur_montant": _m_fcfa(top1["montant_total_xof"]) if top1 else 0,
-            "top_debiteur_jours": top1["retard_max_jours"] if top1 else 0,
-            "top3_part_pct": (
-                round(sum(d["montant_total_xof"] for d in top3) / exposure["exposition_totale_xof"] * 100)
-                if exposure["exposition_totale_xof"] else 0
-            ),
-        }
-        llm = getattr(request.app.state.container, "llm_sonnet", None)
-        analysis = await build_tresorerie_analysis(llm, ctx)
-        return {"analysis": analysis, "context": ctx}
-
-    return await cached(("unpaid_analysis",), 900.0, _compute)
+    partir des chiffres réels déjà calculés (jamais recalculés par le LLM) —
+    figée pour la journée par le job du matin."""
+    return await daily_cached(
+        daily_comp.KEY_UNPAID,
+        "",
+        lambda: daily_comp.unpaid_analysis(_crm(request), _llm_sonnet(request)),
+    )
 
 
 class RecouvrementDecisionRequest(BaseModel):

@@ -16,7 +16,7 @@ function daysSince(dateStr: string | null): number | null {
 
 export async function AmVision() {
   // Narration LLM exclue du Promise.all — voir components/ui/analysis-slot.tsx :
-  // 10-20 s au premier appel, elle bloquait l'affichage des chiffres.
+  // figée à la journée, mais 10-20 s si le calcul de secours se déclenche.
   const [portfolio, actions, crosssell, briefing] = await Promise.all([
     getClientPortfolio(50),
     getNextActions(8),

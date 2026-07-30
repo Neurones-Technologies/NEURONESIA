@@ -14,9 +14,10 @@ import { Note } from "@/components/ui/primitives";
 
 export async function DcVision() {
   // Les narrations LLM (`get*Analysis`) sont volontairement ABSENTES de ce
-  // Promise.all : chacune coûte 10-20 s au premier appel et bloquerait tout le
-  // HTML de la vue. Elles sont chargées en parallèle du rendu par
-  // <AnalysisSlot> et arrivent en streaming (cf. components/ui/analysis-slot.tsx).
+  // Promise.all : figées à la journée côté backend elles sont immédiates, mais
+  // leur calcul de secours coûte 10-20 s et bloquerait tout le HTML de la vue.
+  // Elles sont rendues en parallèle par <AnalysisSlot> (cf.
+  // components/ui/analysis-slot.tsx).
   const [forecast, crosssell, performance, salespeople, briefing] = await Promise.all([
     getForecastPipelineWeighted(),
     getCrossSellSignals(),
