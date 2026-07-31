@@ -136,15 +136,6 @@ async def revenue_by_sector(
     return await _crm(request).get_revenue_by_sector(year=year, limit=limit)
 
 
-@router.get("/revenue/by-product", dependencies=[Depends(require_views("catalogue", "dashboard"))])
-async def revenue_by_product(
-    request: Request,
-    year: int | None = Query(default=None),
-    limit: int = Query(default=30, le=100),
-):
-    return await _crm(request).get_revenue_by_product(year=year, limit=limit)
-
-
 @router.get("/top-clients", dependencies=[Depends(require_views("dashboard", "clients"))])
 async def top_clients(
     request: Request,
@@ -176,22 +167,6 @@ async def performance_analysis(request: Request):
         "",
         lambda: daily_comp.performance_analysis(_crm(request), _llm_sonnet(request)),
     )
-
-
-# ---------- Pipeline ----------
-
-@router.get("/pipeline", dependencies=[Depends(require_views("dashboard", "pipeline"))])
-async def pipeline_stats(request: Request):
-    return await _crm(request).get_pipeline_stats()
-
-
-@router.get("/pipeline/opportunities", dependencies=[Depends(require_views("pipeline"))])
-async def pipeline_opportunities(
-    request: Request,
-    stage: str | None = Query(default=None),
-    limit: int = Query(default=50, le=200),
-):
-    return await _crm(request).list_opportunities(stage=stage, limit=limit)
 
 
 # ---------- Forecast ----------
@@ -330,13 +305,6 @@ async def unpaid_recouvrement_decision(request: Request, body: RecouvrementDecis
         jours=debiteur["retard_max_jours"],
     )
     return decision
-
-
-# ---------- Leads ----------
-
-@router.get("/leads", dependencies=[Depends(require_views("leads"))])
-async def hot_leads(request: Request, limit: int = Query(default=10, le=50)):
-    return await _crm(request).get_hot_leads(limit=limit)
 
 
 # ---------- DSO réel (délai de recouvrement) ----------

@@ -273,15 +273,6 @@ export async function getNextActions(limit = 10): Promise<NextActions | null> {
   });
 }
 
-export interface HotLead {
-  client: string;
-  [key: string]: unknown;
-}
-
-export async function getHotLeads(limit = 10): Promise<HotLead[] | null> {
-  return apiFetch<HotLead[] | null>(`/v1/dashboard/leads?limit=${limit}`, { allowForbidden: true });
-}
-
 export interface TopClient {
   client: string;
   nb_commandes: number;
@@ -294,26 +285,6 @@ export async function getTopClients(year?: number, limit = 10): Promise<TopClien
   if (year) params.set("year", String(year));
   params.set("limit", String(limit));
   return apiFetch<TopClient[] | null>(`/v1/dashboard/top-clients?${params.toString()}`, {
-    allowForbidden: true,
-  });
-}
-
-export interface Opportunity {
-  opportunite: string;
-  client: string;
-  stade: string;
-  revenu_attendu_xof: number;
-  probabilite_pct: number;
-  commercial: string;
-  deadline: string | null;
-  creee_le: string | null;
-}
-
-export async function getPipelineOpportunities(limit = 50, stage?: string): Promise<Opportunity[] | null> {
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  if (stage) params.set("stage", stage);
-  return apiFetch<Opportunity[] | null>(`/v1/dashboard/pipeline/opportunities?${params.toString()}`, {
     allowForbidden: true,
   });
 }

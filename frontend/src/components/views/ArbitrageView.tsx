@@ -782,11 +782,6 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
             <div className="split" style={{ marginTop: 22 }}>
               <div>
                 <MiniLabel>Avocat du contraire · raisons de ne pas suivre la recommandation</MiniLabel>
-                <p style={{ fontSize: 11.5, color: "var(--t3)", fontStyle: "italic", margin: "0 0 10px" }}>
-                  Rédigé par l&apos;IA (Claude) à partir des chiffres ci-dessus, avec repli automatique et
-                  déterministe si le modèle est indisponible — la seule partie de ce dossier qui n&apos;est pas un
-                  calcul.
-                </p>
                 <div className="rows">
                   {dossier.contre_arguments.map((c, i) => (
                     <div className="row" key={i}>
@@ -807,11 +802,6 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
               </div>
               <div>
                 <MiniLabel>Ce qui manque pour trancher</MiniLabel>
-                <p style={{ fontSize: 11.5, color: "var(--t3)", fontStyle: "italic", margin: "0 0 10px" }}>
-                  Ces points portent sur ce que le miroir Odoo ne peut pas dire, et sont formulés au regard du
-                  comportement de paiement du client. Le délai indiqué est une convention, pas une estimation
-                  de votre charge. Une ligne disparaît dès que l&apos;information est apportée ci-dessous.
-                </p>
                 <div className="rows">
                   {dossier.manque.map((m, i) => (
                     <div className="row-m" key={i}>
