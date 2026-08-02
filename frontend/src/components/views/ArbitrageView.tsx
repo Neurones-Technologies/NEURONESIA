@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { getArbitrageDossier, getArbitrageFile, listDecisions } from "@/lib/api/arbitrage";
 import type {
   ArbitrageCandidate,
@@ -16,6 +18,7 @@ import { ProfileKey, Variant } from "@/lib/types";
 import { /* FootNote, */ HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable, DetailCard } from "@/components/ui/detail";
 import { Acts, Btn, MiniLabel, Note, Tag } from "@/components/ui/primitives";
+import { Skel } from "@/components/ui/skeleton";
 import { ArbitrageScopeToggle } from "@/components/views/ArbitrageScopeToggle";
 
 /** Vue Arbitrages — connectée au backend réel (modules 26 à 29, cf.
@@ -462,10 +465,6 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
   const monEnjeuM = mesCandidats.reduce((sum, c) => sum + mFcfa(c.enjeu_xof), 0);
   const monImpayeM = mesCandidats.reduce((sum, c) => sum + mFcfa(c.impaye_xof), 0);
 
-  const dossier = topCandidate ? await getArbitrageDossier(topCandidate.subject_ref) : null;
-  const recommended = dossier?.options.find((o) => o.recommandee);
-  const hasMandate = dossier ? isAdmin || roleToProfile(dossier.mandat_role) === profile : false;
-
   const registre = decisions ?? [];
   const urgent = file.kpi.echeance_plus_proche_jours !== null && file.kpi.echeance_plus_proche_jours < 15;
 
@@ -638,7 +637,226 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
         />
       </div>
 
-      {dossier && recommended ? (
+      {topCandidate ? (
+        <Suspense fallback={<DossierPending />}>
+          <DossierBlock
+            subjectRef={topCandidate.subject_ref}
+            profile={profile}
+            seuilM={seuilM}
+            isAdmin={isAdmin}
+            nbCandidats={file.candidats.length}
+          />
+        </Suspense>
+      ) : (
+        !isAdmin && <AucunDossier nbCandidats={file.candidats.length} />
+      )}
+
+      <div className="bento">
+        <Tile span={12} title="File d'arbitrage" kick="conflits détectés · calcul réel">
+          <ArbitrageScopeToggle hasRelevant={hasRelevantCandidate} perimeterLabel={META[profile].name}>
+            <HintLine>Cliquez un dossier pour son détail chiffré</HintLine>
+            <div style={{ overflowX: "auto" }}>
+              <table className="tb">
+                <thead>
+                  <tr>
+                    <th>Priorité</th>
+                    <th>Dossier</th>
+                    <th>Comportement de paiement</th>
+                    <th className="r">Impayé</th>
+                    <th className="r">Enjeu</th>
+                    <th>Mandat</th>
+                    <th>État</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {file.candidats.map((c) => (
+                    <Clickable
+                      as="tr"
+                      key={c.subject_ref}
+                      detail={candidateDetail(c, seuilM)}
+                      dataAttrs={{ "data-relevant": String(relevantCandidate(c)) }}
+                    >
+                      <td>
+                        <Tag
+                          variant={
+                            c.priorite.niveau >= 3 ? "r" : c.priorite.niveau === 2 ? "w" : c.priorite.niveau === 1 ? "n" : "s"
+                          }
+                        >
+                          {c.priorite.label}
+                        </Tag>
+                      </td>
+                      <td style={{ fontWeight: 500 }}>{c.subject_label}</td>
+                      <td style={{ fontSize: 12 }}>
+                        <span style={{ color: "var(--t1)" }}>{c.profil_payeur.classe_label}</span>
+                        <div className="mono" style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
+                          {c.profil_payeur.delai_recent_jours !== null
+                            ? c.profil_payeur.delai_ancien_jours !== null
+                              ? `${formatNumber(c.profil_payeur.delai_ancien_jours)} j → ${formatNumber(
+                                  c.profil_payeur.delai_recent_jours
+                                )} j`
+                              : `${formatNumber(c.profil_payeur.delai_recent_jours)} j`
+                            : c.profil_payeur.jours_depuis_dernier_paiement !== null
+                              ? `aucun paiement depuis ${formatNumber(
+                                  c.profil_payeur.jours_depuis_dernier_paiement
+                                )} j`
+                              : "non mesurable"}
+                        </div>
+                      </td>
+                      <td className="r mono">{formatMFcfa(c.impaye_xof)} M</td>
+                      <td className="r mono">{formatMFcfa(c.enjeu_xof)} M</td>
+                      <td style={{ fontSize: 12.5, color: "var(--t2)" }}>{roleLabel(c.mandat_role)}</td>
+                      <td>
+                        <Tag variant="r">non tranché</Tag>
+                      </td>
+                    </Clickable>
+                  ))}
+                  {file.decisions_ouvertes.map((d) => (
+                    <Clickable
+                      as="tr"
+                      key={`d-${d.id}`}
+                      detail={decisionDetail(d)}
+                      dataAttrs={{
+                        "data-relevant": String(
+                          isRowRelevant(profile, isAdmin, d.mandat_role, d.profils_impliques)
+                        ),
+                      }}
+                    >
+                      <td>
+                        <span className="ro">décision ouverte</span>
+                      </td>
+                      <td style={{ fontWeight: 500 }}>{d.subject_label || d.title}</td>
+                      <td style={{ fontSize: 12, color: "var(--t2)" }}>
+                        {d.profil_payeur_classe
+                          ? PAYEUR_CLASSE_LABELS[d.profil_payeur_classe] ?? d.profil_payeur_classe
+                          : "—"}
+                        <div className="mono" style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
+                          {d.profils_impliques.map(roleLabel).join(" · ") || "—"}
+                        </div>
+                      </td>
+                      <td className="r mono">—</td>
+                      <td className="r mono">{d.enjeu_xof ? `${formatMFcfa(d.enjeu_xof)} M` : "—"}</td>
+                      <td style={{ fontSize: 12.5, color: "var(--t2)" }}>
+                        {d.mandat_role ? roleLabel(d.mandat_role) : "—"}
+                      </td>
+                      <td>
+                        <Tag variant={statusVariant(d.status)}>{STATUS_LABELS[d.status] ?? d.status}</Tag>
+                      </td>
+                    </Clickable>
+                  ))}
+                  {file.candidats.length === 0 && file.decisions_ouvertes.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ color: "var(--t2)" }}>
+                        Aucun conflit détecté actuellement — aucun client en retard de paiement ne cumule un signal
+                        commercial actif.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {/* <FootNote>
+              Un dossier est détecté quand un client cumule des factures échues ET un signal commercial actif
+              (renouvellement, cross-sell) — recoupement automatique, pas une liste saisie à la main. Le
+              classement croise l&apos;enjeu ET le comportement de paiement du client : trier par montant seul
+              plaçait en tête les plus grosses créances, y compris chez des clients qui règlent normalement, en
+              reléguant des dossiers plus petits où quelque chose venait réellement de changer. Aucun dossier
+              n&apos;est masqué, seul son rang change — et la priorité ne touche pas au mandat, qui reste fondé
+              sur le montant et bascule à la Direction générale au-delà de {formatNumber(seuilM)} M FCFA.
+            </FootNote> */}
+          </ArbitrageScopeToggle>
+        </Tile>
+      </div>
+    </>
+  );
+}
+
+/** Panneau de dossier en cours d'instruction — reprend la forme de `.dec` pour
+ * que l'arrivée du contenu ne décale pas la page déjà peinte. */
+function DossierPending() {
+  return (
+    <div className="dec" style={{ marginTop: 18 }} aria-busy="true" aria-label="Dossier en cours d'instruction">
+      <div className="dec-h">
+        <h3>
+          <Skel width={280} height={19} />
+        </h3>
+        <p style={{ display: "grid", gap: 9, marginTop: 10 }}>
+          {[94, 88, 72].map((w, i) => (
+            <Skel key={i} width={`${w}%`} height={12} />
+          ))}
+        </p>
+      </div>
+      <div className="dec-b">
+        <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
+          <Skel width="100%" height={78} radius={12} />
+          <Skel width="100%" height={56} radius={10} />
+          <Skel width="100%" height={56} radius={10} />
+        </div>
+        <div className="opts">
+          {[0, 1, 2].map((i) => (
+            <Skel key={i} width="100%" height={168} radius={12} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Aucun dossier à instruire pour ce profil. Sort du composant parent ET de
+ * `DossierBlock` : le cas « aucun candidat dans mon périmètre » se connaît sans
+ * attendre le serveur, le cas « le dossier ne porte pas d'option » non. */
+function AucunDossier({ nbCandidats }: { nbCandidats: number }) {
+  return (
+    <Note style={{ marginTop: 18 }}>
+      Aucun dossier ne relève de votre périmètre actuellement.{" "}
+      {nbCandidats > 0
+        ? `${formatNumber(nbCandidats)} dossier(s) sont ouverts mais concernent d'autres profils — basculez sur « Tous les dossiers » dans la file ci-dessous pour les consulter.`
+        : "Aucun conflit n'est détecté pour le moment, pour aucun profil."}{" "}
+      À noter : ce module ne détecte à ce jour qu&apos;un seul type de tension — impayé client contre signal
+      commercial actif. Les conflits propres à la livraison (plan de charge, fournisseurs, staffing) ne sont pas
+      encore modélisés, leur absence ici ne signifie donc pas qu&apos;il n&apos;y en a aucun.
+    </Note>
+  );
+}
+
+/** Instruction du dossier de tête — SEULE partie de l'écran qui attend le LLM.
+ *
+ * `/v1/arbitrage/dossier/{ref}` bloque sur deux appels Claude Sonnet (avocat du
+ * contraire + formulation de l'échéancier, cf. uc_arbitrage/narratif.py). Tant
+ * que ce composant vivait dans le corps d'`ArbitrageView`, ces secondes
+ * retenaient TOUT le HTML de la page — KPI et file d'arbitrage compris, alors
+ * que le backend les produit en 0,3 s (mesuré sur `_compute_all_candidates`).
+ *
+ * Même raison et même patron qu'`AnalysisSlot` (components/ui/analysis-slot.tsx)
+ * pour les narrations du cockpit : ne PAS remettre cet appel dans le
+ * `Promise.all` du parent sous prétexte que le cache de narration le rend
+ * souvent rapide — il ne l'est pas au premier passage, ni après une sync, ni
+ * quand la fenêtre de 900 s est retombée.
+ *
+ * ATTENTION : le streaming n'atteint le navigateur que si le proxy ne tamponne
+ * pas la réponse — `proxy_buffering off` sur `location /`
+ * (nginx.neurones-ia.conf).
+ */
+async function DossierBlock({
+  subjectRef,
+  profile,
+  seuilM,
+  isAdmin,
+  nbCandidats,
+}: {
+  subjectRef: string;
+  profile: ProfileKey;
+  seuilM: number;
+  isAdmin: boolean;
+  nbCandidats: number;
+}) {
+  const dossier = await getArbitrageDossier(subjectRef);
+  const recommended = dossier?.options.find((o) => o.recommandee);
+  if (!dossier || !recommended) {
+    return isAdmin ? null : <AucunDossier nbCandidats={nbCandidats} />;
+  }
+  const hasMandate = isAdmin || roleToProfile(dossier.mandat_role) === profile;
+
+  return (
         <div className="dec" style={{ marginTop: 18 }}>
           <div className="dec-h">
             <h3>{dossier.subject_label}</h3>
@@ -906,135 +1124,5 @@ export async function ArbitrageView({ profile }: { profile: ProfileKey }) {
             )}
           </div>
         </div>
-      ) : (
-        !isAdmin && (
-          <Note style={{ marginTop: 18 }}>
-            Aucun dossier ne relève de votre périmètre actuellement.{" "}
-            {file.candidats.length > 0
-              ? `${formatNumber(file.candidats.length)} dossier(s) sont ouverts mais concernent d'autres profils — basculez sur « Tous les dossiers » dans la file ci-dessous pour les consulter.`
-              : "Aucun conflit n'est détecté pour le moment, pour aucun profil."}{" "}
-            À noter : ce module ne détecte à ce jour qu&apos;un seul type de tension — impayé client contre signal
-            commercial actif. Les conflits propres à la livraison (plan de charge, fournisseurs, staffing) ne sont pas
-            encore modélisés, leur absence ici ne signifie donc pas qu&apos;il n&apos;y en a aucun.
-          </Note>
-        )
-      )}
-
-      <div className="bento">
-        <Tile span={12} title="File d'arbitrage" kick="conflits détectés · calcul réel">
-          <ArbitrageScopeToggle hasRelevant={hasRelevantCandidate} perimeterLabel={META[profile].name}>
-            <HintLine>Cliquez un dossier pour son détail chiffré</HintLine>
-            <div style={{ overflowX: "auto" }}>
-              <table className="tb">
-                <thead>
-                  <tr>
-                    <th>Priorité</th>
-                    <th>Dossier</th>
-                    <th>Comportement de paiement</th>
-                    <th className="r">Impayé</th>
-                    <th className="r">Enjeu</th>
-                    <th>Mandat</th>
-                    <th>État</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {file.candidats.map((c) => (
-                    <Clickable
-                      as="tr"
-                      key={c.subject_ref}
-                      detail={candidateDetail(c, seuilM)}
-                      dataAttrs={{ "data-relevant": String(relevantCandidate(c)) }}
-                    >
-                      <td>
-                        <Tag
-                          variant={
-                            c.priorite.niveau >= 3 ? "r" : c.priorite.niveau === 2 ? "w" : c.priorite.niveau === 1 ? "n" : "s"
-                          }
-                        >
-                          {c.priorite.label}
-                        </Tag>
-                      </td>
-                      <td style={{ fontWeight: 500 }}>{c.subject_label}</td>
-                      <td style={{ fontSize: 12 }}>
-                        <span style={{ color: "var(--t1)" }}>{c.profil_payeur.classe_label}</span>
-                        <div className="mono" style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
-                          {c.profil_payeur.delai_recent_jours !== null
-                            ? c.profil_payeur.delai_ancien_jours !== null
-                              ? `${formatNumber(c.profil_payeur.delai_ancien_jours)} j → ${formatNumber(
-                                  c.profil_payeur.delai_recent_jours
-                                )} j`
-                              : `${formatNumber(c.profil_payeur.delai_recent_jours)} j`
-                            : c.profil_payeur.jours_depuis_dernier_paiement !== null
-                              ? `aucun paiement depuis ${formatNumber(
-                                  c.profil_payeur.jours_depuis_dernier_paiement
-                                )} j`
-                              : "non mesurable"}
-                        </div>
-                      </td>
-                      <td className="r mono">{formatMFcfa(c.impaye_xof)} M</td>
-                      <td className="r mono">{formatMFcfa(c.enjeu_xof)} M</td>
-                      <td style={{ fontSize: 12.5, color: "var(--t2)" }}>{roleLabel(c.mandat_role)}</td>
-                      <td>
-                        <Tag variant="r">non tranché</Tag>
-                      </td>
-                    </Clickable>
-                  ))}
-                  {file.decisions_ouvertes.map((d) => (
-                    <Clickable
-                      as="tr"
-                      key={`d-${d.id}`}
-                      detail={decisionDetail(d)}
-                      dataAttrs={{
-                        "data-relevant": String(
-                          isRowRelevant(profile, isAdmin, d.mandat_role, d.profils_impliques)
-                        ),
-                      }}
-                    >
-                      <td>
-                        <span className="ro">décision ouverte</span>
-                      </td>
-                      <td style={{ fontWeight: 500 }}>{d.subject_label || d.title}</td>
-                      <td style={{ fontSize: 12, color: "var(--t2)" }}>
-                        {d.profil_payeur_classe
-                          ? PAYEUR_CLASSE_LABELS[d.profil_payeur_classe] ?? d.profil_payeur_classe
-                          : "—"}
-                        <div className="mono" style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
-                          {d.profils_impliques.map(roleLabel).join(" · ") || "—"}
-                        </div>
-                      </td>
-                      <td className="r mono">—</td>
-                      <td className="r mono">{d.enjeu_xof ? `${formatMFcfa(d.enjeu_xof)} M` : "—"}</td>
-                      <td style={{ fontSize: 12.5, color: "var(--t2)" }}>
-                        {d.mandat_role ? roleLabel(d.mandat_role) : "—"}
-                      </td>
-                      <td>
-                        <Tag variant={statusVariant(d.status)}>{STATUS_LABELS[d.status] ?? d.status}</Tag>
-                      </td>
-                    </Clickable>
-                  ))}
-                  {file.candidats.length === 0 && file.decisions_ouvertes.length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ color: "var(--t2)" }}>
-                        Aucun conflit détecté actuellement — aucun client en retard de paiement ne cumule un signal
-                        commercial actif.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {/* <FootNote>
-              Un dossier est détecté quand un client cumule des factures échues ET un signal commercial actif
-              (renouvellement, cross-sell) — recoupement automatique, pas une liste saisie à la main. Le
-              classement croise l&apos;enjeu ET le comportement de paiement du client : trier par montant seul
-              plaçait en tête les plus grosses créances, y compris chez des clients qui règlent normalement, en
-              reléguant des dossiers plus petits où quelque chose venait réellement de changer. Aucun dossier
-              n&apos;est masqué, seul son rang change — et la priorité ne touche pas au mandat, qui reste fondé
-              sur le montant et bascule à la Direction générale au-delà de {formatNumber(seuilM)} M FCFA.
-            </FootNote> */}
-          </ArbitrageScopeToggle>
-        </Tile>
-      </div>
-    </>
   );
 }

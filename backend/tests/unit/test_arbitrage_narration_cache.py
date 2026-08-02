@@ -1,7 +1,7 @@
 """Rédactions LLM d'un dossier d'arbitrage : parallélisme, cache, et refus de
 mettre un repli déterministe en cache.
 
-Trois propriétés à ne pas perdre :
+Quatre propriétés à ne pas perdre :
 
   1. Les deux appels modèle (avocat du contraire, formulation de l'option C) ne
      se lisent pas l'un l'autre : ils doivent partir ENSEMBLE. Les enchaîner
@@ -10,22 +10,59 @@ Trois propriétés à ne pas perdre :
      bouger dès qu'un chiffre cité change ou qu'une décision revue vient
      s'ajouter à la mémoire, sinon la narration devient périmée en silence.
   3. Un repli déterministe (modèle indisponible ou réponse illisible) ne doit
-     JAMAIS occuper le cache : ce serait faire durer un incident de quelques
-     secondes pendant toute la fenêtre TTL.
+     JAMAIS être enregistré : ce serait faire durer un incident de quelques
+     secondes jusqu'au prochain changement de chiffre — c'est-à-dire
+     potentiellement des jours, depuis que la persistance a remplacé le TTL.
+  4. La rédaction survit au processus : elle est en base
+     (`arbitrage_narrations`), pas en mémoire. C'est ce qui la rend partagée
+     entre les deux workers uvicorn et conservée à travers un redéploiement.
+
+Chaque narration tourne dans son propre `asyncio.run` — d'où la base sur
+FICHIER temporaire plutôt qu'en mémoire (une connexion aiosqlite est liée à la
+boucle qui l'a ouverte) et la remise à zéro des verrous entre deux tests.
 """
 import asyncio
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from core.services import ttl_cache
-from modules.uc_arbitrage import narratif
+from db.database import Base
+from db.models import ArbitrageNarrationModel
+from modules.uc_arbitrage import narratif, narration_store
 
 
 @pytest.fixture(autouse=True)
-def cache_vide():
+def cache_vide(tmp_path):
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'narrations.db'}")
+
+    async def _creer():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(_creer())
+
+    fabrique_origine = narration_store.AsyncSessionLocal
+    narration_store.AsyncSessionLocal = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+    narration_store._LOCKS.clear()
     ttl_cache._STORE.clear()
     yield
+    narration_store._LOCKS.clear()
     ttl_cache._STORE.clear()
+    narration_store.AsyncSessionLocal = fabrique_origine
+    asyncio.run(engine.dispose())
+
+
+def _lignes_en_base() -> list[ArbitrageNarrationModel]:
+    from sqlalchemy import select
+
+    async def _lire():
+        async with narration_store.AsyncSessionLocal() as session:
+            return (await session.execute(select(ArbitrageNarrationModel))).scalars().all()
+
+    return asyncio.run(_lire())
 
 
 class LLMSimule:
@@ -175,13 +212,14 @@ def test_un_plan_qui_change_invalide_le_cache():
 
 def test_un_repli_n_est_jamais_mis_en_cache():
     """Modèle en panne : le repli déterministe est servi, mais l'appel suivant
-    réessaie — l'incident ne doit pas être figé pour toute la fenêtre TTL."""
+    réessaie — l'incident ne doit rien laisser en base."""
     casse = LLMSimule(casse=True)
     raisons, redaction = _narration(casse)
 
     assert casse.appels == 2
     assert raisons, "aucun repli servi"
     assert redaction["redige_par"] == "repli"
+    assert _lignes_en_base() == [], "le repli a été enregistré et fige la panne"
 
     _narration(casse)
     assert casse.appels == 4, "le repli a été mis en cache et fige la panne"
@@ -190,6 +228,38 @@ def test_un_repli_n_est_jamais_mis_en_cache():
     llm = LLMSimule()
     _, redaction = _narration(llm)
     assert redaction["redige_par"] == "ia"
+
+
+def test_la_redaction_est_persistee_et_survit_au_processus():
+    """Le cache mémoire ne passait ni le redéploiement ni le second worker
+    uvicorn. Une ligne en base, relisible sans le moindre état en mémoire."""
+    llm = LLMSimule()
+    raisons, redaction = _narration(llm)
+    assert llm.appels == 2
+
+    lignes = _lignes_en_base()
+    assert len(lignes) == 1
+    assert lignes[0].subject_ref == "BICICI"
+    assert lignes[0].payload["raisons"] == raisons
+    assert lignes[0].payload["redaction"]["argumentaire"] == redaction["argumentaire"]
+
+    # Simulation de l'autre worker uvicorn : aucun état mémoire, même base.
+    narration_store._LOCKS.clear()
+    raisons2, redaction2 = _narration(llm)
+    assert llm.appels == 2, "l'autre worker a repayé le modèle"
+    assert (raisons2, redaction2) == (raisons, redaction)
+
+
+def test_une_empreinte_perimee_laisse_une_ligne_a_purger():
+    """L'invalidation est portée par le contenu : l'ancienne ligne n'est pas
+    écrasée mais devient inatteignable — d'où la purge par ancienneté."""
+    llm = LLMSimule()
+    _narration(llm)
+    _narration(llm, dossier=_dossier(enjeu_xof=999_000_000))
+
+    assert len(_lignes_en_base()) == 2
+    assert asyncio.run(narration_store.purge_anciennes(retention_jours=0)) == 2
+    assert _lignes_en_base() == []
 
 
 def test_sans_llm_le_repli_deterministe_tient():
