@@ -464,7 +464,10 @@ table{border-spacing:0}
 .opt-h b{font-size:14px;font-weight:500}
 .opt-n{font-family:var(--mono);font-size:10.5px;color:var(--t3);font-weight:500}
 .opt.reco .opt-n{color:var(--accent)}
-.opt-d{font-size:12.5px;color:var(--t2);line-height:1.55;margin-bottom:11px}
+/* `display:block` : la description est un <span> quand la carte est un <label>
+   sélectionnable — un <label> ne peut pas contenir de <div> sans casser le
+   rattachement du contrôle sur certains navigateurs. */
+.opt-d{display:block;font-size:12.5px;color:var(--t2);line-height:1.55;margin-bottom:11px}
 /* conséquence d'une option, par profil : rôle abrégé, phrase, verdict */
 .cons{
   display:grid;grid-template-columns:minmax(64px,auto) 1fr auto;gap:10px;font-size:12px;padding:7px 0;
@@ -477,13 +480,277 @@ table{border-spacing:0}
    ne peut pas aligner 5 tuiles sur une ligne (5×3 = 15 > 12) */
 .kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;margin-bottom:16px}
 .kpi-row>.tile{grid-column:auto}
-
-/* bascule "Mes dossiers / Tous les dossiers" (file d'arbitrage) — les lignes
-   non pertinentes pour le profil courant sont déjà dans le DOM (accessibles
-   via "Tous"), seul l'affichage change */
-[data-scope="mine"] [data-relevant="false"]{display:none}
 @media (max-width:1180px){.kpi-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:820px){.kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---------- arbitrages · plan de travail (file à gauche, dossier à droite) ----------
+   La file était auparavant un tableau posé SOUS le dossier : on lisait la liste
+   sans pouvoir en ouvrir une ligne, et un seul dossier (le premier du périmètre)
+   était instruit. Maître-détail : la file reste visible pendant l'instruction,
+   et changer de dossier ne fait défiler personne. */
+.arb-work{display:grid;grid-template-columns:minmax(292px,352px) minmax(0,1fr);gap:16px;align-items:start}
+.arb-stage{min-width:0}
+.arb-stage>.dec{margin-bottom:0}
+
+.arb-queue{
+  position:sticky;top:78px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:16px 15px;box-shadow:var(--shadow-sm);max-height:calc(100vh - 98px);overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--line-2) transparent
+}
+.arb-queue::-webkit-scrollbar{width:5px}
+.arb-queue::-webkit-scrollbar-track{background:transparent}
+.arb-queue::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:999px}
+.arb-queue:hover::-webkit-scrollbar-thumb{background:var(--t3)}
+.arb-queue-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+.arb-queue-h h3{font-family:var(--disp);font-size:16px;font-weight:400;letter-spacing:-.01em;margin:0}
+.arb-queue-s{font-size:11.5px;color:var(--t3);line-height:1.5;margin:10px 0 12px}
+
+/* bascule de périmètre / de filtre — un vrai segmenté, pas deux boutons */
+.arb-seg{display:flex;gap:3px;padding:3px;background:var(--paper-2);border:1px solid var(--line);border-radius:999px}
+.arb-seg button{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:transparent;
+  border-radius:999px;padding:7px 10px;cursor:pointer;font-family:var(--sans);font-size:12.5px;color:var(--t2);
+  transition:background-color .16s ease,color .16s ease,box-shadow .16s ease
+}
+.arb-seg button i{font-family:var(--mono);font-style:normal;font-size:10px;color:var(--t3)}
+.arb-seg button:hover:not(:disabled){color:var(--ink)}
+.arb-seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-xs)}
+.arb-seg button[aria-pressed="true"] i{color:var(--accent)}
+.arb-seg button:disabled{opacity:.5;cursor:default}
+.arb-seg button:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
+/* hors de la colonne de file, le segmenté ne doit pas s'étirer sur toute la
+   largeur de la section : il redevient un contrôle, pas une barre */
+.arb-seg--c{display:inline-flex;margin-bottom:14px}
+.arb-seg--c button{flex:0 0 auto;padding:6px 16px;white-space:nowrap}
+
+.arb-tools{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
+.arb-search input{
+  width:100%;padding:8px 12px;border:1px solid var(--line-2);border-radius:999px;background:var(--paper-2);
+  font-family:var(--sans);font-size:12.5px;color:var(--t1);outline:0;
+  transition:border-color .16s ease,box-shadow .16s ease
+}
+.arb-search input::placeholder{color:var(--t3)}
+.arb-search input:focus{border-color:var(--accent-strong);box-shadow:var(--ring);background:var(--card)}
+.arb-tools .sel{width:100%}
+
+.arb-list{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.arb-row{position:relative}
+.arb-item{
+  position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:start;
+  padding:10px 32px 11px 10px;border:1px solid transparent;border-radius:var(--r-md);text-decoration:none;color:inherit;
+  transition:background-color .15s ease,border-color .15s ease
+}
+.arb-item:hover{background:var(--paper-2);border-color:var(--line)}
+.arb-item:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
+.arb-row.is-on .arb-item{background:var(--accent-soft);border-color:var(--accent-border)}
+.arb-item-r{font-family:var(--mono);font-size:9.5px;color:var(--t3);padding-top:3px}
+.arb-row.is-on .arb-item-r{color:var(--accent)}
+.arb-item-b{min-width:0;display:block}
+/* le nom du client se balaie seul ; la phrase de conflit vient dessous, tronquée
+   à deux lignes — la file sert à choisir, pas à lire le dossier */
+.arb-item-n{display:block;font-size:13px;font-weight:500;line-height:1.35;overflow-wrap:anywhere}
+.arb-item-c{
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  font-size:11.5px;color:var(--t2);line-height:1.45;margin-top:2px
+}
+.arb-item-t{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.arb-item-t .tag{font-size:9px;padding:3px 7px}
+.arb-item-m{display:block;font-family:var(--mono);font-size:10.5px;color:var(--t2);margin-top:7px}
+.arb-item-m i{font-style:normal;color:var(--t3);letter-spacing:.04em}
+.arb-item-m em{font-style:normal;color:var(--line-2);margin:0 5px}
+.arb-item-s{display:block;font-family:var(--mono);font-size:10px;color:var(--t3);margin-top:3px}
+/* pastille de chargement : le dossier attend deux appels au modèle, le clic doit
+   se voir tout de suite. Toujours dans le flux, opacité seule → aucun décalage. */
+.arb-load{
+  position:absolute;right:12px;bottom:12px;width:6px;height:6px;border-radius:50%;
+  background:var(--accent-strong);opacity:0
+}
+.arb-load.on{opacity:1}
+@media (prefers-reduced-motion:no-preference){.arb-load.on{animation:arb-pulse 1s ease-in-out infinite}}
+@keyframes arb-pulse{0%,100%{opacity:1}50%{opacity:.25}}
+/* le « i » ouvre les chiffres du dossier sans lancer son instruction : posé hors
+   du lien, un bouton ne pouvant pas être imbriqué dans une ancre */
+.arb-row-i{
+  position:absolute;top:9px;right:8px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line-2);
+  background:var(--card);color:var(--t3);font-family:var(--mono);font-size:10px;line-height:1;cursor:pointer;
+  opacity:0;transition:opacity .16s ease,border-color .16s ease,color .16s ease
+}
+.arb-row:hover .arb-row-i,.arb-row-i:focus-visible{opacity:1}
+.arb-row-i:hover{border-color:var(--accent-strong);color:var(--accent)}
+
+.arb-empty{
+  font-size:12.5px;line-height:1.6;color:var(--t2);background:var(--paper-2);border:1px dashed var(--line-2);
+  border-radius:var(--r-md);padding:14px 15px;margin:4px 0 0
+}
+.arb-empty--inline{margin:0 0 14px}
+
+/* ---------- en-tête du dossier instruit ---------- */
+.arb-hd{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.arb-hd-t{display:flex;gap:7px;flex-wrap:wrap}
+.arb-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;margin:14px 0 14px}
+.arb-fact{background:var(--card);padding:11px 13px;min-width:0}
+.arb-fact>span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--t3)}
+.arb-fact>b{
+  display:block;font-family:var(--disp);font-weight:300;font-size:23px;letter-spacing:-.025em;line-height:1.15;
+  margin:6px 0 4px;font-variant-numeric:tabular-nums lining-nums
+}
+.arb-fact>b.arb-fact-w{font-family:var(--sans);font-weight:500;font-size:14px;letter-spacing:0;line-height:1.35}
+.arb-fact>i{display:block;font-style:normal;font-family:var(--mono);font-size:10px;color:var(--t2);line-height:1.5}
+
+/* ---------- étapes d'instruction ---------- */
+.arb-step{
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:26px 0 12px;padding-top:14px;
+  border-top:1px solid var(--hair)
+}
+.dec-b>.arb-step:first-child{margin-top:0;padding-top:0;border-top:0}
+.arb-step>i{
+  font-family:var(--mono);font-style:normal;font-size:9.5px;color:var(--accent);background:var(--accent-soft);
+  border:1px solid var(--accent-border);border-radius:999px;padding:2px 7px;flex:0 0 auto
+}
+.arb-step>b{font-size:14px;font-weight:500}
+.arb-step>span{font-size:12px;color:var(--t3);line-height:1.5}
+.arb-mb{margin-bottom:18px}
+
+/* « ce qui manque pour trancher » — une question, son porteur, son délai.
+   Reprend la peinture de `.rows` (même filet, même rayon, pour que les deux
+   colonnes de `.split` restent une paire), mais empile au lieu de juxtaposer :
+   cf. `ManqueListe` pour pourquoi la grille à trois colonnes ne pouvait pas
+   tenir dans une demi-largeur. */
+.arb-gap{
+  display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-md);
+  overflow:hidden;box-shadow:var(--shadow-xs);list-style:none;margin:0;padding:0
+}
+.arb-gap-i{background:var(--card);padding:12px 14px;transition:background-color .15s ease}
+.arb-gap-i:hover{background:var(--paper-2)}
+.arb-gap-t{margin:0;font-size:12.5px;line-height:1.55;color:var(--t2)}
+.arb-gap-m{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px}
+.arb-gap-o{font-family:var(--mono);font-size:10.5px;color:var(--t2);min-width:0}
+.arb-gap-o i{font-style:normal;color:var(--t3)}
+.arb-hint{font-size:11.5px;color:var(--t3);font-style:italic;line-height:1.55;margin:0 0 10px}
+.arb-hint--tight{margin:8px 0 0}
+.pay-tags{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+/* .clk:hover décolorerait le bandeau de paiement, qui porte un dégradé */
+.pay.clk:hover{background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.arb-prior{margin-bottom:6px}
+
+/* ---------- options sélectionnables ---------- */
+/* La carte EST le contrôle de sélection : lire les options en haut puis
+   rechoisir la même dans une liste déroulante en bas de page était un doublon
+   que rien ne reliait visuellement. */
+.arb-fs{border:0;padding:0;margin:0 0 20px;min-width:0}
+.arb-fs>legend{padding:0;display:block}
+.arb-fs>legend>span{
+  display:block;font-family:var(--sans);font-size:12px;letter-spacing:0;text-transform:none;color:var(--t3);
+  margin-top:4px;line-height:1.5
+}
+.opts[data-muted="true"]{opacity:.5}
+.opt-pick{display:block;cursor:pointer}
+.opts[data-muted="true"] .opt-pick{cursor:default}
+.opt-t{display:block;font-size:14px;font-weight:500;margin-bottom:7px;line-height:1.35}
+.opt-a{display:block;font-size:12.5px;font-style:italic;color:var(--t3);line-height:1.55;margin:0 0 10px}
+/* conséquence d'une option, par profil.
+   `.cons` (grille `auto 1fr auto`) convient à « Positions en présence », qui
+   dispose de la largeur entière du panneau. Dans une carte d'option, le nom du
+   rôle en `max-content` et la puce de verdict réservaient les deux tiers de la
+   ligne : la phrase héritait de 130 px et tombait sur cinq lignes. Ici le rôle
+   et le verdict tiennent leur propre ligne, la conséquence prend toute la
+   largeur, et un filet coloré reprend la teinte du verdict — on voit d'un coup
+   d'œil combien de profils une option arrange et combien elle dessert. */
+.ocons{display:block;padding:9px 0 10px 11px;border-top:1px solid rgba(16,14,10,.07);border-left:2px solid transparent}
+.ocons--s{border-left-color:var(--signal)}
+.ocons--r{border-left-color:var(--alert)}
+.ocons--w{border-left-color:var(--watch)}
+.ocons--n{border-left-color:var(--line-2)}
+.ocons-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.ocons-h i{font-family:var(--mono);font-style:normal;font-size:9.5px;color:var(--t3);letter-spacing:.02em}
+.ocons-h .tag{font-size:9px;padding:3px 7px}
+.ocons-t{display:block;font-size:12.5px;color:var(--t2);line-height:1.55}
+.opt-check{
+  margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);
+  border:1px solid var(--line-2);border-radius:999px;padding:3px 8px;background:var(--card);white-space:nowrap
+}
+.opt.is-sel{border-color:var(--accent-strong);box-shadow:var(--ring)}
+.opt.is-sel .opt-check{border-color:var(--accent-strong);color:var(--accent);background:var(--accent-soft)}
+.opt:has(input:focus-visible){outline:2px solid var(--accent-strong);outline-offset:2px}
+.opt-foot{margin-top:10px;padding-top:9px;border-top:1px solid rgba(16,14,10,.07)}
+.arb-ecart{
+  font-size:12px;line-height:1.6;color:var(--t2);background:var(--watch-soft);border:1px solid var(--watch-border);
+  border-radius:var(--r-md);padding:10px 13px;margin:12px 0 0
+}
+
+/* ---------- issue du comité, verdict de revue ---------- */
+.arb-choice{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}
+.arb-ch{
+  display:block;cursor:pointer;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:11px 13px;transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease
+}
+.arb-ch:hover{border-color:var(--line-2)}
+.arb-ch b{display:block;font-size:13.5px;font-weight:500;margin-bottom:2px}
+.arb-ch span{display:block;font-size:11.5px;color:var(--t2);line-height:1.5}
+.arb-ch.is-sel,.arb-ch:has(input:checked){background:var(--card);border-color:var(--accent-strong);box-shadow:var(--ring)}
+.arb-ch:has(input:focus-visible){outline:2px solid var(--accent-strong);outline-offset:2px}
+.arb-req{font-style:normal;color:var(--alert)}
+.arb-cockpit .txa{margin-top:2px}
+
+/* ---------- retour d'action ---------- */
+.arb-msg{
+  font-size:12.5px;line-height:1.6;border-radius:var(--r-md);padding:11px 14px;margin:14px 0 0;
+  border:1px solid var(--line);background:var(--paper-2);color:var(--t2)
+}
+/* la région `aria-live` reste dans le DOM pour que le lecteur d'écran annonce le
+   premier message ; tant qu'elle est vide, elle ne doit rien peindre */
+.arb-msg:empty{display:none}
+.arb-msg--ok{background:var(--signal-soft);border-color:var(--signal-border);color:var(--signal)}
+.arb-msg--err{background:var(--alert-soft);border-color:var(--alert-border);color:var(--alert)}
+
+/* ---------- registre et fiabilité ---------- */
+/* trois colonnes fixes, pas `auto-fit` : la note qui suit s'étend sur toute la
+   grille (`1/-1`), ce qui force l'existence des pistes qu'`auto-fit` aurait dû
+   réduire à zéro — on obtenait trois cellules serrées à gauche et une large
+   bande vide à droite */
+.arb-rel{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;margin-bottom:16px
+}
+@media (max-width:900px){.arb-rel{grid-template-columns:minmax(0,1fr)}}
+.arb-rel-c{background:var(--card);padding:13px 15px;min-width:0}
+.arb-rel-c>span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--t3)}
+.arb-rel-c>b{
+  display:block;font-family:var(--disp);font-weight:300;font-size:26px;letter-spacing:-.03em;line-height:1.1;
+  margin:7px 0 5px;font-variant-numeric:tabular-nums lining-nums
+}
+.arb-rel-c>i{display:block;font-style:normal;font-family:var(--mono);font-size:10px;color:var(--t2);line-height:1.55}
+.arb-rel-n{
+  grid-column:1/-1;background:var(--paper-2);margin:0;padding:11px 15px;font-family:var(--mono);font-size:10.5px;
+  line-height:1.65;color:var(--t3)
+}
+.arb-late td{background:var(--alert-soft)}
+.arb-btn-s{padding:5px 12px;font-size:11.5px}
+.arb-cellbtn{font-size:13px;font-weight:500;text-align:left}
+.arb-revcell{background:var(--paper-2)}
+.arb-rev{display:grid;gap:12px;padding:6px 0 10px;max-width:900px}
+.arb-rev .acts{margin-top:0}
+
+/* bouton en forme de lien — ouvre le tiroir de détail depuis un contexte déjà
+   interactif (carte d'option, cellule de tableau) */
+.linkish{
+  border:0;background:none;padding:0;cursor:pointer;font-family:var(--sans);font-size:12px;color:var(--accent);
+  text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--accent-border)
+}
+.linkish:hover{text-decoration-color:var(--accent-strong)}
+.linkish:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:4px}
+
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);
+  white-space:nowrap;border:0
+}
+
+@media (max-width:1180px){
+  .arb-work{grid-template-columns:minmax(0,1fr)}
+  .arb-queue{position:static;max-height:none}
+  .arb-list{max-height:340px;overflow-y:auto}
+}
 
 /* ---------- parametres ---------- */
 .pblk{
@@ -526,23 +793,45 @@ table{border-spacing:0}
    quel sens ça évolue. Traité comme un bandeau et non comme une ligne de
    tableau parce qu'il se lit avant les montants, pas après. */
 .pay{
-  display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start;
-  padding:15px 17px;border:1px solid var(--line);border-radius:var(--r-md);
+  display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:24px;align-items:start;
+  padding:16px 18px;border:1px solid var(--line);border-radius:var(--r-md);
   background:linear-gradient(180deg,#FFFEFB,var(--paper-2));margin-bottom:18px
 }
 .pay--r{border-left:3px solid var(--alert)}
 .pay--w{border-left:3px solid var(--watch)}
 .pay--s{border-left:3px solid var(--signal)}
 .pay--n{border-left:3px solid var(--line-2)}
-/* la trajectoire chiffrée : 14 j → 36 j, en mono pour qu'on la lise comme une mesure */
+/* colonne de mesure : ce qu'on mesure, le chiffre, puis le fait secondaire.
+   Le label vient AVANT le chiffre — « 781 j » sans énoncé n'est qu'un nombre. */
+.pay-m{min-width:0;display:block}
+.pay-l{
+  display:block;font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--t3);margin-bottom:6px
+}
+/* la trajectoire chiffrée : 14 j → 36 j, en mono pour qu'on la lise comme une
+   mesure. La flèche n'apparaît qu'en mode `tendance` (cf. payeurTrajectoire) :
+   elle compare une même grandeur à deux moments et n'a de sens que là. */
 .pay-t{display:flex;align-items:baseline;gap:9px;font-family:var(--mono);white-space:nowrap}
-.pay-t b{font-size:21px;font-weight:400;letter-spacing:-.02em}
+.pay-t b{font-size:24px;font-weight:400;letter-spacing:-.02em}
 .pay-t s{font-size:14px;color:var(--t3);text-decoration:none}
 .pay-t i{font-style:normal;color:var(--t3);font-size:15px}
-.pay-l{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-top:5px}
+.pay-r{display:block;font-size:11.5px;color:var(--t3);line-height:1.5;margin-top:7px;max-width:26ch}
+.pay-c{min-width:0}
+/* la conduite à tenir : la conclusion du bandeau, donc son deuxième plan de
+   lecture après le chiffre — pas une note de bas de bloc en mono grise */
+.pay-do{
+  display:flex;gap:8px;font-size:13px;font-weight:500;color:var(--t1);line-height:1.5;margin:9px 0 7px
+}
+.pay-do::before{content:"→";color:var(--accent);flex:0 0 auto}
 .pay-b{font-size:12.5px;color:var(--t2);line-height:1.6;margin:0}
 .pay-b b{color:var(--t1);font-weight:500}
-@media (max-width:720px){.pay{grid-template-columns:1fr}}
+.pay-more{
+  font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3);
+  margin:10px 0 0
+}
+.pay-more::after{content:" \203A"}
+.pay.clk:hover .pay-more{color:var(--accent)}
+@media (max-width:720px){.pay{grid-template-columns:1fr}.pay-r{max-width:none}}
 
 /* formulaire de décision — l'option retenue et l'issue sont deux choix
    distincts : on peut reporter sans retenir d'option. */
@@ -603,6 +892,10 @@ h1.vt{
 .sec:first-of-type{margin-top:0}
 .sec-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding-top:22px;border-top:1px solid var(--line)}
 .sec:first-of-type .sec-h{padding-top:0;border-top:0}
+/* une section qui suit un bandeau d'indicateurs n'est pas un début de page :
+   elle garde son filet de séparation (cf. écran Arbitrages) */
+.kpi-row+.sec{margin-top:34px}
+.kpi-row+.sec>.sec-h{padding-top:22px;border-top:1px solid var(--line)}
 .sec-h b{
   display:flex;align-items:baseline;gap:10px;font-family:var(--disp);font-weight:400;font-size:20px;
   letter-spacing:-.015em;color:var(--ink)

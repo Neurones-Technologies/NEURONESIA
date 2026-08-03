@@ -92,6 +92,30 @@ function useDetail() {
   return useContext(Ctx);
 }
 
+/** Ouvre le tiroir depuis un composant client déjà interactif, là où `Clickable`
+ * ne convient pas : un `<div role="button">` ne peut pas contenir un champ de
+ * formulaire ni un autre bouton sans casser la navigation au clavier. C'est le
+ * cas des cartes d'option du dossier d'arbitrage, qui portent un bouton radio.
+ * Le tiroir reste accessible, mais par un vrai `<button>` distinct. */
+export function DetailButton({
+  detail,
+  children,
+  className = "linkish",
+  title,
+}: {
+  detail: DetailCard;
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  const ctx = useDetail();
+  return (
+    <button type="button" className={className} title={title} onClick={() => ctx?.open(detail)}>
+      {children}
+    </button>
+  );
+}
+
 /** Rend ses enfants dans un élément cliquable qui ouvre le tiroir de détail.
  * Utilisable depuis un Server Component : `detail` doit rester sérialisable. */
 export function Clickable({

@@ -32,7 +32,7 @@ DEMO_USERS = [
     {"role": "admin", "email": "oboyer@neuronestech.com", "full_name": "Boyer Othniel Nehemie"},
     {"role": "dg", "email": "jmkouadio@neuronestech.com", "full_name": "Direction Generale"},
     {"role": "dir_commercial", "email": "pbourron@neuronestech.com", "full_name": "Direction Commerciale"},
-    {"role": "dir_operations", "email": "psoro@neuronestech.com", "full_name": "Direction des Operations"},
+    {"role": "dir_operations", "email": "pyoro@neuronestech.com", "full_name": "Direction des Operations"},
     {"role": "presale", "email": "presales@neuronestech.com", "full_name": "Equipe Avant-Vente"},
     {"role": "dir_financier", "email": "cdjereke@neuronestech.com", "full_name": "Direction Financiere"},
     {"role": "commercial", "email": "sales@neuronestech.com", "full_name": "Commercial"},
@@ -42,7 +42,7 @@ DEMO_USERS = [
 LEGACY_EMAILS = {
     "dg@neurones-tech.com": "jmkouadio@neuronestech.com",
     "dir.commercial@neurones-tech.com": "pbourron@neuronestech.com",
-    "dir.operations@neurones-tech.com": "psoro@neuronestech.com",
+    "dir.operations@neurones-tech.com": "pyoro@neuronestech.com",
     "presale@neurones-tech.com": "presales@neuronestech.com",
     "dir.financier@neurones-tech.com": "cdjereke@neuronestech.com",
     "commercial@neurones-tech.com": "sales@neuronestech.com",
