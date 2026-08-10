@@ -97,13 +97,18 @@ table{border-spacing:0}
    toute sa hauteur : le soulignement de l'onglet actif tombe alors exactement
    sur la bordure basse de l'en-tête. */
 .hdr-nav{display:flex;gap:2px;min-width:0;overflow-x:auto;align-self:stretch;align-items:stretch;margin:-13px 0}
+/* Rendu en <button> (mode scroll-spy) ou en <a> via next/link (mode route) —
+   d'où le `text-decoration:none` et le double sélecteur d'état actif : un
+   <Link> porte aria-current="page", le bouton du scroll-spy "true". */
 .hdr-nav-btn{
   background:none;border:0;border-bottom:2px solid transparent;color:var(--t2);
   font-family:var(--sans);font-size:14px;padding:0 14px;cursor:pointer;white-space:nowrap;
-  display:flex;align-items:center;transition:color .16s ease,border-color .16s ease
+  display:flex;align-items:center;transition:color .16s ease,border-color .16s ease;
+  text-decoration:none
 }
 .hdr-nav-btn:hover{color:var(--ink)}
-.hdr-nav-btn[aria-current="true"]{color:var(--ink);border-bottom-color:var(--accent-strong);font-weight:500}
+.hdr-nav-btn[aria-current="true"],
+.hdr-nav-btn[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent-strong);font-weight:500}
 .hdr-nav-btn:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-3px}
 .hdr-t b{display:block;font-family:var(--disp);font-weight:400;font-size:17px;letter-spacing:-.015em;line-height:1.2}
 .hdr-t span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-top:3px}
@@ -476,12 +481,16 @@ table{border-spacing:0}
 .cons i{font-family:var(--mono);font-style:normal;font-size:9.5px;color:var(--t3);letter-spacing:.02em}
 .cons span{color:var(--t2)}
 
-/* rangée de KPI à 5 tuiles égales — le bento (12 colonnes, span minimum 3)
-   ne peut pas aligner 5 tuiles sur une ligne (5×3 = 15 > 12) */
-.kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;margin-bottom:16px}
+/* rangée de KPI en tuiles égales — le bento (12 colonnes, span minimum 3) ne
+   peut pas aligner 5 tuiles sur une ligne (5×3 = 15 > 12).
+   `auto-fit` plutôt qu'un nombre fixe de colonnes : la rangée occupe toute la
+   largeur quel que soit le nombre de tuiles (5 sur Arbitrages, 3 sur le cockpit
+   DC). Avec `repeat(5,…)` les tuiles manquantes laissaient un vide à droite. */
+.kpi-row{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));
+  gap:16px;margin-bottom:16px
+}
 .kpi-row>.tile{grid-column:auto}
-@media (max-width:1180px){.kpi-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:820px){.kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* ---------- arbitrages · plan de travail (file à gauche, dossier à droite) ----------
    La file était auparavant un tableau posé SOUS le dossier : on lisait la liste
@@ -1180,6 +1189,7 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .lst-i.clk{border-radius:10px;padding-left:8px;padding-right:8px;margin-left:-8px;margin-right:-8px}
 .bar-r.clk{border-radius:10px;padding:7px 8px;margin:-7px -8px}
 .bar-r.clk:hover .bar-t i{filter:saturate(1.25)}
+.stat-block{border-radius:10px;padding:7px 8px 18px;margin:-7px -8px 4px}
 .clk:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:10px}
 table.tb tr.clk td:last-child::after{content:"\203A";font-family:var(--mono);color:var(--t3);margin-left:9px}
 table.tb tr.clk{cursor:pointer}

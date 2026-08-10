@@ -99,6 +99,19 @@ export function PageSkeleton() {
   );
 }
 
+/** Squelette d'un onglet de section (profils en mode "route") : pas de brief,
+ * seulement la grille — le brief n'appartient qu'au premier onglet, l'afficher
+ * partout ferait clignoter un bandeau qui ne viendra jamais. */
+export function SectionSkeleton() {
+  return (
+    <div className="bento">
+      <SkeletonTile span={7} lines={5} />
+      <SkeletonTile span={5} lines={5} />
+      <SkeletonTile span={12} lines={4} />
+    </div>
+  );
+}
+
 /** Squelette de toute la coque (rail + en-tête + contenu) — utilisé au tout
  * premier chargement, le temps que `[profile]/layout.tsx` résolve la session. */
 export function ShellSkeleton() {

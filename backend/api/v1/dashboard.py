@@ -18,6 +18,8 @@ from modules.uc_crosssell.signals import get_signals as crosssell_signals
 from modules.uc_daily_analysis import computations as daily_comp
 from modules.uc_daily_analysis.store import daily_cached
 from modules.uc_forecast.aggregation import build_pipeline_forecast, month_labels
+from modules.uc_dormance.aggregation import build_suivi_dormance
+from modules.uc_offermix.aggregation import build_offer_mix
 from modules.uc_forecast.decision_client import build_client_decision
 from modules.uc_tresorerie.decision_recouvrement import build_recouvrement_decision
 
@@ -198,6 +200,45 @@ async def forecast_analysis(request: Request):
         "",
         lambda: daily_comp.forecast_analysis(_crm(request), _llm_sonnet(request)),
     )
+
+
+# ---------- Mix d'offre (profil DC) ----------
+
+@router.get("/offer-mix", dependencies=[Depends(require_views("forecast"))])
+async def offer_mix(request: Request):
+    """Répartition du pipeline par famille d'offre (logiciel / réseau /
+    équipement / services) et mix d'atterrissage par trimestre d'échéance.
+
+    Lit TOUT le pipe (`list_all_opportunities`, sans limite) et non le top 500
+    pondéré : un plafond tronquerait le mix à 7 % des opportunités en base et
+    rendrait faux le taux de couverture servi dans `coverage`.
+
+    La famille est DÉDUITE du libellé faute de champ catégorie côté Odoo — d'où
+    `coverage`, que le front doit afficher : les parts portent sur ~81 % du
+    montant, pas sur 100 %.
+    """
+    opportunities = await _crm(request).list_all_opportunities()
+    return build_offer_mix(opportunities)
+
+
+# ---------- Comptes dormants / actifs (profil DC) ----------
+
+@router.get("/account-activity", dependencies=[Depends(require_views("clients"))])
+async def account_activity(request: Request):
+    """Segmentation du portefeuille par ancienneté de dernière commande signée :
+    Actif / Ralentit / Dormant / Perdu / Prospect, seuils validés par la Direction
+    Commerciale (6 / 12 / 24 mois).
+
+    Gated par « clients » et non « tresorerie » : le profil DC n'a pas accès aux
+    données de trésorerie (cf. config/permissions.py). L'impayé est donc servi en
+    DRAPEAU et MONTANT AGRÉGÉ par compte, jamais en détail de factures — même
+    arbitrage que la vue AM.
+
+    La segmentation dépend de la date d'observation (~10 comptes changent de segment
+    par mois) : `as_of` est dans la réponse et doit être affiché.
+    """
+    comptes = await _crm(request).get_account_activity()
+    return build_suivi_dormance(comptes)
 
 
 class ClientDecisionRequest(BaseModel):

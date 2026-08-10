@@ -1830,6 +1830,142 @@ class LocalCRMAdapter(CRMRepository):
             for r in rows
         ]
 
+    async def get_account_activity(self, as_of: date | None = None) -> list[dict]:
+        """Rythme de commande de CHAQUE compte, pour la segmentation dormant/actif.
+
+        Source de la dormance : `sale_orders.date_order` — la commande SIGNÉE,
+        décision du Directeur Commercial. À ne pas confondre avec la
+        `derniere_commande` de `get_client_portfolio()`, calculée elle sur
+        `dossiers.date_creation` : les deux divergent sur 14 comptes (sur 533
+        communs) au point d'en changer le segment. `sale_orders` couvre plus de
+        comptes (632 vs 541) et remonte plus loin (2019 vs 2020).
+
+        À ne pas confondre non plus avec `get_account_rhythm_breaks()`, qui mesure
+        une rupture de rythme RELATIVE (silence > 2,5 × l'intervalle médian du
+        compte, sur les comptes ≥ 3 commandes et ≥ 100 M de CA annuel) et alimente
+        le briefing DG. Ici la segmentation est ABSOLUE et couvre tout le
+        portefeuille, prospects inclus. Les deux emploient le mot « dormant » avec
+        deux sens : ils ne doivent pas être comparés.
+
+        `as_of` (défaut : aujourd'hui) borne les commandes prises en compte, ce qui
+        rend la lecture rejouable à une date passée.
+
+        Trois particularités du miroir traitées ici :
+        - 101 `client_id` de `sale_orders` sont ABSENTS de `clients`, et ils portent
+          7 961 M FCFA — dont ORANGE BURKINA FASO (2 839 M, compte actif). L'agrégat
+          part donc de `sale_orders` avec un LEFT JOIN (jamais INNER) sur `clients`,
+          qui ne sert qu'à récupérer un nom canonique. Le drapeau
+          `hors_referentiel` remonte l'anomalie au lieu de la taire.
+        - Le groupement se fait par `client_id`, JAMAIS par nom : 641 identifiants
+          pour 632 noms distincts (UEMOA porte 3 `client_id`, AIR CÔTE D'IVOIRE 2).
+          Grouper par nom fusionnerait des comptes distincts.
+        - Les comptes de `clients` sans aucune commande sont ajoutés en UNION avec
+          `derniere_commande = None` : ce sont des prospects (jamais COMMANDÉ, ce
+          qui n'est pas « jamais facturé » — 180 comptes ayant commandé n'ont
+          aucune facture).
+
+        Les impayés échus et les opportunités ouvertes sont joints ici car ils
+        qualifient le silence : un compte muet avec du pipe, ou muet ET en défaut
+        de paiement, ne se traitent pas de la même façon.
+        """
+        from sqlalchemy import text
+        jour = (as_of or date.today()).isoformat()
+        sql = """
+            WITH cmd AS (
+                SELECT client_id,
+                       MAX(date_order) AS last_order,
+                       MIN(date_order) AS first_order,
+                       COUNT(*) AS nb_cmd,
+                       SUM(amount) AS ca
+                FROM sale_orders
+                WHERE client_id IS NOT NULL AND client_id != ''
+                  AND state IN ('sale', 'done')
+                  AND date(date_order) <= date(:jour)
+                GROUP BY client_id
+            ),
+            nom AS (
+                SELECT client_id, client_name FROM (
+                    SELECT client_id, client_name,
+                           ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_order DESC) rg
+                    FROM sale_orders
+                    WHERE client_name IS NOT NULL AND client_name != ''
+                ) WHERE rg = 1
+            ),
+            comm AS (
+                SELECT client_id, salesperson_name FROM (
+                    SELECT client_id, salesperson_name,
+                           ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_order DESC) rg
+                    FROM sale_orders
+                    WHERE salesperson_name IS NOT NULL AND salesperson_name != ''
+                ) WHERE rg = 1
+            ),
+            impayes AS (
+                SELECT client_id, COUNT(*) AS nb, SUM(amount_residual) AS mnt,
+                       MAX(CAST(julianday(date(:jour)) - julianday(date(due_date)) AS INTEGER)) AS retard
+                FROM invoices
+                WHERE amount_residual > 0
+                  AND due_date IS NOT NULL AND date(due_date) < date(:jour)
+                GROUP BY client_id
+            ),
+            -- Opportunités OUVERTES. Le référentiel Odoo porte 16 libellés d'étape
+            -- pour ~9 étapes réelles (« 6-Gagné » et « Won » coexistent, tout comme
+            -- « 8-Suspendu » et « 8- Suspendu ») : on écarte donc les closes par
+            -- MOTIF, jamais par égalité, sous peine de perdre 681 affaires gagnées.
+            opp_par_compte AS (
+                SELECT client_id, COUNT(*) AS nb, SUM(expected_revenue) AS mnt
+                FROM opportunities
+                WHERE client_id IS NOT NULL AND client_id != ''
+                  AND lower(COALESCE(stage, '')) NOT LIKE '%gagn%'
+                  AND lower(COALESCE(stage, '')) NOT LIKE '%won%'
+                  AND lower(COALESCE(stage, '')) NOT LIKE '%perdu%'
+                  AND lower(COALESCE(stage, '')) NOT LIKE '%lost%'
+                  AND lower(COALESCE(stage, '')) NOT LIKE '%annul%'
+                  AND lower(COALESCE(stage, '')) NOT LIKE '%cancel%'
+                GROUP BY client_id
+            )
+            SELECT COALESCE(NULLIF(TRIM(cl.name), ''), n.client_name, '(compte sans nom)') AS compte,
+                   c.client_id, c.last_order, c.first_order, c.nb_cmd, c.ca,
+                   cm.salesperson_name,
+                   COALESCE(i.nb, 0), COALESCE(i.mnt, 0), COALESCE(i.retard, 0),
+                   COALESCE(op.nb, 0), COALESCE(op.mnt, 0),
+                   CASE WHEN cl.client_id IS NULL THEN 1 ELSE 0 END AS hors_referentiel
+            FROM cmd c
+            LEFT JOIN nom n ON n.client_id = c.client_id
+            LEFT JOIN clients cl ON cl.client_id = c.client_id
+            LEFT JOIN comm cm ON cm.client_id = c.client_id
+            LEFT JOIN impayes i ON i.client_id = c.client_id
+            LEFT JOIN opp_par_compte op ON op.client_id = c.client_id
+            UNION ALL
+            SELECT COALESCE(NULLIF(TRIM(cl.name), ''), '(compte sans nom)'),
+                   cl.client_id, NULL, NULL, 0, 0, NULL,
+                   COALESCE(i.nb, 0), COALESCE(i.mnt, 0), COALESCE(i.retard, 0),
+                   COALESCE(op.nb, 0), COALESCE(op.mnt, 0), 0
+            FROM clients cl
+            LEFT JOIN impayes i ON i.client_id = cl.client_id
+            LEFT JOIN opp_par_compte op ON op.client_id = cl.client_id
+            WHERE NOT EXISTS (SELECT 1 FROM cmd c2 WHERE c2.client_id = cl.client_id)
+        """
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(text(sql), {"jour": jour})).fetchall()
+        return [
+            {
+                "compte": r[0] or "(compte sans nom)",
+                "client_id": r[1],
+                "derniere_commande": str(r[2])[:10] if r[2] else None,
+                "premiere_commande": str(r[3])[:10] if r[3] else None,
+                "nb_commandes": int(r[4] or 0),
+                "ca_total_xof": round(r[5] or 0),
+                "commercial": r[6] or "",
+                "nb_impayes": int(r[7] or 0),
+                "impaye_xof": round(r[8] or 0),
+                "retard_max_jours": int(r[9] or 0),
+                "nb_opp_ouvertes": int(r[10] or 0),
+                "opp_ouvertes_xof": round(r[11] or 0),
+                "hors_referentiel": bool(r[12]),
+            }
+            for r in rows
+        ]
+
     async def get_clients_by_country(self) -> list[dict]:
         """Répartition des clients par pays (le cockpit affiche le nb de clients)."""
         from sqlalchemy import text
@@ -1913,6 +2049,41 @@ class LocalCRMAdapter(CRMRepository):
                 "commercial": r[5] or "",
                 "deadline": str(r[6]) if r[6] else None,
                 "creee_le": str(r[7])[:10] if r[7] else None,
+            }
+            for r in rows
+        ]
+
+    async def list_all_opportunities(self) -> list[dict]:
+        """TOUTES les opportunités du miroir, avec leur famille d'offre persistée.
+
+        Distincte de `list_opportunities()` sur deux points volontaires :
+        - aucune limite : cette dernière plafonne à 500 lignes triées par valeur
+          pondérée, ce qui suffit à un top-N mais tronquerait le mix d'offre à
+          7 % du pipe (6 675 opportunités en base) et rendrait le taux de
+          couverture affiché faux ;
+        - le `stage` est remonté tel quel, l'agrégation ayant besoin de
+          distinguer ouvert / gagné / perdu / annulé elle-même (le référentiel
+          Odoo porte 16 libellés d'étape pour ~9 étapes réelles).
+        """
+        from sqlalchemy import text
+        sql = """
+            SELECT name, client_name, stage, expected_revenue, probability,
+                   salesperson_name, deadline, created_at, offer_family
+            FROM opportunities
+        """
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(text(sql))).fetchall()
+        return [
+            {
+                "opportunite": r[0],
+                "client": r[1],
+                "stade": r[2],
+                "revenu_attendu_xof": round(r[3] or 0),
+                "probabilite_pct": round(r[4] or 0),
+                "commercial": r[5] or "",
+                "deadline": str(r[6])[:10] if r[6] else None,
+                "creee_le": str(r[7])[:10] if r[7] else None,
+                "famille": r[8],
             }
             for r in rows
         ]

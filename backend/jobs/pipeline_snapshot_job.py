@@ -38,6 +38,7 @@ async def run_pipeline_snapshot() -> None:
                 salesperson_name=opp.salesperson_name,
                 deadline=opp.deadline,
                 created_at=opp.created_at,
+                offer_family=opp.offer_family,
             ))
 
         dossiers = (await session.execute(select(DossierModel))).scalars().all()

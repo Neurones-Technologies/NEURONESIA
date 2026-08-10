@@ -307,6 +307,13 @@ class OpportunityModel(Base):
     deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     order_ids: Mapped[list] = mapped_column(JSON, default=list)  # IDs Odoo des sale.order générés par cette opportunité
+    # Famille d'offre DÉDUITE du libellé (modules.uc_offermix.taxonomy) : logiciel /
+    # reseau / equipement / services, NULL si le libellé ne permet pas de trancher.
+    # Champ dérivé et recalculable — stocké pour la performance et pour que les
+    # snapshots quotidiens rendent l'historique ventilable. Odoo ne porte aucune
+    # catégorie sur crm.lead, et la voie « lignes de commande » est inexploitable
+    # (40 opportunités sur 6 675 ont un order_ids non vide).
+    offer_family: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -658,6 +665,11 @@ class PipelineSnapshotModel(Base):
     salesperson_name: Mapped[str] = mapped_column(String(255), default="")
     deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Recopiée depuis OpportunityModel : sans elle, l'historique accumulé ne serait
+    # pas ventilable par famille rétroactivement (le libellé seul suffirait à
+    # reclasser, mais la taxonomie évolue — figer la famille du jour préserve la
+    # comparabilité dans le temps).
+    offer_family: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True)
 
 
 class BacklogSnapshotModel(Base):

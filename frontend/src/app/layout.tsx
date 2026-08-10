@@ -31,12 +31,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${disp.variable} ${sans.variable} ${mono.variable}`}>
-      {/* suppressHydrationWarning : certaines extensions de navigateur
-          (ColorZilla, gestionnaires de mots de passe…) ajoutent des attributs
-          sur <body> avant l'hydratation — ex. `cz-shortcut-listen`. React
-          signalait alors une divergence serveur/client qui ne vient pas du
-          code. La suppression ne porte que sur les attributs de cet élément. */}
+    <html
+      lang="fr"
+      className={`${disp.variable} ${sans.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
+      {/* suppressHydrationWarning (html + body) : certaines extensions de
+          navigateur (ColorZilla, gestionnaires de mots de passe, LanguageTool…)
+          ajoutent des attributs sur <html> ou <body> avant l'hydratation — ex.
+          `cz-shortcut-listen`, `data-lt-installed`. React signalait alors une
+          divergence serveur/client qui ne vient pas du code. La suppression ne
+          porte que sur les attributs de ces éléments. */}
       <body suppressHydrationWarning>{children}</body>
     </html>
   );
