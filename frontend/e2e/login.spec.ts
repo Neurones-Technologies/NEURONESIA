@@ -21,4 +21,19 @@ test.describe("Page de connexion", () => {
 
     await expect(page).toHaveURL(/\/login$/);
   });
+
+  // Le proxy ajoute `?next=` sur toute page protégée demandée sans session ; le
+  // formulaire doit survivre au paramètre, y compris quand il est hostile.
+  test("se rend avec un paramètre next", async ({ page }) => {
+    await page.goto("/login?next=%2Fdc%2Farbitrage");
+
+    await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Se connecter" })).toBeVisible();
+  });
+
+  test("se rend avec un next hors domaine", async ({ page }) => {
+    await page.goto("/login?next=https%3A%2F%2Fevil.tld");
+
+    await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+  });
 });

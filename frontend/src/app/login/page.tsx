@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ProfileKey } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/auth/roles";
+import { defaultTarget, safeNextPath } from "@/lib/auth/redirect";
 
 // Mot de passe des comptes démo — doit rester aligné sur DEMO_USERS_PASSWORD
 // dans backend/scripts/seed_demo_users.py (défaut "neurones2026" si non surchargé).
@@ -61,8 +62,9 @@ const PROFILES: DemoProfile[] = [
   },
 ];
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [profileKey, setProfileKey] = useState<ProfileKey>("dg");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -93,7 +95,12 @@ export default function LoginPage() {
         setError(data.detail || "Échec de connexion");
         return;
       }
-      router.push(`/${profileKey}/vision`);
+      // `?next=` est posé par le proxy quand une page protégée a été demandée
+      // sans session (cf. src/proxy.ts) : on y retourne, sinon cockpit du profil.
+      // Un `next` hors domaine ou pointant sur /login est écarté par
+      // safeNextPath. Si la cible appartient à un autre profil, le layout
+      // [profile] ramène de lui-même l'utilisateur sur le sien.
+      router.push(safeNextPath(searchParams.get("next")) ?? defaultTarget(profileKey));
     } finally {
       setLoading(false);
     }
@@ -212,5 +219,15 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() suspend au pré-rendu : sans cette frontière, `next build`
+// échoue sur /login (missing-suspense-with-csr-bailout).
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
