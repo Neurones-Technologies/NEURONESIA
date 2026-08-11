@@ -20,7 +20,7 @@ import json
 import logging
 import re
 
-from core.services.ttl_cache import cached
+from modules.uc_arbitrage import narration_store
 
 logger = logging.getLogger(__name__)
 
@@ -240,12 +240,6 @@ async def write_echeancier(llm, dossier: dict, plan: dict) -> dict:
         return fallback
 
 
-# Rédactions d'un dossier déjà ouvert. Même fenêtre que les autres analyses LLM du
-# projet (cf. api/v1/dashboard.py, uc_clients) : rouvrir un dossier est le geste le
-# plus courant de l'écran et repayait deux appels modèle à chaque fois.
-_NARRATION_TTL_SECONDES = 900.0
-
-
 def _empreinte(dossier: dict, option: dict, decisions_passees: list[dict] | None, plan: dict | None) -> tuple:
     """Tout ce que les deux prompts consomment réellement, et rien d'autre.
 
@@ -253,6 +247,12 @@ def _empreinte(dossier: dict, option: dict, decisions_passees: list[dict] | None
     sync qui déplace l'impayé, une décision revue qui alimente la mémoire) et
     rester stable sinon. Bâtie sur les champs lus par les gabarits plutôt que sur
     le dossier entier, qui contient des clés sans effet sur la rédaction.
+
+    Depuis le passage en base (`narration_store`), c'est la SEULE mécanique
+    d'invalidation : il n'y a plus de TTL derrière pour rattraper une empreinte
+    trop large. Y ajouter un champ que les gabarits ne lisent pas ferait
+    réécrire la narration pour rien ; en omettre un qu'ils lisent la ferait
+    citer des chiffres périmés — sans expiration pour l'effacer.
     """
     profil = dossier.get("profil_payeur") or {}
     # Mêmes 5 décisions que `_format_memoire`, réduites aux deux champs qu'elle lit.
@@ -301,12 +301,17 @@ async def build_dossier_narration(
     enchaîner ajoutait la latence du second à celle du premier — c'est ce qui
     dominait le temps d'ouverture d'un dossier.
 
-    Le résultat n'est mis en cache que si le modèle a effectivement répondu pour
-    les deux parties attendues. Mettre un repli déterministe en cache
-    reviendrait à faire durer une panne de quelques secondes pendant toute la
-    fenêtre, alors que le repli n'a de sens que le temps de l'incident.
+    Le résultat n'est enregistré que si le modèle a effectivement répondu pour
+    les deux parties attendues. Mettre un repli déterministe en base
+    reviendrait à faire durer une panne de quelques secondes jusqu'à ce qu'un
+    chiffre du dossier change, alors que le repli n'a de sens que le temps de
+    l'incident.
+
+    La persistance elle-même est dans `narration_store` (table
+    `arbitrage_narrations`) : le cache mémoire ne survivait ni au redéploiement
+    ni au second worker uvicorn, et chaque worker repayait ~5 s d'appel modèle.
     """
-    async def _rediger() -> tuple[list[str], dict | None, bool]:
+    async def _rediger() -> tuple[dict, bool]:
         taches = [build_counter_argument(llm, dossier, option, decisions_passees)]
         if plan:
             taches.append(write_echeancier(llm, dossier, plan))
@@ -317,13 +322,14 @@ async def build_dossier_narration(
         tout_redige = contre["redige_par"] == "ia" and (
             redaction is None or redaction["redige_par"] == "ia"
         )
-        return contre["raisons"], redaction, tout_redige
+        return {"raisons": contre["raisons"], "redaction": redaction}, tout_redige
 
-    raisons, redaction, _ = await cached(
+    payload = await narration_store.cached_narration(
         _empreinte(dossier, option, decisions_passees, plan),
-        _NARRATION_TTL_SECONDES,
+        dossier["subject_ref"],
         _rediger,
-        store_if=lambda resultat: resultat[2],
     )
-    # Copies : le triplet vient du cache et est partagé entre requêtes.
-    return list(raisons), (dict(redaction) if redaction else None)
+    # Copies : le payload peut venir de la base comme d'un calcul, l'appelant le
+    # modifie (le router pose `titre`/`argumentaire` sur l'option C).
+    redaction = payload.get("redaction")
+    return list(payload.get("raisons") or []), (dict(redaction) if redaction else None)

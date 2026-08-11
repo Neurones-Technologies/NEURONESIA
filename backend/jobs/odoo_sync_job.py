@@ -8,6 +8,7 @@ from db.models import (
     ClientModel, InvoiceModel, ProjectModel, SaleOrderModel, PurchaseOrderModel,
     OpportunityModel, DossierModel, SupplierModel, SupplierInvoiceModel,
 )
+from modules.uc_offermix.taxonomy import famille_a_persister
 from sqlalchemy import select, text
 from config.settings import settings
 
@@ -760,6 +761,14 @@ async def run_odoo_sync(force_full: bool = False):
                     deadline = _parse_date(opp.get("date_deadline"))
                     created_at = _parse_date(opp.get("create_date"))
                     order_ids = opp.get("order_ids") or []
+                    # Famille d'offre déduite du libellé : reclassée à chaque sync
+                    # pour qu'un enrichissement du dictionnaire se propage sans
+                    # backfill (cf. modules/uc_offermix/taxonomy.py).
+                    #
+                    # `famille_a_persister` et non `classify_family` : un libellé
+                    # indécidable s'écrit "" (sentinelle), jamais NULL, sinon la
+                    # lecture du mix d'offre le reclasse à chaque affichage.
+                    offer_family = famille_a_persister(opp.get("name", ""))
                     existing = await session.get(OpportunityModel, opp_id)
                     if existing:
                         existing.name = opp.get("name", "")
@@ -769,6 +778,7 @@ async def run_odoo_sync(force_full: bool = False):
                         existing.salesperson_name = salesperson
                         existing.deadline = deadline
                         existing.order_ids = order_ids
+                        existing.offer_family = offer_family
                         existing.synced_at = sync_start
                     else:
                         session.add(OpportunityModel(
@@ -784,6 +794,7 @@ async def run_odoo_sync(force_full: bool = False):
                             deadline=deadline,
                             created_at=created_at,
                             order_ids=order_ids,
+                            offer_family=offer_family,
                         ))
                         new_opp += 1
                 await session.commit()

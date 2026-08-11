@@ -34,30 +34,23 @@ PERSONA_ROLES: list[str] = [
 EDITABLE_ROLES: list[str] = [r for r in PERSONA_ROLES if r != UserRole.ADMIN.value]
 
 # view → {role → autorisé}. Défauts = copie fidèle de la matrice du mockup.
+# Élagué le 2026-07-31 : les vues sans écran ni endpoint frontend consommateur
+# (actions, veille, veille-client, veille-ao, presales, offres, workflow,
+# taches, leads, pipeline, catalogue, admin) ont été retirées avec leurs
+# endpoints dashboard.py correspondants — "documents" (GED) est conservé bien
+# que non gaté par vue, l'endpoint GED restant en service.
 DEFAULT_MODULE_ACCESS: dict[str, dict[str, bool]] = {
     "briefing":      {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": True,  "commercial": True},
     "dashboard":     {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": True,  "commercial": True},
-    "actions":       {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": False, "commercial": True},
     "forecast":      {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": False, "commercial": False},
     "tresorerie":    {"dg": True,  "dir_commercial": False, "dir_operations": False, "presale": False, "dir_financier": True,  "commercial": False},
     "performance":   {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": True,  "commercial": False},
-    "veille":        {"dg": True,  "dir_commercial": True,  "dir_operations": False, "presale": True,  "dir_financier": False, "commercial": True},
-    "veille-client": {"dg": False, "dir_commercial": True,  "dir_operations": False, "presale": False, "dir_financier": False, "commercial": True},
-    "veille-ao":     {"dg": False, "dir_commercial": True,  "dir_operations": False, "presale": True,  "dir_financier": False, "commercial": False},
     "crosssell":     {"dg": False, "dir_commercial": True,  "dir_operations": False, "presale": False, "dir_financier": False, "commercial": True},
     "portefeuille":  {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": True,  "dir_financier": True,  "commercial": True},
-    "presales":      {"dg": True,  "dir_commercial": False, "dir_operations": True,  "presale": True,  "dir_financier": False, "commercial": False},
-    "offres":        {"dg": False, "dir_commercial": True,  "dir_operations": False, "presale": True,  "dir_financier": False, "commercial": True},
     "couts":         {"dg": False, "dir_commercial": True,  "dir_operations": True,  "presale": True,  "dir_financier": True,  "commercial": False},
-    "workflow":      {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": True,  "commercial": False},
-    "taches":        {"dg": False, "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": False, "commercial": True},
-    "leads":         {"dg": False, "dir_commercial": True,  "dir_operations": False, "presale": True,  "dir_financier": False, "commercial": True},
     "clients":       {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": True,  "commercial": True},
     "partenaires":   {"dg": False, "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": False, "commercial": False},
-    "pipeline":      {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": True,  "dir_financier": False, "commercial": True},
-    "catalogue":     {"dg": False, "dir_commercial": True,  "dir_operations": True,  "presale": True,  "dir_financier": False, "commercial": True},
     "documents":     {"dg": False, "dir_commercial": False, "dir_operations": True,  "presale": False, "dir_financier": False, "commercial": False},
-    "admin":         {"dg": False, "dir_commercial": False, "dir_operations": False, "presale": False, "dir_financier": False, "commercial": False},
     # Registre de décisions / arbitrages inter-profils (module cockpit ajouté après le
     # blueprint 25 modules) — ouvert aux 5 personas métier, pas à l'avant-vente.
     "arbitrage":     {"dg": True,  "dir_commercial": True,  "dir_operations": True,  "presale": False, "dir_financier": True,  "commercial": True},

@@ -2,13 +2,20 @@
 
 import { usePathname } from "next/navigation";
 import { ProfileKey } from "@/lib/types";
-import { VISION_SECTIONS } from "@/lib/data/sections";
+import { VISION_SECTIONS, visionNavMode } from "@/lib/data/sections";
 import { SectionNav } from "./SectionNav";
 import { UserMenu } from "./UserMenu";
 
 function currentSectionKey(pathname: string, profile: ProfileKey): string {
   const rest = pathname.replace(`/${profile}/`, "").replace(`/${profile}`, "");
   return rest.split("/")[0] || "vision";
+}
+
+/** Segment de section d'une vue en mode `"route"` : `/dc/vision/pipeline`
+ * → `"pipeline"`. Vide sur `/dc/vision` (avant la redirection). */
+function currentVisionSection(pathname: string, profile: ProfileKey): string | undefined {
+  const rest = pathname.replace(`/${profile}/`, "").replace(`/${profile}`, "");
+  return rest.split("/")[1] || undefined;
 }
 
 /** En-tête de la coque : les onglets de section (scroll-spy) quand la page en
@@ -27,10 +34,18 @@ export function Header({
 
   const sectionKey = currentSectionKey(pathname, profile);
   const sections = sectionKey === "vision" ? VISION_SECTIONS[profile] : undefined;
+  const navMode = visionNavMode(profile);
 
   return (
     <header className="hdr">
-      {sections && sections.length > 0 && <SectionNav items={sections} />}
+      {sections && sections.length > 0 && (
+        <SectionNav
+          items={sections}
+          mode={navMode}
+          basePath={`/${profile}/vision`}
+          active={navMode === "route" ? currentVisionSection(pathname, profile) : undefined}
+        />
+      )}
 
       <UserMenu
         profile={profile}

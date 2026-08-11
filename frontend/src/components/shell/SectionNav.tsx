@@ -1,11 +1,51 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SectionNavItem } from "@/lib/data/sections";
+import { SectionNavItem, VisionNavMode } from "@/lib/data/sections";
+import { NavLink } from "./NavLink";
 
 export type { SectionNavItem };
 
-export function SectionNav({ items }: { items: readonly SectionNavItem[] }) {
+/** Menu de sections de l'en-tête. Deux modes (cf. lib/data/sections.ts) :
+ *
+ * - `"scroll"` : les sections sont toutes dans la page, le menu défile jusqu'à
+ *   l'ancre et surligne celle qui est à l'écran (IntersectionObserver).
+ * - `"route"` : chaque section est une page, le menu rend des <Link> et
+ *   surligne d'après l'URL. Pas d'observer — il n'y a qu'une section montée. */
+export function SectionNav({
+  items,
+  mode = "scroll",
+  basePath,
+  active: activeFromUrl,
+}: {
+  items: readonly SectionNavItem[];
+  mode?: VisionNavMode;
+  /** Mode `"route"` : préfixe des liens, p. ex. `/dc/vision`. */
+  basePath?: string;
+  /** Mode `"route"` : section active, lue depuis l'URL par l'appelant. */
+  active?: string;
+}) {
+  if (mode === "route") {
+    return (
+      <nav className="hdr-nav" aria-label="Sections de la vue">
+        {items.map((it) => (
+          <NavLink
+            key={it.id}
+            href={`${basePath}/${it.id}`}
+            className="hdr-nav-btn"
+            aria-current={activeFromUrl === it.id ? "page" : undefined}
+          >
+            {it.label}
+          </NavLink>
+        ))}
+      </nav>
+    );
+  }
+
+  return <ScrollSpyNav items={items} />;
+}
+
+function ScrollSpyNav({ items }: { items: readonly SectionNavItem[] }) {
   const [active, setActive] = useState(items[0]?.id);
 
   useEffect(() => {

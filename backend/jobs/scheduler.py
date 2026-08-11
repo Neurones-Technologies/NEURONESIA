@@ -6,6 +6,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from core.services.ged_indexer import GEDIndexer
 from core.ports.crm_repository import CRMRepository
+from modules.uc_arbitrage import narration_store
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +104,27 @@ def build_scheduler(
         max_instances=1,
     )
 
+    # Les rédactions d'arbitrage sont invalidées par le CONTENU (empreinte du
+    # dossier), pas par une horloge : une ligne périmée n'est jamais relue mais
+    # reste en base. Sans cette purge, la table grossit au rythme des sync Odoo
+    # qui déplacent un montant cité.
+    scheduler.add_job(
+        _arbitrage_narration_purge_job,
+        trigger=CronTrigger(hour=3, minute=45),
+        id="arbitrage_narration_purge",
+        name="Purge des rédactions d'arbitrage périmées",
+        replace_existing=True,
+        misfire_grace_time=1800,
+        coalesce=True,
+        max_instances=1,
+    )
+
     logger.info(
         "Scheduler configuré : sync Odoo toutes les %d min (coalesce, max 1), scan GED à 2h00, "
-        "purge quarantaine à 3h30 (rétention %d j), briefing quotidien à 0h00, "
-        "snapshot pipeline/backlog à 1h00, analyses IA du cockpit à 6h00",
-        sync_interval, settings.quarantine_retention_days,
+        "purge quarantaine à 3h30 (rétention %d j), purge rédactions d'arbitrage à 3h45 "
+        "(rétention %d j), briefing quotidien à 0h00, snapshot pipeline/backlog à 1h00, "
+        "analyses IA du cockpit à 6h00",
+        sync_interval, settings.quarantine_retention_days, narration_store.RETENTION_JOURS,
     )
     return scheduler
 
@@ -165,6 +182,14 @@ async def _quarantine_purge_job():
             logger.warning("Purge quarantaine — suppression %s impossible : %s", p, e)
     if paths:
         logger.info("Purge quarantaine : %d entrée(s) périmée(s), %d fichier(s) supprimé(s)", len(paths), removed)
+
+
+async def _arbitrage_narration_purge_job():
+    """Supprime les rédactions d'arbitrage devenues inatteignables (cf.
+    modules/uc_arbitrage/narration_store.py)."""
+    purgees = await narration_store.purge_anciennes()
+    if purgees:
+        logger.info("Purge rédactions d'arbitrage : %d ligne(s) périmée(s)", purgees)
 
 
 async def _pipeline_snapshot_job():

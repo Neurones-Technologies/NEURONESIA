@@ -40,7 +40,7 @@ const PROFILES: DemoProfile[] = [
     code: "DO",
     label: "Direction des opérations — backlog & visibilité",
     fullName: "Direction des Operations",
-    email: "psoro@neuronestech.com",
+    email: "pyoro@neuronestech.com",
     badge: ROLE_LABELS.dir_operations,
   },
   {

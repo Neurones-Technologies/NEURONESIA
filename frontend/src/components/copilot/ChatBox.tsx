@@ -28,6 +28,23 @@ function newSessionId(): string {
     : Math.random().toString(36).slice(2);
 }
 
+/** Session expirée : le proxy relaie le 401 du backend. Le pointeur de
+ * conversation doit alors être conservé — l'utilisateur retrouvera son fil après
+ * s'être reconnecté. */
+class AuthExpiredError extends Error {
+  constructor() {
+    super("Session expirée — reconnectez-vous pour retrouver vos conversations.");
+  }
+}
+
+/** Fil réellement absent côté backend (purge à 30 jours, suppression depuis un
+ * autre onglet). Seul ce cas justifie d'oublier le pointeur localStorage. */
+class HistoryGoneError extends Error {
+  constructor() {
+    super("Conversation introuvable");
+  }
+}
+
 /** Liste des conversations du profil. L'historique est un confort : en cas
  * d'échec on renvoie la liste vide plutôt que de bloquer la page. */
 async function fetchSessions(profile: string): Promise<SessionSummary[]> {
@@ -41,7 +58,17 @@ async function fetchHistory(sessionId: string, profile: string): Promise<ChatMes
   const res = await fetch(
     `/api/chat/sessions/${encodeURIComponent(sessionId)}?profile=${encodeURIComponent(profile)}`
   );
-  if (!res.ok) throw new Error("Conversation introuvable");
+  // Un 401 (cookie expiré pendant que l'onglet était en arrière-plan) et un 502
+  // (backend momentanément injoignable) ne disent RIEN sur l'existence du fil :
+  // les confondre avec une purge faisait perdre le pointeur d'une conversation
+  // encore en base, définitivement.
+  if (res.status === 401) throw new AuthExpiredError();
+  if (res.status === 404) throw new HistoryGoneError();
+  if (!res.ok) throw new Error("Reprise impossible — réessayez dans un instant.");
+  // Le backend répond 200 + messages vides pour un fil purgé (et pour un profil
+  // non reconnu) ; le proxy marque ce cas d'en-tête, seule façon de le
+  // distinguer d'une conversation réellement vide.
+  if (res.headers.get("x-history-empty") === "1") throw new HistoryGoneError();
   const data = (await res.json()) as { messages: { role: "user" | "assistant"; content: string }[] };
   // Les outils appelés ne sont pas persistés (seul le texte des tours l'est) :
   // une conversation reprise n'affiche donc pas la trace « Analyse SQL… ».
@@ -77,6 +104,16 @@ export function ChatBox({
   const threadRef = useRef<HTMLDivElement>(null);
   const threadInnerRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+
+  // Miroirs de `busy` et `sessionId` pour l'écouteur de resynchronisation plus
+  // bas : abonné une seule fois, il capturerait sinon les valeurs du premier
+  // rendu et rechargerait par-dessus une réponse en cours de streaming.
+  const busyRef = useRef(busy);
+  const sessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    busyRef.current = busy;
+    sessionIdRef.current = sessionId;
+  }, [busy, sessionId]);
 
   useEffect(() => {
     const box = threadRef.current;
@@ -122,9 +159,14 @@ export function ChatBox({
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Reprise impossible");
-        // Fil disparu (purge à 30 jours, suppression depuis un autre onglet) :
-        // on oublie le pointeur pour ne pas rejouer l'échec au prochain accès.
-        localStorage.removeItem(storageKey);
+        // On n'oublie le pointeur que si le fil a VRAIMENT disparu (purge à 30
+        // jours, suppression depuis un autre onglet). Le purger sur un 401 ou
+        // une panne réseau perdait l'accès à une conversation encore en base.
+        if (err instanceof HistoryGoneError) localStorage.removeItem(storageKey);
+        // Cookie expiré : le layout redirige déjà vers /login au prochain rendu
+        // serveur, mais le cache routeur peut le différer d'une minute. On le
+        // provoque ici, sinon la vue reste sur un message sans issue.
+        if (err instanceof AuthExpiredError) router.replace("/login");
       });
   }
 
@@ -251,11 +293,51 @@ export function ChatBox({
       return;
     }
 
+    // `initialSessions` vient du rendu serveur, qui retombe sur une liste vide
+    // si le backend a bronché (CopilotView.loadSessions). Cet instantané est
+    // ensuite resservi 60 s par le cache routeur : sans ce rattrapage, l'échec
+    // d'une seule requête vidait la barre latérale de façon persistante, alors
+    // que les conversations étaient bien en base.
+    if (initialSessions.length === 0) refreshSessions();
+
     // Reprise du fil en cours après un simple rafraîchissement de page.
     const stored = localStorage.getItem(storageKey);
     if (stored) openSession(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Resynchronisation au retour sur la vue.
+  //
+  // `staleTimes.dynamic` (next.config.ts) fait resservir le payload RSC déjà
+  // reçu pendant 60 s : revenir sur le Copilote ne rejoue NI le rendu serveur
+  // qui peuple `initialSessions` (CopilotView), NI l'effet de montage ci-dessus.
+  // La barre latérale restait donc figée sur l'instantané du premier rendu —
+  // vide si l'historique avait échoué à ce moment-là — et le fil courant
+  // disparaissait de l'écran alors qu'il était toujours en base.
+  //
+  // On se raccroche à `visibilitychange` (retour d'onglet) et `pageshow` (retour
+  // arrière, restauration bfcache) plutôt qu'au montage : ce sont précisément
+  // les transitions que le cache routeur rend silencieuses.
+  useEffect(() => {
+    const resync = () => {
+      if (document.visibilityState !== "visible") return;
+      // Un flux SSE en cours écrit dans `messages` : le recharger le tronquerait.
+      if (busyRef.current) return;
+      refreshSessions();
+      const stored = localStorage.getItem(storageKey);
+      // Fil déjà à l'écran, ou aucun fil repris : rien à recharger. On évite
+      // ainsi de réécraser un brouillon de conversation neuve non encore envoyée.
+      if (!stored || stored === sessionIdRef.current) return;
+      openSession(stored);
+    };
+    document.addEventListener("visibilitychange", resync);
+    window.addEventListener("pageshow", resync);
+    return () => {
+      document.removeEventListener("visibilitychange", resync);
+      window.removeEventListener("pageshow", resync);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
 
   return (
     <div className={`cop-wrap${sidebarOpen ? "" : " cop-wrap--closed"}`}>

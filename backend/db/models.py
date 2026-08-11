@@ -307,6 +307,13 @@ class OpportunityModel(Base):
     deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     order_ids: Mapped[list] = mapped_column(JSON, default=list)  # IDs Odoo des sale.order générés par cette opportunité
+    # Famille d'offre DÉDUITE du libellé (modules.uc_offermix.taxonomy) : logiciel /
+    # reseau / equipement / services, NULL si le libellé ne permet pas de trancher.
+    # Champ dérivé et recalculable — stocké pour la performance et pour que les
+    # snapshots quotidiens rendent l'historique ventilable. Odoo ne porte aucune
+    # catégorie sur crm.lead, et la voie « lignes de commande » est inexploitable
+    # (40 opportunités sur 6 675 ont un order_ids non vide).
+    offer_family: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -658,6 +665,11 @@ class PipelineSnapshotModel(Base):
     salesperson_name: Mapped[str] = mapped_column(String(255), default="")
     deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Recopiée depuis OpportunityModel : sans elle, l'historique accumulé ne serait
+    # pas ventilable par famille rétroactivement (le libellé seul suffirait à
+    # reclasser, mais la taxonomie évolue — figer la famille du jour préserve la
+    # comparabilité dans le temps).
+    offer_family: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True)
 
 
 class BacklogSnapshotModel(Base):
@@ -801,3 +813,44 @@ class ArbitrageContexteModel(Base):
     created_by: Mapped[str] = mapped_column(String(255), default="")
     created_role: Mapped[str] = mapped_column(String(50), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ArbitrageNarrationModel(Base):
+    """Parties rédigées d'un dossier d'arbitrage — avocat du contraire et
+    formulation de l'option C (cf. uc_arbitrage/narratif.py).
+
+    Ces deux textes coûtent un appel Claude Sonnet chacun, soit ~5 s mesurées à
+    l'ouverture d'un dossier. Ils étaient amortis par le cache mémoire de
+    `core/services/ttl_cache.py`, qui porte deux limites que ce module ne
+    supporte plus :
+
+      - il est PROCESS-LOCAL, et l'API tourne avec `--workers 2` (cf.
+        Dockerfile) : chaque worker payait sa propre génération, et un
+        redéploiement les remettait tous les deux à zéro ;
+      - sa fenêtre de 900 s expirait alors même qu'aucun chiffre cité n'avait
+        bougé — la narration était réécrite à l'identique, pour rien.
+
+    La clé n'est donc PAS une date ni une durée mais `empreinte` : le sha256 de
+    tout ce que les deux gabarits de prompt consomment réellement
+    (`narratif._empreinte`). Une ligne reste valable tant que le dossier dit la
+    même chose, et devient inatteignable dès qu'un montant, une lecture de
+    payeur, un échéancier ou un verdict de revue change — l'invalidation est
+    portée par le contenu, pas par une horloge.
+
+    Seule une rédaction entièrement produite par le modèle est enregistrée : un
+    repli déterministe (modèle indisponible) doit rester recalculable, sinon
+    une panne de quelques secondes se fige en base. Même règle que le `store_if`
+    de ttl_cache et que `uc_daily_analysis.store.est_figeable`.
+    """
+    __tablename__ = "arbitrage_narrations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # sha256 hex de l'empreinte du dossier — 64 caractères, unique.
+    empreinte: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # Redondant avec l'empreinte, mais c'est la seule colonne lisible à l'œil :
+    # sans elle, la table est un mur de hashs impossible à inspecter en prod.
+    subject_ref: Mapped[str] = mapped_column(String(255), index=True)
+    # {"raisons": [...], "redaction": {...} | null} — la forme rendue par
+    # `narratif.build_dossier_narration`, stockée telle quelle.
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

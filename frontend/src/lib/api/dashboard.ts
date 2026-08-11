@@ -121,6 +121,149 @@ export async function getForecastPipelineWeighted(): Promise<ForecastPipelineWei
   return apiFetch<ForecastPipelineWeighted>("/v1/dashboard/forecast/pipeline-weighted");
 }
 
+export interface OfferMixFamily {
+  family: string;
+  label: string;
+  nb: number;
+  montant_xof: number;
+  montant_pondere_xof: number;
+  /** Part du montant CLASSÉ, pas du pipe total — cf. `coverage`. */
+  part_montant_pct: number;
+  part_nb_pct: number;
+  win_rate_pct: number;
+  nb_closes: number;
+}
+
+/** Fraction du pipe sur laquelle portent réellement les parts par famille. La
+ * famille d'offre est déduite du libellé (Odoo ne porte aucune catégorie sur
+ * l'opportunité), donc une part du pipe reste inclassable — à afficher, sans
+ * quoi « Réseau 36 % » se lit comme 36 % du pipe au lieu de 36 % du classé. */
+export interface OfferMixCoverage {
+  nb_total: number;
+  nb_classe: number;
+  nb_non_classe: number;
+  couverture_nb_pct: number;
+  montant_total_xof: number;
+  montant_classe_xof: number;
+  montant_non_classe_xof: number;
+  couverture_montant_pct: number;
+}
+
+export interface OfferMixPeriod {
+  period: string;
+  montant_total_xof: number;
+  nb_total: number;
+  vide: boolean;
+  /** Échéance déjà passée : à ne pas présenter comme du forecast. */
+  echu: boolean;
+  courant: boolean;
+  families: Array<{
+    family: string;
+    label: string;
+    nb: number;
+    montant_xof: number;
+    part_montant_pct: number;
+  }>;
+}
+
+export interface OfferMix {
+  families: OfferMixFamily[];
+  coverage: OfferMixCoverage;
+  periods: OfferMixPeriod[];
+  /** "echeance" : l'axe temporel porte les dates de clôture prévue. */
+  axe_temporel: string;
+  hors_fenetre: { nb: number; montant_xof: number };
+  sans_echeance: { nb: number; montant_xof: number };
+  echu: { nb: number; montant_xof: number; part_montant_pct: number };
+  dominante: {
+    family: string | null;
+    label: string | null;
+    part_montant_pct: number;
+    /** `null` quand les deux trimestres comparés n'ont pas assez de volume. */
+    delta_part_pct: number | null;
+  };
+  /** `false` tant que la ventilation vient des échéances et non de snapshots
+   * quotidiens : c'est une projection, pas une tendance mesurée. */
+  historique_reel: boolean;
+  nb_closes: number;
+  nb_annulees: number;
+}
+
+export async function getOfferMix(): Promise<OfferMix> {
+  return apiFetch<OfferMix>("/v1/dashboard/offer-mix");
+}
+
+/** Compte du portefeuille, vu par le suivi de dormance. L'impayé est un DRAPEAU et
+ * un montant agrégé : le détail par facture est réservé aux profils financiers. */
+export interface DormanceAccount {
+  compte: string;
+  client_id: string | null;
+  segment: string;
+  label: string;
+  /** `null` pour un prospect : il n'a jamais commandé, il n'est pas « silencieux ». */
+  mois_silence: number | null;
+  derniere_commande: string | null;
+  nb_commandes: number;
+  ca_total_xof: number;
+  commercial: string;
+  alerte_impaye: boolean;
+  impaye_xof: number;
+  retard_max_jours: number;
+  nb_opp_ouvertes: number;
+  opp_ouvertes_xof: number;
+  /** Présent dans les commandes mais absent du référentiel clients (défaut de sync Odoo). */
+  hors_referentiel: boolean;
+}
+
+export interface DormanceSegment {
+  segment: string;
+  label: string;
+  borne: string;
+  nb_comptes: number;
+  part_nb_pct: number;
+  ca_historique_xof: number;
+  part_ca_pct: number;
+  nb_avec_impaye: number;
+  impaye_xof: number;
+  nb_avec_opp_ouverte: number;
+  pipe_ouvert_xof: number;
+  silence_median_mois: number | null;
+  comptes: DormanceAccount[];
+}
+
+export interface SuiviDormance {
+  /** Date d'observation. À AFFICHER : la segmentation glisse d'environ 10 comptes
+   * par mois, deux lectures prises à quinze jours d'écart semblent se contredire. */
+  as_of: string;
+  seuils_mois: { ralentit: number; dormant: number; perdu: number };
+  /** Dans l'ordre métier Actif → Prospect, jamais trié par volume. */
+  segments: DormanceSegment[];
+  /** Comptes Ralentit + Dormant par CA historique — le cœur du suivi d'état. */
+  decrochages: DormanceAccount[];
+  totaux: {
+    nb_comptes: number;
+    nb_avec_commande: number;
+    nb_prospects: number;
+    ca_historique_xof: number;
+    ca_a_risque_xof: number;
+    nb_decroches: number;
+  };
+  /** CA historique CUMULÉ des comptes Dormant + Perdu — jamais un manque à gagner
+   * de l'exercice. À qualifier à l'écran. */
+  sommeil: { ca_historique_xof: number; part_ca_pct: number; nb_comptes: number };
+  dormants_avec_impaye: { nb_comptes: number; impaye_xof: number; comptes: DormanceAccount[] };
+  qualite_donnees: {
+    nb_hors_referentiel: number;
+    ca_hors_referentiel_xof: number;
+    nb_comptes_ca_nul: number;
+  };
+  note: string;
+}
+
+export async function getAccountActivity(): Promise<SuiviDormance> {
+  return apiFetch<SuiviDormance>("/v1/dashboard/account-activity");
+}
+
 export interface LostDeal {
   client: string;
   [key: string]: unknown;
@@ -273,15 +416,6 @@ export async function getNextActions(limit = 10): Promise<NextActions | null> {
   });
 }
 
-export interface HotLead {
-  client: string;
-  [key: string]: unknown;
-}
-
-export async function getHotLeads(limit = 10): Promise<HotLead[] | null> {
-  return apiFetch<HotLead[] | null>(`/v1/dashboard/leads?limit=${limit}`, { allowForbidden: true });
-}
-
 export interface TopClient {
   client: string;
   nb_commandes: number;
@@ -294,26 +428,6 @@ export async function getTopClients(year?: number, limit = 10): Promise<TopClien
   if (year) params.set("year", String(year));
   params.set("limit", String(limit));
   return apiFetch<TopClient[] | null>(`/v1/dashboard/top-clients?${params.toString()}`, {
-    allowForbidden: true,
-  });
-}
-
-export interface Opportunity {
-  opportunite: string;
-  client: string;
-  stade: string;
-  revenu_attendu_xof: number;
-  probabilite_pct: number;
-  commercial: string;
-  deadline: string | null;
-  creee_le: string | null;
-}
-
-export async function getPipelineOpportunities(limit = 50, stage?: string): Promise<Opportunity[] | null> {
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  if (stage) params.set("stage", stage);
-  return apiFetch<Opportunity[] | null>(`/v1/dashboard/pipeline/opportunities?${params.toString()}`, {
     allowForbidden: true,
   });
 }

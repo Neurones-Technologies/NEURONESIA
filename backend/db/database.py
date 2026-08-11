@@ -46,6 +46,7 @@ async def init_db():
         await conn.run_sync(_migrate_veille_entries)
         await conn.run_sync(_migrate_sale_orders)
         await conn.run_sync(_migrate_opportunities)
+        await conn.run_sync(_migrate_pipeline_snapshots)
         await conn.run_sync(_migrate_purchase_orders)
         await conn.run_sync(_migrate_decisions)
         await conn.run_sync(_migrate_conversations)
@@ -104,8 +105,12 @@ def _migrate_sale_orders(sync_conn):
 
 # Lien opportunité → bons de commande générés (crm.lead.order_ids), pour
 # tracer quelle vente a réellement découlé de quelle opportunité du pipeline.
+# `offer_family` : famille d'offre déduite du libellé (cf. uc_offermix.taxonomy),
+# NULL tant qu'un libellé ne permet pas de trancher — nullable assumé, c'est ce
+# NULL qui alimente le taux de couverture affiché au Directeur Commercial.
 _OPPORTUNITY_NEW_COLUMNS = {
     "order_ids": "JSON NOT NULL DEFAULT '[]'",
+    "offer_family": "VARCHAR(30)",
 }
 
 
@@ -120,6 +125,35 @@ def _migrate_opportunities(sync_conn):
                 f"ALTER TABLE opportunities ADD COLUMN {name} {ddl}"
             )
             logger.info("Migration opportunities : colonne '%s' ajoutée", name)
+    # `create_all` ne touche pas aux index d'une table existante.
+    sync_conn.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_opportunities_offer_family "
+        "ON opportunities (offer_family)"
+    )
+
+
+# Même colonne sur l'instantané quotidien : sans elle l'historique accumulé ne
+# serait pas ventilable par famille.
+_PIPELINE_SNAPSHOT_NEW_COLUMNS = {
+    "offer_family": "VARCHAR(30)",
+}
+
+
+def _migrate_pipeline_snapshots(sync_conn):
+    inspector = inspect(sync_conn)
+    if "pipeline_snapshots" not in inspector.get_table_names():
+        return
+    existing = {c["name"] for c in inspector.get_columns("pipeline_snapshots")}
+    for name, ddl in _PIPELINE_SNAPSHOT_NEW_COLUMNS.items():
+        if name not in existing:
+            sync_conn.exec_driver_sql(
+                f"ALTER TABLE pipeline_snapshots ADD COLUMN {name} {ddl}"
+            )
+            logger.info("Migration pipeline_snapshots : colonne '%s' ajoutée", name)
+    sync_conn.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_pipeline_snapshots_offer_family "
+        "ON pipeline_snapshots (offer_family)"
+    )
 
 
 # Lien commande fournisseur → dossier (purchase.order.dossier_id) — ajouté après coup
