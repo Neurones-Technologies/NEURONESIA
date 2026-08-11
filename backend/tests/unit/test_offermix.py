@@ -6,8 +6,15 @@ utilisés sont réels ou directement dérivés de libellés réels.
 """
 from datetime import date
 
+from modules.uc_offermix import aggregation
 from modules.uc_offermix.aggregation import _stage_outcome, build_offer_mix
-from modules.uc_offermix.taxonomy import FINE_TO_FAMILY, classify_family
+from modules.uc_offermix.taxonomy import (
+    FINE_TO_FAMILY,
+    INDECIDABLE,
+    classify_family,
+    famille_a_persister,
+    label_of,
+)
 
 TODAY = date(2026, 8, 5)
 
@@ -67,6 +74,16 @@ def test_classify_inclassable_retourne_none():
         assert classify_family(libelle) is None, libelle
 
 
+def test_famille_a_persister_ne_rend_jamais_none():
+    """Le chemin d'ÉCRITURE ne laisse jamais de NULL en base : un indécidable
+    s'écrit "", ce qui vaut « déjà jugé » et non « jamais jugé »."""
+    assert famille_a_persister("Refresh WAN") == "reseau"
+    assert famille_a_persister("Projet KARANGA") == INDECIDABLE
+    assert famille_a_persister(None) == INDECIDABLE
+    # Et la sentinelle reste inclassable à l'affichage.
+    assert label_of(INDECIDABLE) == "Non qualifié"
+
+
 def test_fine_to_family_couvre_les_categories_du_crosssell():
     """Le pont vers les 5 catégories fines du cross-sell doit rester complet :
     une catégorie non mappée ferait diverger les deux tuiles du cockpit."""
@@ -101,7 +118,9 @@ def _opp(nom, stade="Proposition", montant=1000, proba=50, deadline="2026-07-15"
     return {
         "opportunite": nom, "stade": stade, "revenu_attendu_xof": montant,
         "probabilite_pct": proba, "deadline": deadline, "creee_le": "2026-04-07",
-        **({"famille": famille} if famille else {}),
+        # `is not None` et non `if famille` : la sentinelle "" est une valeur
+        # persistée à part entière (cf. taxonomy.INDECIDABLE), pas une absence.
+        **({"famille": famille} if famille is not None else {}),
     }
 
 
@@ -151,6 +170,40 @@ def test_famille_persistee_prime_sur_le_libelle():
     """La colonne `offer_family` du miroir évite de reclasser à chaque appel, et
     fige la famille telle qu'elle était quand la taxonomie a tourné."""
     res = build_offer_mix([_opp("BABN", famille="reseau", montant=500)], today=TODAY)
+    assert res["families"][0]["family"] == "reseau"
+    assert res["coverage"]["couverture_montant_pct"] == 100.0
+
+
+def test_sentinelle_indecidable_compte_en_non_classe_sans_reclasser(monkeypatch):
+    """La sentinelle "" dit « déjà jugé inclassable » : elle se compte en
+    non-classé exactement comme un None, mais sans repasser par la taxonomie.
+
+    C'est tout l'intérêt de la distinguer de NULL — 4 700 lignes du miroir dans
+    ce cas, reclassées à chaque affichage tant que la sentinelle n'existait pas."""
+    appels = []
+    reel = aggregation.classify_family
+    monkeypatch.setattr(
+        aggregation, "classify_family",
+        lambda label: (appels.append(label), reel(label))[1],
+    )
+
+    res = build_offer_mix([
+        _opp("Refresh WAN", famille="reseau", montant=600),
+        _opp("Projet KARANGA", famille=INDECIDABLE, montant=400),
+    ], today=TODAY)
+
+    assert appels == []                              # aucune reclassification
+    cov = res["coverage"]
+    assert cov["nb_classe"] == 1
+    assert cov["nb_non_classe"] == 1
+    assert cov["couverture_montant_pct"] == 60.0     # 600 / 1000
+
+
+def test_famille_absente_du_miroir_reste_reclassee():
+    """Un miroir antérieur au backfill porte des NULL : ces lignes-là doivent
+    encore être classées à la lecture, sinon le mix s'effondre en attendant le
+    passage du script."""
+    res = build_offer_mix([_opp("Refresh WAN", famille=None, montant=500)], today=TODAY)
     assert res["families"][0]["family"] == "reseau"
     assert res["coverage"]["couverture_montant_pct"] == 100.0
 

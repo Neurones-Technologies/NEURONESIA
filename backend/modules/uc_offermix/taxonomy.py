@@ -12,6 +12,8 @@ sont structurellement inclassables — d'où `classify_family() -> None` et
 l'affichage obligatoire du taux de couverture partout où ces familles sont
 montrées. Ne JAMAIS remplacer ce None par une famille « par défaut » : un
 non-classé silencieux ferait totaliser les parts à 100 % d'un périmètre inconnu.
+(La sentinelle `INDECIDABLE` plus bas n'est pas une telle famille — elle ne sert
+qu'à ne pas reclasser indéfiniment un libellé déjà jugé inclassable.)
 
 Deux niveaux de lecture :
 - 4 familles hautes (ici) — la lecture du Directeur Commercial ;
@@ -182,6 +184,32 @@ def classify_family(label: str | None) -> str | None:
     if any(_matches(haystack, kw) for kw in GENERIC_SERVICE_KEYWORDS):
         return "services"
     return None
+
+
+# Sentinelle de PERSISTANCE : « la taxonomie a tourné sur ce libellé et n'a rien
+# pu décider ». À distinguer de NULL en base, qui veut dire « jamais soumis à la
+# taxonomie ».
+#
+# Ce n'est PAS la famille par défaut que le module s'interdit plus haut : elle ne
+# range rien nulle part, `label_of("")` rend « Non qualifié » et l'agrégation la
+# compte en non-classé exactement comme un None. Elle ne dit que ceci : inutile
+# de reclasser cette ligne.
+#
+# Sans elle, les 4 700 libellés indécidables du miroir (sur 9 475) repassaient
+# par `classify_family()` à CHAQUE lecture du mix d'offre pour re-échouer à
+# l'identique — 728 000 tests de mots-clés, ~200 ms des 293 ms de l'agrégation
+# (profilé le 10/08/2026).
+INDECIDABLE = ""
+
+
+def famille_a_persister(label: str | None) -> str:
+    """Valeur de `offer_family` à écrire en base pour ce libellé — jamais NULL.
+
+    À utiliser sur tous les chemins d'écriture (sync Odoo, backfill) ; les
+    chemins de LECTURE, eux, appellent `classify_family()` et gardent le `None`
+    porteur de sens.
+    """
+    return classify_family(label) or INDECIDABLE
 
 
 def family_from_fine_category(fine: str | None) -> str | None:

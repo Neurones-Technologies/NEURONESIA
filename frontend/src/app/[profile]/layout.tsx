@@ -2,17 +2,10 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/client";
+import { getMe, type Me } from "@/lib/api/me";
 import { ROLE_LABELS, isAdminRole, roleToProfile } from "@/lib/auth/roles";
 import { PROFILE_KEYS, ProfileKey } from "@/lib/types";
-
-interface Me {
-  id: number;
-  email: string;
-  full_name: string;
-  role: string;
-  allowed_views: string[] | null;
-}
 
 function initials(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -36,7 +29,7 @@ export default async function ProfileLayout({
 
   let me: Me;
   try {
-    me = await apiFetch<Me>("/v1/auth/me");
+    me = await getMe();
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login");
     throw err;

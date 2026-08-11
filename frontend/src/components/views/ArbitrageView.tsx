@@ -2,7 +2,7 @@ import { Suspense } from "react";
 
 import { getArbitrageFile, getReliability, listDecisions } from "@/lib/api/arbitrage";
 import type { ArbitrageCandidate, Decision } from "@/lib/api/arbitrage";
-import { apiFetch } from "@/lib/api/client";
+import { getMe } from "@/lib/api/me";
 import { isAdminRole, roleToProfile } from "@/lib/auth/roles";
 import { META } from "@/lib/data/profiles";
 import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
@@ -44,10 +44,6 @@ import {
  * dossier : vérifié ici pour l'affichage, et côté backend (`create_decision` et
  * `update_decision`) pour l'exécution. Chaque chiffre affiché porte sa nature
  * (mesuré / observé / inféré) pour qu'une déduction ne se lise pas comme un fait. */
-
-interface Me {
-  role: string;
-}
 
 function queueItem(c: ArbitrageCandidate, rang: number, relevant: boolean, seuilM: number): QueueItem {
   const { client, conflit } = splitSujet(c.subject_label);
@@ -115,7 +111,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
     getArbitrageFile(),
     listDecisions(),
     getReliability(),
-    apiFetch<Me>("/v1/auth/me"),
+    getMe(),
   ]);
 
   if (!file) {
@@ -148,7 +144,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
 
   return (
     <>
-      <ViewHeader
+      {/* <ViewHeader
         title="Arbitrages"
         subtitle={
           <>
@@ -157,7 +153,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
             est décidé — il ne tranche jamais à votre place.
           </>
         }
-      />
+      /> */}
 
       <div className="kpi-row">
         <StatTile

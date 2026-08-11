@@ -30,6 +30,41 @@ def _crm(request: Request):
     return request.app.state.container.crm_repo
 
 
+async def _hors_boucle(fn, *args):
+    """Exécute une agrégation Python synchrone HORS de la boucle d'événements.
+
+    Les `build_*` de modules/ ne font aucune I/O : ce sont des boucles Python sur
+    la totalité des lignes remontées (`build_offer_mix` lit tout le pipe, sans
+    plafond — c'est une nécessité métier, cf. son endpoint). Appelées en ligne
+    dans un `async def`, elles monopolisaient le worker pendant toute leur durée
+    — jusqu'à ~330 ms pour le mix d'offre — et aucune autre requête ne
+    progressait entre-temps.
+
+    Symptôme mesuré côté cockpit : les 6 appels de la vue DG lancés en
+    `Promise.all` coûtaient 238 ms quand le plus lent seul en coûtait 96, soit un
+    parallélisme non seulement nul mais négatif (la somme séquentielle valait
+    215 ms). Avec 2 workers uvicorn, le backend ne servait que deux agrégations
+    à la fois, l'une après l'autre.
+
+    Ce que ce déport apporte, mesuré (build_offer_mix sur 9475 opportunités, 6
+    passages en ordre alterné) — un « tour » = une reprise de main de la boucle :
+
+      inline    : 318 ms ·  2 tours sur ~317 possibles (1 % du nominal)
+      to_thread : 329 ms · 12 tours sur ~328 possibles (4 % du nominal)
+
+    À lire honnêtement : le coût unitaire est négligeable (+11 ms) et la boucle
+    reprend la main 6 fois plus souvent, mais elle reste affamée 96 % du temps —
+    le GIL n'est pas relâché par du Python pur. Ce déport empêche une agrégation
+    de GELER complètement son worker ; il ne rend PAS la concurrence saine.
+
+    Le vrai correctif pour `offer-mix` est ailleurs : 318 ms de boucles Python sur
+    tout le pipe, recalculés à chaque affichage, pour un agrégat qui ne bouge
+    qu'aux syncs Odoo. Il faut le figer, comme les narrations du jour
+    (modules/uc_daily_analysis/store.py), pas le déplacer de thread.
+    """
+    return await asyncio.to_thread(fn, *args)
+
+
 # ---------- Vue Tableau de bord ----------
 
 @router.get("/kpis", dependencies=[Depends(require_views("dashboard"))])
@@ -43,11 +78,25 @@ async def kpis(
     """
     crm = _crm(request)
     y = year or datetime.now().year
+    # NE PAS remplacer ces await par un asyncio.gather. C'est tentant — les 9
+    # agrégats sont indépendants et chaque méthode du LocalCRMAdapter ouvre sa
+    # propre session — et c'est mesuré comme PIRE. Sur le miroir local, 8 mesures
+    # en ordre alterné après préchauffage :
+    #
+    #   séquentiel : min 85 · médiane  91 · max 112 ms
+    #   gather     : min 87 · médiane 100 · max 188 ms   → 1,10x plus lent
+    #
+    # Le goulot n'est pas la latence d'aller-retour mais le travail de requête
+    # lui-même, que SQLite sérialise de toute façon : neuf connexions
+    # concurrentes sur un fichier unique n'achètent rien et dégradent la queue de
+    # distribution. Le jour où le miroir passera sur Postgres, la mesure vaudra
+    # d'être refaite.
+    #
+    # `get_ytd_stats` : CA arrêté au même jour calendaire dans les deux années —
+    # seul agrégat comparable à N-1 en cours d'exercice (year/previous_year
+    # comparent une année partielle à une année pleine, cf. build_dg_facts).
     current = await crm.get_year_stats(y)
     previous = await crm.get_year_stats(y - 1)
-    # CA arrêté au même jour calendaire dans les deux années — seul agrégat
-    # comparable à N-1 en cours d'exercice (year/previous_year comparent une
-    # année partielle à une année pleine, cf. build_dg_facts).
     ytd = await crm.get_ytd_stats(y)
     previous_ytd = await crm.get_ytd_stats(y - 1)
     monthly = await crm.get_monthly_revenue(y)
@@ -185,7 +234,7 @@ async def forecast_pipeline_weighted(request: Request):
     par client) — remplace le calcul JS qui tournait sur des fixtures front.
     """
     opportunities = await _crm(request).list_opportunities(limit=500)
-    result = build_pipeline_forecast(opportunities)
+    result = await _hors_boucle(build_pipeline_forecast, opportunities)
     result["month_labels"] = month_labels()
     return result
 
@@ -218,7 +267,7 @@ async def offer_mix(request: Request):
     montant, pas sur 100 %.
     """
     opportunities = await _crm(request).list_all_opportunities()
-    return build_offer_mix(opportunities)
+    return await _hors_boucle(build_offer_mix, opportunities)
 
 
 # ---------- Comptes dormants / actifs (profil DC) ----------
@@ -238,7 +287,7 @@ async def account_activity(request: Request):
     par mois) : `as_of` est dans la réponse et doit être affiché.
     """
     comptes = await _crm(request).get_account_activity()
-    return build_suivi_dormance(comptes)
+    return await _hors_boucle(build_suivi_dormance, comptes)
 
 
 class ClientDecisionRequest(BaseModel):
@@ -252,7 +301,7 @@ async def forecast_client_decision(request: Request, body: ClientDecisionRequest
     uniquement la justification et l'action."""
     crm = _crm(request)
     opportunities = await crm.list_opportunities(limit=500)
-    agg = build_pipeline_forecast(opportunities)
+    agg = await _hors_boucle(build_pipeline_forecast, opportunities)
     client_agg = next((c for c in agg["by_client"] if c["client"] == body.client), None)
     if client_agg is None:
         raise HTTPException(status_code=404, detail="Client introuvable dans le pipeline ouvert")

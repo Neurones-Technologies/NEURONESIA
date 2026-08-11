@@ -49,6 +49,23 @@ export function defaultVisionSection(profile: ProfileKey): string | undefined {
   return VISION_SECTIONS[profile]?.[0]?.id;
 }
 
+/** URL d'entrée du Cockpit, redirection déjà résolue.
+ *
+ * En mode `"route"`, `/{profile}/vision` n'est pas une page : elle ne renvoie
+ * qu'un `NEXT_REDIRECT` vers la première section (cf. vision/page.tsx). Un lien
+ * pointé dessus est donc impossible à précharger utilement — le prefetch met en
+ * cache l'ordre de redirection, pas le contenu, et le clic paie quand même le
+ * rendu de la cible. Viser directement la section évite ce détour.
+ *
+ * La redirection reste en place : elle sert les URL tapées à la main et les
+ * liens déjà partagés. */
+export function visionEntryPath(profile: ProfileKey): string {
+  const base = `/${profile}/vision`;
+  if (visionNavMode(profile) !== "route") return base;
+  const first = defaultVisionSection(profile);
+  return first ? `${base}/${first}` : base;
+}
+
 export function isVisionSection(profile: ProfileKey, section: string): boolean {
   return (VISION_SECTIONS[profile] ?? []).some((s) => s.id === section);
 }

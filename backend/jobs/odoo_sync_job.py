@@ -8,7 +8,7 @@ from db.models import (
     ClientModel, InvoiceModel, ProjectModel, SaleOrderModel, PurchaseOrderModel,
     OpportunityModel, DossierModel, SupplierModel, SupplierInvoiceModel,
 )
-from modules.uc_offermix.taxonomy import classify_family
+from modules.uc_offermix.taxonomy import famille_a_persister
 from sqlalchemy import select, text
 from config.settings import settings
 
@@ -764,7 +764,11 @@ async def run_odoo_sync(force_full: bool = False):
                     # Famille d'offre déduite du libellé : reclassée à chaque sync
                     # pour qu'un enrichissement du dictionnaire se propage sans
                     # backfill (cf. modules/uc_offermix/taxonomy.py).
-                    offer_family = classify_family(opp.get("name", ""))
+                    #
+                    # `famille_a_persister` et non `classify_family` : un libellé
+                    # indécidable s'écrit "" (sentinelle), jamais NULL, sinon la
+                    # lecture du mix d'offre le reclasse à chaque affichage.
+                    offer_family = famille_a_persister(opp.get("name", ""))
                     existing = await session.get(OpportunityModel, opp_id)
                     if existing:
                         existing.name = opp.get("name", "")

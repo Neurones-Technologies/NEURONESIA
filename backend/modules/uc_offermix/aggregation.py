@@ -117,8 +117,9 @@ def build_offer_mix(
 
     `opportunities` : dicts au contrat de `CRMRepository.list_all_opportunities()`
     — clés `opportunite`, `client`, `stade`, `revenu_attendu_xof`,
-    `probabilite_pct`, `commercial`, `creee_le`, et `famille` si déjà persistée
-    (sinon reclassée ici depuis le libellé).
+    `probabilite_pct`, `commercial`, `creee_le`, et `famille` telle que persistée
+    au miroir : une famille, `""` si la taxonomie a tourné sans rien décider, ou
+    `None` si la ligne ne lui a jamais été soumise (seul cas reclassé ici).
 
     `today` : ancre de la grille trimestrielle, injectable pour rendre les tests
     déterministes (défaut : date du jour).
@@ -138,9 +139,16 @@ def build_offer_mix(
     closed_rows: list[dict] = []
 
     for o in opportunities:
-        # `famille` peut arriver pré-calculée du miroir (colonne offer_family) ;
-        # à défaut on classe à la volée — le résultat doit être identique.
-        family = o.get("famille") or classify_family(o.get("opportunite"))
+        # `famille` vient du miroir (colonne offer_family) : une famille, ou la
+        # sentinelle `INDECIDABLE` ("") quand la taxonomie a déjà tourné sans
+        # rien décider. Seul un None — ligne jamais soumise à la taxonomie —
+        # justifie de reclasser ici.
+        #
+        # NE PAS revenir à `o.get("famille") or classify_family(...)` : "" étant
+        # falsy, cette écriture reclassait les 4 700 indécidables du miroir à
+        # chaque affichage, pour re-échouer à l'identique (~200 ms par appel).
+        famille = o.get("famille")
+        family = classify_family(o.get("opportunite")) if famille is None else famille
         value = o.get("revenu_attendu_xof") or 0
         prob = o.get("probabilite_pct") or 0
         row = {

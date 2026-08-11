@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 import { ProfileKey, SectionKey } from "@/lib/types";
+import { visionEntryPath } from "@/lib/data/sections";
+import { NavLink } from "./NavLink";
 
 const RAIL_ITEMS: { key: SectionKey; label: string; href: (p: ProfileKey) => string; icon: React.ReactNode; adminOnly?: boolean }[] = [
   {
@@ -87,13 +88,19 @@ export function Rail({ profile, code, isAdmin }: { profile: ProfileKey; code: st
         <path d="M30.5 2.8a25.4 25.4 0 0 1 0 34.4" stroke="var(--accent-strong)" strokeWidth="2.3" fill="none" strokeLinecap="round" opacity=".42" />
       </svg>
       {items.map((item) => {
-        const href = item.href(profile);
-        const current = pathname === href || pathname.startsWith(`${href}/`);
+        // `base` sert au surlignage, `href` à la navigation : pour un profil en
+        // mode "route", le Cockpit pointe directement sur sa première section
+        // (cf. visionEntryPath) alors que l'entrée doit rester allumée sur
+        // TOUTES ses sections. Confondre les deux éteignait le rail dès qu'on
+        // changeait d'onglet.
+        const base = item.href(profile);
+        const href = item.key === "vision" ? visionEntryPath(profile) : base;
+        const current = pathname === base || pathname.startsWith(`${base}/`);
         return (
-          <Link key={item.key} className="rl" aria-current={current} title={item.label} href={href}>
+          <NavLink key={item.key} className="rl" aria-current={current} title={item.label} href={href}>
             {item.icon}
             {item.label}
-          </Link>
+          </NavLink>
         );
       })}
       <div className="rail-sp" />

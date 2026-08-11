@@ -1,19 +1,10 @@
-import { apiFetch } from "@/lib/api/client";
 import { getMirrorCoverageSafe } from "@/lib/api/donnees";
+import { getMe } from "@/lib/api/me";
 import { engineFiability, ENGINES } from "@/lib/data/donnees";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import { formatDate } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { Note, Tag } from "@/components/ui/primitives";
-
-interface Me {
-  id: number;
-  email: string;
-  full_name: string;
-  role: string;
-  allowed_views: string[] | null;
-  last_login: string | null;
-}
 
 const VIEW_LABELS: Record<string, string> = {
   briefing: "Briefing quotidien",
@@ -38,7 +29,7 @@ const ALL_VIEWS = Object.keys(VIEW_LABELS);
  * vivent dans le code), ni préférences de notification (aucune table ne les
  * persiste aujourd'hui). */
 export async function ParamsView({ profile: _profile }: { profile: ProfileKey }) {
-  const [me, coverage] = await Promise.all([apiFetch<Me>("/v1/auth/me"), getMirrorCoverageSafe()]);
+  const [me, coverage] = await Promise.all([getMe(), getMirrorCoverageSafe()]);
   const isAdmin = me.allowed_views === null;
   const allowed = new Set(me.allowed_views ?? ALL_VIEWS);
 

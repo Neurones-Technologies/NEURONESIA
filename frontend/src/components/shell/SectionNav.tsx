@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { SectionNavItem, VisionNavMode } from "@/lib/data/sections";
+import { NavLink } from "./NavLink";
 
 export type { SectionNavItem };
 
@@ -29,14 +29,14 @@ export function SectionNav({
     return (
       <nav className="hdr-nav" aria-label="Sections de la vue">
         {items.map((it) => (
-          <Link
+          <NavLink
             key={it.id}
             href={`${basePath}/${it.id}`}
             className="hdr-nav-btn"
             aria-current={activeFromUrl === it.id ? "page" : undefined}
           >
             {it.label}
-          </Link>
+          </NavLink>
         ))}
       </nav>
     );

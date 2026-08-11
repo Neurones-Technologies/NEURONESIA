@@ -8,6 +8,11 @@ réécrit la famille de chaque ligne depuis son libellé.
 (modules/uc_offermix/taxonomy.py) si l'on veut que les lignes déjà en base en
 profitent immédiatement — sinon elles seront reclassées au sync suivant.
 
+Écrit `""` (et non NULL) sur les libellés indécidables : c'est cette sentinelle
+qui évite de les reclasser à chaque lecture du mix d'offre. Un miroir dont les
+indécidables sont restés à NULL fonctionne toujours, mais paye ~200 ms par
+affichage — passer ce script une fois suffit à les résorber.
+
     python -m scripts.backfill_offer_family          # applique
     python -m scripts.backfill_offer_family --dry-run # mesure sans écrire
 
@@ -24,7 +29,12 @@ from sqlalchemy import select
 
 from db.database import AsyncSessionLocal, init_db
 from db.models import OpportunityModel
-from modules.uc_offermix.taxonomy import FAMILY_ORDER, classify_family, label_of
+from modules.uc_offermix.taxonomy import (
+    FAMILY_ORDER,
+    INDECIDABLE,
+    classify_family,
+    label_of,
+)
 
 
 async def backfill(dry_run: bool = False) -> None:
@@ -44,10 +54,13 @@ async def backfill(dry_run: bool = False) -> None:
                 stats[family]["montant"] += opp.expected_revenue or 0
             else:
                 non_classes.append((opp.name or "(libellé vide)", opp.expected_revenue or 0))
-            if opp.offer_family != family:
+            # Un indécidable s'écrit "" et non NULL : c'est ce qui dit à la
+            # lecture « déjà jugé, ne reclasse pas » (cf. taxonomy.INDECIDABLE).
+            persistee = family or INDECIDABLE
+            if opp.offer_family != persistee:
                 changed += 1
                 if not dry_run:
-                    opp.offer_family = family
+                    opp.offer_family = persistee
 
         if not dry_run:
             await session.commit()

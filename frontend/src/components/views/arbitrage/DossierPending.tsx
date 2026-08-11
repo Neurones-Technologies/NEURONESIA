@@ -3,10 +3,13 @@ import { Skel } from "@/components/ui/skeleton";
 /** Panneau de dossier en cours d'instruction.
  *
  * Reprend la forme exacte de `.dec` — en-tête, bandeau de faits, options — pour
- * que l'arrivée du contenu ne décale pas la page déjà peinte. Vit dans son
- * propre fichier parce qu'il sert à deux endroits qui ne doivent rien partager
- * d'autre : la frontière Suspense de la vue, et `loading.tsx` (qui n'a aucune
- * raison de tirer avec lui le module de dossier et ses appels réseau). */
+ * que l'arrivée du contenu ne décale pas la page déjà peinte.
+ *
+ * Sert la frontière Suspense de `ArbitrageView`, qui est `key={selectedRef}` :
+ * elle se redéclenche donc à chaque changement de dossier dans la file, et pas
+ * seulement à l'ouverture de l'écran. C'est ce qui la distingue des `loading.tsx`
+ * de route, retirés depuis (cf. app/loading.tsx) : sans elle, un clic dans la
+ * file figerait la page entière au lieu du seul panneau de droite. */
 export function DossierPending() {
   return (
     <div className="dec" aria-busy="true" aria-label="Dossier en cours d'instruction">

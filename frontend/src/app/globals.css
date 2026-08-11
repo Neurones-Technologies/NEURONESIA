@@ -110,6 +110,44 @@ table{border-spacing:0}
 .hdr-nav-btn[aria-current="true"],
 .hdr-nav-btn[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent-strong);font-weight:500}
 .hdr-nav-btn:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-3px}
+
+/* ---------- navigation en attente ---------- */
+/* `.nav-busy` n'est dans le DOM que pendant qu'une navigation est en vol : il est
+   monté par components/shell/NavLink.tsx d'après useLinkStatus().
+
+   Il répond au seul reproche qui restait après la suppression des loading.tsx :
+   entre le clic et le remplacement du contenu, l'écran ne bougeait pas. Mesuré au
+   navigateur : 47 à 143 ms quand le prefetch a abouti, mais 250 à 610 ms sinon
+   (premier clic sur une page fraîche, cache routeur expiré, serveur froid).
+
+   D'où le RETARD de 120 ms sur les deux animations : en dessous, la navigation
+   s'est déjà faite et l'indicateur n'aurait fait que clignoter. Il n'apparaît que
+   quand l'attente devient réelle. Ce délai est la raison d'être de la règle — ne
+   pas le retirer « pour que ça se voie mieux ». */
+.rl,.hdr-nav-btn{position:relative}
+.nav-busy{
+  position:absolute;left:0;right:0;bottom:0;height:2px;overflow:hidden;border-radius:2px;
+  opacity:0;animation:nav-busy-in 1ms linear 120ms forwards
+}
+.nav-busy::after{
+  content:"";position:absolute;top:0;bottom:0;left:0;width:40%;border-radius:2px;
+  background:var(--accent-strong);animation:nav-busy-slide 1s ease-in-out 120ms infinite
+}
+/* Le rail est une tuile arrondie de 14px : une barre pleine largeur dépasserait
+   visuellement de la courbe des angles, d'où l'encart. Les onglets d'en-tête,
+   eux, gardent bottom:0 — la barre tombe alors exactement là où le soulignement
+   de l'onglet actif va se poser. (Pas de valeur négative : `.hdr-nav` est en
+   `overflow-x:auto` et rognerait ce qui déborde.) */
+.rl .nav-busy{left:9px;right:9px;bottom:6px}
+@keyframes nav-busy-in{to{opacity:1}}
+@keyframes nav-busy-slide{from{transform:translateX(-110%)}to{transform:translateX(275%)}}
+@media (prefers-reduced-motion:reduce){
+  /* La règle globale plus bas coupe toute animation : sans ce rattrapage,
+     `.nav-busy` resterait à opacity:0 et l'attente redeviendrait muette. On le
+     rend statique — visible tout de suite, mais immobile. */
+  .nav-busy{opacity:1}
+  .nav-busy::after{width:100%;opacity:.5}
+}
 .hdr-t b{display:block;font-family:var(--disp);font-weight:400;font-size:17px;letter-spacing:-.015em;line-height:1.2}
 .hdr-t span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-top:3px}
 .cmd{
@@ -487,10 +525,20 @@ table{border-spacing:0}
    largeur quel que soit le nombre de tuiles (5 sur Arbitrages, 3 sur le cockpit
    DC). Avec `repeat(5,…)` les tuiles manquantes laissaient un vide à droite. */
 .kpi-row{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));
-  gap:16px;margin-bottom:16px
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(152px,100%),1fr));
+  gap:12px;margin-bottom:16px
 }
-.kpi-row>.tile{grid-column:auto}
+/* Tuiles compactées : à 210px de largeur minimale, la cinquième tuile passait à
+   la ligne dès que la colonne centrale se resserrait (le bandeau se lisait alors
+   comme 4 + 1, ce qui suggère une hiérarchie qui n'existe pas). Le bandeau est
+   du cadrage, pas le contenu de l'écran : chiffre plus petit, marges resserrées,
+   lecture en 11 px — les 5 indicateurs tiennent sur une ligne. */
+.kpi-row>.tile{grid-column:auto;padding:14px 15px 15px}
+.kpi-row .tile-h{margin-bottom:10px}
+.kpi-row .tile-h h3{font-size:14px;line-height:1.25}
+.kpi-row .stat-v{font-size:31px;letter-spacing:-.03em}
+.kpi-row .stat-u{font-size:10px;margin-left:5px}
+.kpi-row .stat-d{font-size:10.5px;margin-top:8px;line-height:1.45}
 
 /* ---------- arbitrages · plan de travail (file à gauche, dossier à droite) ----------
    La file était auparavant un tableau posé SOUS le dossier : on lisait la liste
@@ -1097,15 +1145,9 @@ table.tb tbody tr:hover{background:var(--paper-2)}
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);
   animation:skel-shimmer 1.5s ease-in-out infinite
 }
-.skel--dark{background:rgba(255,255,255,.09)}
-.skel--dark::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent)}
 @keyframes skel-shimmer{100%{transform:translateX(100%)}}
-.rl-skel{width:60px;height:58px;border-radius:14px;background:rgba(255,255,255,.06);position:relative;overflow:hidden}
-.rl-skel::after{
-  content:"";position:absolute;inset:0;transform:translateX(-100%);
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);
-  animation:skel-shimmer 1.5s ease-in-out infinite
-}
+/* `.skel--dark` et `.rl-skel` retirés avec ShellSkeleton/SkeletonBrief : plus
+   aucun appelant depuis la suppression des loading.tsx (cf. ui/skeleton.tsx). */
 
 /* ---------- panneau brief (encre) ---------- */
 .brief{
