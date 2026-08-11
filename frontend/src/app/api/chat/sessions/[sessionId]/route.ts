@@ -12,6 +12,12 @@ function errorResponse(err: unknown, fallback: string) {
   return NextResponse.json({ detail }, { status });
 }
 
+/** Le backend renvoie `messages: []` (200) aussi bien pour un fil purgé que pour
+ * un profil non reconnu (cf. router.py, get_session_history). Sans ce marqueur le
+ * client ne peut pas distinguer « ce fil n'existe plus » — qui justifie d'oublier
+ * le pointeur localStorage — d'un simple aléa, qui ne le justifie pas. */
+const EMPTY_HISTORY_HEADER = "x-history-empty";
+
 /** Historique complet d'une conversation, pour la reprendre. */
 export async function GET(
   request: Request,
@@ -23,7 +29,9 @@ export async function GET(
     const data = await apiFetch<{ session_id: string; messages: StoredMessage[] }>(
       `/v1/chat/sessions/${encodeURIComponent(sessionId)}?profile=${encodeURIComponent(profile)}`
     );
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: data.messages?.length ? undefined : { [EMPTY_HISTORY_HEADER]: "1" },
+    });
   } catch (err) {
     return errorResponse(err, "Conversation introuvable");
   }
