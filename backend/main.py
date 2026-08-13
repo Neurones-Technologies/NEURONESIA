@@ -17,6 +17,8 @@ from api.v1.dependencies import get_current_user, require_views
 from modules.uc_arbitrage.router import router as arbitrage_router
 from modules.uc_briefing.router import router as briefing_router
 from modules.uc_clients.router import router as clients_router
+from modules.uc_commercial.router import router as commercial_router
+from modules.uc_daf.router import router as daf_router
 from modules.uc_daily_analysis.router import router as daily_analysis_router
 from modules.uc_crosssell.router import router as crosssell_router
 from modules.uc_partners.router import router as partners_router
@@ -106,6 +108,15 @@ app.include_router(clients_router, prefix="/v1", dependencies=[Depends(require_v
 app.include_router(partners_router, prefix="/v1", dependencies=[Depends(require_views("partenaires", "portefeuille"))])
 # Arbitrages : gated par la matrice module × rôle (vue "arbitrage")
 app.include_router(arbitrage_router, prefix="/v1", dependencies=[Depends(require_views("arbitrage"))])
+# Pilotage commercial (cockpit DC) : le gating est porté endpoint par endpoint et
+# non ici — les écrans de ce module retombent sur des vues différentes selon ce
+# qu'ils exposent (`performance` pour le Gap et l'efficacité, `clients` pour
+# l'animation de compte, `forecast` pour le pipe, `dashboard` pour le marché).
+app.include_router(commercial_router, prefix="/v1", dependencies=_auth)
+# Pilotage financier (cockpit DAF) : même raison qu'au-dessus, le gating est porté
+# endpoint par endpoint — `couts`/`dashboard` pour le budget, `tresorerie` pour les
+# créances et la trésorerie prévisionnelle, `dashboard` pour le volet formation.
+app.include_router(daf_router, prefix="/v1", dependencies=_auth)
 # Analyses IA quotidiennes du cockpit : statut/relance (le contenu lui-même est
 # servi par les endpoints de section, cf. modules/uc_daily_analysis/router.py)
 app.include_router(daily_analysis_router, prefix="/v1", dependencies=_auth)

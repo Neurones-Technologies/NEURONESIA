@@ -1,0 +1,306 @@
+import { getMarcheDc } from "@/lib/api/commercial";
+import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Note } from "@/components/ui/primitives";
+import { SourceNote, sourceKick } from "./source";
+
+/** Onglet « Secteurs et marché » — §1 et §4 du compte-rendu DC.
+ *
+ * « Évaluer les tendances : part du marché et selon aussi la santé du marché
+ * orienté (Ex : Intelligence Artificielle et infrastructure…) », et « Tendance des
+ * secteurs : performance commerciale ventilée par secteur d'activité ».
+ *
+ * Trois demandes, trois régimes de faisabilité — et l'écran est ordonné pour que
+ * la différence saute aux yeux plutôt qu'elle se devine :
+ *
+ * 1. les AXES DE MARCHÉ sont mesurés sur nos propres affaires, via une grille de
+ *    motifs appliquée aux libellés. C'est ce qui répond réellement à « la santé du
+ *    marché orienté IA et infrastructure » — sur notre positionnement, pas sur le
+ *    marché ;
+ * 2. les SECTEURS sont un gabarit : le secteur d'activité n'est renseigné que pour
+ *    une poignée de clients. Le tableau sert à faire valider la NOMENCLATURE, car
+ *    c'est elle qui déterminera la saisie à mener ;
+ * 3. la PART DE MARCHÉ est hors d'atteinte sans source externe. Elle est affichée
+ *    à côté de la part de portefeuille, nommée différemment : les confondre
+ *    conduirait à des décisions erronées.
+ *
+ * La veille, elle, est réelle mais jeune : son taux de déchet est affiché avec elle.
+ */
+export async function DcMarche() {
+  const marche = await getMarcheDc(12);
+
+  if (!marche) {
+    return (
+      <Bento>
+        <Tile span={12} title="Secteurs et marché">
+          <Note style={{ marginTop: 0 }}>
+            L&apos;analyse de marché n&apos;est pas accessible depuis ce profil.
+          </Note>
+        </Tile>
+      </Bento>
+    );
+  }
+
+  const { axes, secteurs, veille } = marche;
+  const maxAxe = Math.max(...axes.axes.map((a) => a.montant_ouvert_xof), 1);
+  const maxSecteur = Math.max(...secteurs.secteurs.map((s) => s.ca_xof), 1);
+  const couvertureFaible = axes.coverage.couverture_montant_pct < 70;
+
+  return (
+    <>
+      <div className="kpi-row">
+        <StatTile
+          span={4}
+          label="Axe dominant du pipe"
+          value={axes.dominante?.axe ?? "—"}
+          unit={axes.dominante ? `${formatPct(axes.dominante.part_montant_pct, 0)} % du pipe qualifié` : ""}
+          reading={`calculé sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe en montant`}
+          readingVariant={couvertureFaible ? "wat" : undefined}
+          detail={{
+            kicker: "Indicateur · positionnement de marché",
+            title: `${axes.dominante?.axe ?? "—"}, axe dominant`,
+            tag: "mesuré",
+            tagVariant: "s",
+            body: [
+              `Le pipe ouvert qualifié se répartit sur ${formatNumber(axes.coverage.nb_axes)} axes de marché, dominé par ${axes.dominante?.axe ?? "—"} à ${formatPct(axes.dominante?.part_montant_pct ?? null, 0)} % du montant.`,
+              `L'axe est déduit du LIBELLÉ de l'opportunité au moyen d'une grille de ${formatNumber(axes.coverage.nb_motifs)} motifs éditables : le CRM ne porte aucune notion d'axe. ${formatNumber(axes.coverage.nb_non_classe)} opportunités (${formatMFcfa(axes.coverage.montant_non_classe_xof)} M FCFA) portent un libellé trop générique pour être qualifiées — les parts ci-dessus portent donc sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe.`,
+              "Cette grille est une convention de lecture, pas une donnée extraite : la corriger fait bouger les chiffres, ce qui est normal et voulu.",
+            ],
+            kv: [
+              ["Axe dominant", axes.dominante?.axe ?? "—"],
+              ["Part du pipe qualifié", `${formatPct(axes.dominante?.part_montant_pct ?? null, 0)} %`],
+              ["Axes distincts", formatNumber(axes.coverage.nb_axes)],
+              ["Motifs de la grille", formatNumber(axes.coverage.nb_motifs)],
+              ["Couverture en montant", `${formatPct(axes.coverage.couverture_montant_pct, 0)} %`],
+              ["Opportunités non qualifiées", formatNumber(axes.coverage.nb_non_classe)],
+            ],
+          }}
+        />
+        <StatTile
+          span={4}
+          label="Secteur renseigné"
+          value={formatNumber(secteurs.couverture_reelle.nb_avec_secteur)}
+          unit={`client sur ${formatNumber(secteurs.couverture_reelle.nb_clients)}`}
+          reading="analyse sectorielle réelle impossible en l'état"
+          readingVariant="neg"
+          detail={{
+            kicker: "Indicateur · qualité du référentiel clients",
+            title: "Taux de renseignement du secteur d'activité",
+            tag: `${formatPct(secteurs.couverture_reelle.couverture_pct, 2)} %`,
+            tagVariant: "r",
+            body: [
+              secteurs.couverture_reelle.verdict,
+              secteurs.raison,
+              "Ce chiffre est affiché précisément parce qu'il est mauvais : un écran vide sans explication se lit comme une panne, alors qu'il s'agit d'une donnée à saisir.",
+            ],
+            kv: [
+              ["Clients au référentiel", formatNumber(secteurs.couverture_reelle.nb_clients)],
+              ["Avec un secteur", formatNumber(secteurs.couverture_reelle.nb_avec_secteur)],
+              ["Couverture", `${formatPct(secteurs.couverture_reelle.couverture_pct, 2)} %`],
+              ["Valeurs distinctes", formatNumber(secteurs.couverture_reelle.nb_secteurs_distincts)],
+              ...secteurs.couverture_reelle.valeurs
+                .slice(0, 4)
+                .map((v) => [v.secteur, `${formatNumber(v.nb_clients)} client(s)`] as [string, string]),
+            ],
+          }}
+        />
+        <StatTile
+          span={4}
+          label="Signaux de veille exploitables"
+          value={formatNumber(veille.qualite.nb_avec_url)}
+          unit={`sur ${formatNumber(veille.qualite.nb_total)} collectés`}
+          reading={
+            veille.qualite.dernier_scan
+              ? `dernière collecte le ${formatDate(veille.qualite.dernier_scan)}`
+              : "aucune collecte"
+          }
+          readingVariant={veille.qualite.part_exploitable_pct < 60 ? "wat" : undefined}
+          detail={{
+            kicker: "Indicateur · veille externe",
+            title: "Signaux de marché réellement exploitables",
+            tag: `${formatPct(veille.qualite.part_exploitable_pct, 0)} %`,
+            tagVariant: "w",
+            body: [
+              `${formatNumber(veille.qualite.nb_avec_url)} des ${formatNumber(veille.qualite.nb_total)} entrées collectées portent un lien exploitable. Les autres sont du bruit de collecte — libellés de menu capturés comme titres — et ne sont pas servies comme signaux.`,
+              `Aucune des entrées ne porte de date de publication : l'ancienneté d'un signal n'est pas connue, seule sa date de détection l'est. Collecte du ${formatDate(veille.qualite.premier_scan)} au ${formatDate(veille.qualite.dernier_scan)}.`,
+              veille.note,
+            ],
+            kv: [
+              ["Entrées collectées", formatNumber(veille.qualite.nb_total)],
+              ["Avec lien", formatNumber(veille.qualite.nb_avec_url)],
+              ["Avec date de publication", formatNumber(veille.qualite.nb_avec_date_publication)],
+              ["Part exploitable", `${formatPct(veille.qualite.part_exploitable_pct, 0)} %`],
+              ...veille.sources.map((s) => [s.nom, s.active ? "active" : "inactive"] as [string, string]),
+            ],
+          }}
+        />
+      </div>
+
+      <Bento>
+        <Tile
+          span={12}
+          title="Axes de marché du pipe ouvert"
+          kick={`mesuré · calculé sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe`}
+        >
+          <HintLine>Cliquez un axe pour son poids et son taux de réussite</HintLine>
+          <Bars
+            rows={axes.axes.map((a) => ({
+              name: a.axe,
+              sub: [
+                `${formatNumber(a.nb_ouvertes)} opportunités ouvertes`,
+                `${formatPct(a.part_montant_pct, 0)} % du pipe qualifié`,
+                a.win_rate_pct !== null
+                  ? `réussite ${formatPct(a.win_rate_pct, 0)} % sur ${formatNumber(a.nb_closes)} closes`
+                  : "aucune affaire close",
+              ].join(" · "),
+              value: `${formatMFcfa(a.montant_ouvert_xof)} M`,
+              pct: (a.montant_ouvert_xof / maxAxe) * 100,
+              variant: a.part_montant_pct > 30 ? ("w" as const) : undefined,
+              detail: {
+                kicker: "Axe de marché · pipe ouvert",
+                title: a.axe,
+                tag: `${formatPct(a.part_montant_pct, 0)} % du pipe qualifié`,
+                tagVariant: a.part_montant_pct > 30 ? ("w" as const) : ("a" as const),
+                body: [
+                  `${formatNumber(a.nb_ouvertes)} opportunités ouvertes sur cet axe pour ${formatMFcfa(a.montant_ouvert_xof)} M FCFA, soit ${formatMFcfa(a.montant_pondere_xof)} M FCFA pondérés par la probabilité déclarée.`,
+                  a.win_rate_pct !== null
+                    ? `Sur les ${formatNumber(a.nb_closes)} affaires déjà closes de cet axe, ${formatPct(a.win_rate_pct, 0)} % de la valeur engagée a été gagnée (${formatMFcfa(a.montant_gagne_xof)} M gagnés contre ${formatMFcfa(a.montant_perdu_xof)} M perdus). L'écart entre le poids dans le pipe et le taux de réussite est le signal à lire : se positionner massivement là où l'on gagne peu déplace le résultat.`
+                    : "Aucune affaire close sur cet axe : son taux de réussite n'est pas encore calculable.",
+                  "L'axe est déduit du libellé de l'opportunité par une grille de motifs, non lu dans un champ du CRM : un libellé plus explicite améliore directement la lecture.",
+                ],
+                kv: [
+                  ["Pipe ouvert", `${formatMFcfa(a.montant_ouvert_xof)} M FCFA`],
+                  ["Pipe pondéré", `${formatMFcfa(a.montant_pondere_xof)} M FCFA`],
+                  ["Opportunités ouvertes", formatNumber(a.nb_ouvertes)],
+                  ["Part du pipe qualifié", `${formatPct(a.part_montant_pct, 0)} %`],
+                  ["Taux de réussite", a.win_rate_pct !== null ? `${formatPct(a.win_rate_pct, 0)} %` : "—"],
+                  ["Affaires closes", formatNumber(a.nb_closes)],
+                  ["Valeur gagnée", `${formatMFcfa(a.montant_gagne_xof)} M FCFA`],
+                  ["Valeur perdue", `${formatMFcfa(a.montant_perdu_xof)} M FCFA`],
+                ],
+              },
+            }))}
+          />
+          <Note style={{ marginTop: 14 }}>{axes.note}</Note>
+        </Tile>
+
+        <Tile span={7} title="Performance par secteur d'activité" kick={sourceKick(secteurs.source, "nomenclature à valider")}>
+          <HintLine>Cliquez un secteur pour sa part de marché supposée</HintLine>
+          <Bars
+            rows={secteurs.secteurs.map((s) => ({
+              name: s.secteur,
+              sub: [
+                `${formatNumber(s.nb_clients)} clients`,
+                `${formatPct(s.part_ca_pct, 0)} % du CA`,
+                `croissance ${s.croissance_pct > 0 ? "+" : ""}${formatPct(s.croissance_pct, 1)} %`,
+              ].join(" · "),
+              value: `${formatMFcfa(s.ca_xof)} M`,
+              pct: (s.ca_xof / maxSecteur) * 100,
+              variant: s.croissance_pct < 0 ? ("r" as const) : undefined,
+              detail: {
+                kicker: "Secteur · gabarit",
+                title: s.secteur,
+                tag: "donnée statique",
+                tagVariant: "n" as const,
+                body: [
+                  `Le gabarit pose ${formatMFcfa(s.ca_xof)} M FCFA de CA sur ${formatNumber(s.nb_clients)} clients pour ce secteur, soit ${formatPct(s.part_ca_pct, 0)} % du CA, avec une croissance de ${formatPct(s.croissance_pct, 1)} %.`,
+                  s.part_marche_pct !== null
+                    ? `Rapporté à une taille de marché supposée de ${formatMFcfa(s.taille_marche_xof)} M FCFA, cela donnerait une part de marché de ${formatPct(s.part_marche_pct, 2)} %. Cette taille de marché est un ordre de grandeur de travail, à remplacer par une étude ou des données publiques.`
+                    : "Aucune taille de marché n'est associée à ce secteur.",
+                  secteurs.raison,
+                ],
+                kv: [
+                  ["CA (gabarit)", `${formatMFcfa(s.ca_xof)} M FCFA`],
+                  ["Clients (gabarit)", formatNumber(s.nb_clients)],
+                  ["Part du CA", `${formatPct(s.part_ca_pct, 0)} %`],
+                  ["Croissance", `${formatPct(s.croissance_pct, 1)} %`],
+                  ["Taille de marché supposée", `${formatMFcfa(s.taille_marche_xof)} M FCFA`],
+                  ["Part de marché supposée", s.part_marche_pct !== null ? `${formatPct(s.part_marche_pct, 2)} %` : "—"],
+                ],
+              },
+            }))}
+          />
+          <SourceNote source={secteurs.source} raison={secteurs.raison} avertissement={secteurs.avertissement} />
+        </Tile>
+
+        <Tile span={5} title="Part de marché : ce qui est calculable et ce qui ne l'est pas" quiet>
+          <Bars
+            rows={[
+              {
+                name: "Part de marché globale supposée",
+                sub: `notre CA rapporté à une taille de marché de ${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA`,
+                value:
+                  secteurs.totaux.part_marche_globale_pct !== null
+                    ? `${formatPct(secteurs.totaux.part_marche_globale_pct, 2)} %`
+                    : "—",
+                pct: Math.min(100, (secteurs.totaux.part_marche_globale_pct ?? 0) * 10),
+                variant: "w" as const,
+              },
+              {
+                name: "Secteurs réellement renseignés",
+                sub: `sur ${formatNumber(secteurs.couverture_reelle.nb_clients)} clients du référentiel`,
+                value: formatNumber(secteurs.couverture_reelle.nb_avec_secteur),
+                pct: Math.max(1, secteurs.couverture_reelle.couverture_pct),
+                variant: "r" as const,
+              },
+            ]}
+          />
+          <Note accent style={{ marginTop: 14 }}>
+            {secteurs.part_marche.distinction}
+          </Note>
+          <Note style={{ marginTop: 12 }}>{secteurs.part_marche.raison}</Note>
+        </Tile>
+
+        <Tile
+          span={12}
+          title="Signaux de marché détectés"
+          kick={`mesuré · ${formatNumber(veille.signaux.length)} signaux exploitables`}
+        >
+          {veille.signaux.length > 0 ? (
+            <>
+              <HintLine>Cliquez un signal pour sa lecture commerciale</HintLine>
+              <Lst
+                items={veille.signaux.map((s) => ({
+                  title: s.titre,
+                  sub: [s.source, s.pays, s.detecte_le ? `détecté le ${formatDate(s.detecte_le)}` : null]
+                    .filter(Boolean)
+                    .join(" · "),
+                  tag: s.criticite >= 70 ? "à traiter" : s.criticite >= 40 ? "à qualifier" : "à surveiller",
+                  tagVariant: s.criticite >= 70 ? ("r" as const) : s.criticite >= 40 ? ("w" as const) : ("n" as const),
+                  detail: {
+                    kicker: `Signal de marché · ${s.source}`,
+                    title: s.titre,
+                    tag: `criticité ${formatNumber(s.criticite)}`,
+                    tagVariant: s.criticite >= 70 ? ("r" as const) : ("w" as const),
+                    body: [
+                      s.so_what || "Aucune lecture commerciale n'a encore été rédigée pour ce signal.",
+                      s.action ? `Action suggérée : ${s.action}` : "",
+                      s.risque ? `Risque identifié : ${s.risque}` : "",
+                      s.publie_le
+                        ? `Publié le ${formatDate(s.publie_le)}.`
+                        : "La source ne remonte pas de date de publication : seule la date de détection est connue, l'ancienneté réelle du signal ne l'est pas.",
+                    ].filter(Boolean),
+                    kv: [
+                      ["Source", s.source],
+                      ["Pays", s.pays || "—"],
+                      ["Criticité", formatNumber(s.criticite)],
+                      ["Détecté le", formatDate(s.detecte_le)],
+                      ["Offre associée", s.offre || "—"],
+                      ["Lien", s.url || "—"],
+                    ],
+                  },
+                }))}
+              />
+            </>
+          ) : (
+            <Note style={{ marginTop: 0 }}>
+              Aucun signal exploitable dans la veille : {formatNumber(veille.qualite.nb_total)} entrées
+              collectées, aucune ne portant de lien utilisable.
+            </Note>
+          )}
+          <Note style={{ marginTop: 14 }}>{veille.note}</Note>
+        </Tile>
+      </Bento>
+    </>
+  );
+}

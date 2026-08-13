@@ -854,3 +854,188 @@ class ArbitrageNarrationModel(Base):
     # `narratif.build_dossier_narration`, stockée telle quelle.
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pilotage commercial (UC Commercial — cockpit DC)
+#
+# Ces six tables PRÉEXISTAIENT en base sans modèle correspondant dans ce
+# fichier : elles avaient été créées par un code depuis disparu (il ne reste que
+# du bytecode dans modules/uc_commercial/__pycache__, daté du 04/08/2026, jamais
+# committé). Les colonnes déclarées ici reproduisent EXACTEMENT le schéma trouvé
+# en base — `create_all` ne modifie jamais une table existante, un écart de
+# colonne se traduirait donc par une erreur SQL au premier accès, pas par une
+# migration.
+#
+# Elles portent ce qu'aucun fait du miroir Odoo ne peut fournir : un objectif est
+# une DÉCISION (pas une donnée synchronisée), un référentiel de commerciaux est
+# un ARBITRAGE d'identité (Odoo ne stocke que du texte libre), un axe stratégique
+# est une GRILLE DE LECTURE (« IA », « infrastructure » n'existent nulle part
+# dans le CRM).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class CommercialObjectiveModel(Base):
+    """Objectif commercial — la donnée qui manquait à tout indicateur d'écart.
+
+    `scope`/`scope_ref` : "equipe" (ref vide), "commercial" (ref = salesperson_id),
+    "secteur" (ref = libellé secteur). `kind` : "ca" (montant signé) ou "prospection"
+    (opportunités générées). Les deux cibles coexistent sur une ligne car le DC les
+    exprime ensemble (« 30 M et tant de leads ») : `target_amount_xof` peut être 0
+    sur un objectif de volume pur, et `target_count` 0 sur un objectif de montant pur.
+
+    `period_index` : 1-12 en mensuel, 1-4 en trimestriel, 0 en annuel.
+
+    RÉVISIONS : un objectif n'est jamais mis à jour en place — on insère une
+    révision supérieure et on marque la précédente `superseded`. Sans cela, un Gap
+    calculé en mars n'est plus reproductible après une révision de juin, et le
+    « pourquoi » de l'écart devient indéfendable.
+    """
+    __tablename__ = "commercial_objectives"
+    __table_args__ = (
+        Index("ix_commercial_objectives_lookup", "scope", "scope_ref", "kind", "period_year"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scope: Mapped[str] = mapped_column(String(20), default="equipe")
+    scope_ref: Mapped[str] = mapped_column(String(255), default="")
+    kind: Mapped[str] = mapped_column(String(20), default="ca")
+    period_type: Mapped[str] = mapped_column(String(10), default="annee")
+    period_year: Mapped[int] = mapped_column(Integer, default=0)
+    period_index: Mapped[int] = mapped_column(Integer, default=0)
+    target_amount_xof: Mapped[float] = mapped_column(Float, default=0.0)
+    target_count: Mapped[int] = mapped_column(Integer, default=0)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    superseded: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class CommercialAlertModel(Base):
+    """Alerte du cockpit commercial, persistée pour porter son ÂGE.
+
+    Le calcul des signaux est refait à chaque lecture (aucune heuristique n'est
+    figée en base) ; ce qui est persisté, c'est la date de PREMIÈRE apparition
+    d'une clé et l'éventuel écartement. Deux raisons :
+
+    - « ce compte est en pic depuis 3 jours » n'est pas calculable sur un miroir
+      qui ne garde que l'état courant. `created_at` de la clé le donne ;
+    - une alerte écartée qui revient chaque matin est du bruit, exactement ce que
+      le DC redoute. `dismissed_at` la retire, `dismissed_reason` dit pourquoi.
+
+    `alert_key` est DÉTERMINISTE (type + sujet + période), jamais un hash aléatoire :
+    c'est ce qui permet de reconnaître la même alerte d'un jour sur l'autre.
+    """
+    __tablename__ = "commercial_alerts"
+    __table_args__ = (Index("ix_commercial_alerts_key", "alert_key", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alert_key: Mapped[str] = mapped_column(String(255))
+    alert_type: Mapped[str] = mapped_column(String(40), default="")
+    severity: Mapped[str] = mapped_column(String(20), default="info")
+    subject_ref: Mapped[str] = mapped_column(String(255), default="")
+    subject_label: Mapped[str] = mapped_column(String(500), default="")
+    salesperson_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    montant_xof: Mapped[float] = mapped_column(Float, default=0.0)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dismissed_reason: Mapped[str] = mapped_column(String(500), default="")
+
+
+class CommercialParamModel(Base):
+    """Paramètres métier du cockpit commercial (seuils), en JSON sous clé.
+
+    Les seuils de dormance sont, eux, VALIDÉS et donc figés dans le code
+    (uc_dormance). Cette table ne porte que ce qui reste ouvert : seuil de
+    traçage du cycle de vie, sensibilité de la détection de pic, règle de
+    complétude d'une opportunité. Un seuil arbitraire codé en dur se lit comme
+    une vérité métier ; sous clé paramétrable, il reste discutable.
+    """
+    __tablename__ = "commercial_params"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value_json: Mapped[str] = mapped_column(Text, default="{}")
+    updated_by: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SalespersonModel(Base):
+    """Identité commerciale canonique — ce qu'Odoo ne porte pas.
+
+    Le miroir ne connaît que `salesperson_name` en texte libre : 28 valeurs
+    distinctes dans `opportunities`, 36 dans `sale_orders`, avec des doublons de
+    casse (« Segui Mireille  KOUADIO » / « SEGUI MIREILLE  KOUADIO ») et des
+    comptes techniques (« Administrateur » porte 1 106 opportunités). Sans cette
+    table, tout classement par commercial additionne des orthographes et compte
+    un robot parmi les vendeurs.
+
+    `is_active`/`left_at` : un commercial parti ne doit pas disparaître de
+    l'historique, seulement des classements de la période courante.
+    """
+    __tablename__ = "salespeople"
+
+    salesperson_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(255), default="")
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    odoo_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    left_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SalespersonAliasModel(Base):
+    """Orthographe observée dans le miroir → identité canonique.
+
+    `confirmed = False` signale un rattachement PROPOSÉ par la normalisation
+    automatique (casse, espaces, accents) et non validé humainement. Le cockpit
+    doit dire combien d'alias restent non confirmés : c'est la marge d'erreur du
+    classement, et la taire reviendrait à présenter un palmarès comme certain.
+
+    `salesperson_id` nul = alias volontairement non rattaché (compte technique,
+    assistante commerciale, entité interne) : une exclusion assumée et tracée,
+    pas une donnée perdue.
+    """
+    __tablename__ = "salesperson_aliases"
+    __table_args__ = (Index("ix_salesperson_aliases_norm", "alias_normalized", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alias_normalized: Mapped[str] = mapped_column(String(255))
+    alias_raw: Mapped[str] = mapped_column(String(255), default="")
+    salesperson_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    source_tables: Mapped[list] = mapped_column(JSON, default=list)
+    occurrences: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    resolved_by: Mapped[str] = mapped_column(String(255), default="")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class StrategicAxisMappingModel(Base):
+    """Motif de libellé → axe stratégique (« IA », « infrastructure », « cloud »…).
+
+    Le DC raisonne en marchés (« santé du marché orienté IA et infrastructure »),
+    le CRM ne porte ni secteur exploitable ni catégorie d'offre. Cette table est
+    la grille de lecture qui relie les deux, en assumant qu'elle est une
+    CONVENTION éditable et non une vérité extraite des données.
+
+    Distincte de la taxonomie de familles d'offre (uc_offermix), qui répond à
+    « qu'est-ce qu'on vend » (logiciel / réseau / équipement / services). Ici la
+    question est « sur quel marché » — un même équipement peut relever de l'axe
+    datacenter ou de l'axe cybersécurité selon le projet.
+    """
+    __tablename__ = "strategic_axis_mappings"
+    __table_args__ = (Index("ix_strategic_axis_mappings_axis", "axis"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    axis: Mapped[str] = mapped_column(String(50), default="")
+    match_type: Mapped[str] = mapped_column(String(20), default="contains")
+    pattern: Mapped[str] = mapped_column(String(255), default="")
+    priority: Mapped[int] = mapped_column(Integer, default=100)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -20,6 +20,10 @@ data/debug/
 data/score_cache/
 ollama_models/
 
+# ── Rapports du banc de charge Locust (artefacts, pas du code) ─────────────
+loadtest/reports/*
+!loadtest/reports/.gitkeep
+
 # ── Dossiers temporaires ────────────────────────────────────────────────────
 steph/
 OneDrive_*/
@@ -64,3 +68,6 @@ desktop.ini
 backend/run_std*.log
 frontend/run_std*.log
 *.pdf
+
+
+loadtest/
