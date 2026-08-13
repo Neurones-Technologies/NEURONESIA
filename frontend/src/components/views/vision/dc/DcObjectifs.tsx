@@ -4,7 +4,6 @@ import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/
 import { Note } from "@/components/ui/primitives";
 import { PeriodeNav } from "./periode-nav";
 import { SourceNote, sourceKick } from "./source";
-import { ScreenNotes } from "@/components/ui/screen-notes";
 import { ChartNote, ColumnChart } from "@/components/ui/chart";
 import { REPERE, SERIE_2 } from "@/components/ui/chart-palette";
 
@@ -53,8 +52,6 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
         annee={gap.annee}
         annees={gap.annees_disponibles}
       />
-
-      <ScreenNotes notes={[gap.note]} />
 
       <div className="kpi-row">
         <StatTile

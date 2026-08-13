@@ -16,7 +16,7 @@ import { test, expect, type Cookie } from "@playwright/test";
 // Python : ce test est aussi le garde-fou contre une régression qui ferait tomber
 // l'un de ces calculs sur les données réelles.
 
-const SECTIONS = ["encours", "budget", "relation-commerciale", "tresorerie", "formation"] as const;
+const SECTIONS = ["encours", "budget", "relation-commerciale", "tresorerie"] as const;
 
 test.describe("Cockpit DAF — les onglets rendent tous", () => {
   // Exécution SÉRIELLE, et c'est la seule raison : `beforeAll` est rejoué par
@@ -104,6 +104,17 @@ test.describe("Cockpit DAF — les onglets rendent tous", () => {
   test("une section inconnue répond 404", async ({ page }) => {
     const reponse = await page.goto("/df/vision/section-inexistante");
     expect(reponse?.status()).toBe(404);
+  });
+
+  // « Formation et qualité » a été retiré du cockpit. Le retirer du seul menu
+  // l'aurait masqué à l'œil en laissant l'URL servir la page : ce cas vérifie les
+  // deux faces du retrait — plus d'onglet, et plus de route.
+  test("le volet formation n'est ni affiché ni atteignable", async ({ page }) => {
+    await page.goto("/df/vision/encours");
+    await expect(page.getByRole("link", { name: /formation/i })).toHaveCount(0);
+
+    const reponse = await page.goto("/df/vision/formation");
+    expect(reponse?.status(), "statut HTTP de /df/vision/formation").toBe(404);
   });
 
   // `/df/vision` n'est plus une page : elle redirige vers la première section.

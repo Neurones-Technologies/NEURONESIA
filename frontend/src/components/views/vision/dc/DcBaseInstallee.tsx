@@ -152,7 +152,7 @@ export async function DcBaseInstallee() {
       )}
 
       <Tile span={12} title="Ciblage cross-sell et renouvellement" kick="M1 · narration">
-        <AnalysisSlot load={getCrossSellAnalysis} />
+        <AnalysisSlot load={getCrossSellAnalysis} pliable titrePli="Lire l'analyse du ciblage" />
         {crosssell && (
           <div style={{ marginTop: 18 }}>
             <HintLine>Cliquez un compte pour le signal détaillé</HintLine>

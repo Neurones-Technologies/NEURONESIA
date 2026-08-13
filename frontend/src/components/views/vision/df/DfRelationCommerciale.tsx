@@ -8,7 +8,6 @@ import { RAMPE_AGE, SERIE_1 } from "@/components/ui/chart-palette";
 import { Variant } from "@/lib/types";
 import { SourceNote, sourceKick } from "../dc/source";
 import { ExerciceNav } from "./exercice-nav";
-import { ScreenNotes } from "@/components/ui/screen-notes";
 import { ScreenLede } from "@/components/ui/screen-lede";
 
 /** Tableau de bord n°2 du DAF — Relation commerciale.
@@ -87,20 +86,6 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             label: dpo.source === "reel" ? `DPO ${formatPct(dpo.dpo_jours, 0)} j` : "DPO non mesurable",
             alerte: dpo.source !== "reel",
           },
-        ]}
-      />
-
-      <ScreenNotes
-        notes={[
-          dso.note,
-          dpo.note,
-          // Même phrase que la note de pied précédente, composée en chaîne : le
-          // panneau prend des textes, pas du JSX.
-          `Couverture de la mesure : ${formatNumber(dso.couverture.nb_reglees_datees)} factures portent une date de règlement sur ${formatNumber(dso.couverture.nb_factures)} (${formatPct(dso.couverture.part_datee_pct, 1)} %).${
-            balance.nb_sans_echeance > 0
-              ? ` ${formatNumber(balance.nb_sans_echeance)} facture(s) ouverte(s) n'ont pas d'échéance exploitable (${formatMFcfa(balance.montant_sans_echeance_xof)} M FCFA) : elles sortent de la balance âgée.`
-              : ""
-          }`,
         ]}
       />
 

@@ -99,10 +99,10 @@ function page(section: string) {
  * l'inverse. La route valide le segment avant d'appeler ce registre, et un test
  * e2e parcourt les deux listes. */
 export const DC_SECTIONS: Record<string, (params: DcSectionParams) => ReactNode> = {
+  marche: page("marche"),
   portefeuille: page("portefeuille"),
   pipeline: page("pipeline"),
   objectifs: page("objectifs"),
-  marche: page("marche"),
   "mix-offre": page("mix-offre"),
   transformation: page("transformation"),
   visites: page("visites"),

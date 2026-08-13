@@ -3,7 +3,6 @@ import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { SourceNote, sourceKick } from "./source";
-import { ScreenNotes } from "@/components/ui/screen-notes";
 
 /** Onglet « Cycle de vie » — §2 du compte-rendu DC.
  *
@@ -45,8 +44,6 @@ export async function DcCycleVie() {
 
   return (
     <>
-      <ScreenNotes notes={[cycle.note]} />
-
       <div className="kpi-row">
         <StatTile
           span={4}
@@ -171,7 +168,13 @@ export async function DcCycleVie() {
 
         <Tile span={5} title="Affaires suivies, par montant" kick={`${formatNumber(cycle.affaires.length)} affichées`}>
           <HintLine>Cliquez une affaire pour son âge et son état</HintLine>
+          {/* Repli à 7 : la liste porte jusqu'à quinze affaires et occupait à elle
+              seule plus d'un écran, reléguant les blocs suivants sous la ligne de
+              flottaison. Les sept premières suffisent à la lecture courante (les
+              plus gros montants), le reste est à un clic. */}
           <Lst
+            replierApres={7}
+            nom="affaires"
             items={cycle.affaires.map((a) => ({
               title: a.name,
               sub: [

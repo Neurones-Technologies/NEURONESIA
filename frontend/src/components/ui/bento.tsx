@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Variant } from "@/lib/types";
 import { Clickable, DetailCard } from "./detail";
+import { LstRepli } from "./lst-repli";
 
 type Span = 3 | 4 | 5 | 6 | 7 | 8 | 12;
 
@@ -13,16 +14,20 @@ export function Tile({
   title,
   kick,
   quiet,
+  rows,
   children,
 }: {
   span?: Span;
   title?: string;
   kick?: string;
   quiet?: boolean;
+  /** `2` : la tuile tient la hauteur de deux rangées, pour faire face à une
+   *  colonne de deux tuiles empilées. Sans valeur, comportement d'avant. */
+  rows?: 2;
   children: ReactNode;
 }) {
   return (
-    <div className={`tile t${span}${quiet ? " tile--q" : ""}`}>
+    <div className={`tile t${span}${quiet ? " tile--q" : ""}${rows === 2 ? " tile--tall" : ""}`}>
       {(title || kick) && (
         <div className="tile-h">
           {title && <h3>{title}</h3>}
@@ -55,6 +60,17 @@ export function Brief({
 }) {
   return (
     <div className="brief">
+      {/* Marque « texte généré par l'IA », en haut à droite du panneau.
+          Le tracé est celui de l'icône Copilote du rail (cf. shell/Rail.tsx) :
+          l'étincelle désigne déjà l'IA ailleurs dans l'interface, un second
+          dessin pour la même idée ferait deux vocabulaires.
+          `title` plutôt que `aria-hidden` : l'origine du texte est une
+          information, pas une décoration — elle doit être lisible au lecteur
+          d'écran comme au survol. */}
+      <svg className="brief-ia" viewBox="0 0 24 24" role="img" aria-label="Généré par l'IA">
+        <title>Généré par l&apos;IA</title>
+        <path d="M12 3l1.9 4.9L19 9.8l-5.1 1.9L12 17l-1.9-5.3L5 9.8l5.1-1.9zM18 15.5l.9 2.3 2.1.8-2.1.8-.9 2.1-.9-2.1-2.1-.8 2.1-.8z" />
+      </svg>
       <p className="brief-k">
         <span className="dot" />
         {kicker}
@@ -212,30 +228,54 @@ export interface LstItem {
   detail?: DetailCard;
 }
 
-export function Lst({ items }: { items: LstItem[] }) {
+/** Liste numérotée d'un écran.
+ *
+ * `replierApres` replie la queue derrière une bascule « Voir les N autres »
+ * (cf. ui/lst-repli.tsx). Option et non comportement par défaut : la trentaine
+ * d'appels existants affichent des listes déjà coupées à la source par un
+ * `.slice()`, et les replier d'office cacherait des lignes que l'écran annonce
+ * comme affichées. Sans cette prop, le rendu est celui d'avant — entièrement
+ * serveur, sans JavaScript. */
+export function Lst({
+  items,
+  replierApres,
+  nom,
+}: {
+  items: LstItem[];
+  /** Nombre de lignes visibles avant repli. Omis : liste entière, comme avant. */
+  replierApres?: number;
+  /** Nom des lignes au pluriel, pour le libellé de la bascule. */
+  nom?: string;
+}) {
+  const lignes = items.map((it, i) => {
+    const inner = (
+      <>
+        <b>{String(i + 1).padStart(2, "0")}</b>
+        <span className="lst-t">
+          <b>{it.title}</b>
+          {it.sub && <span>{it.sub}</span>}
+        </span>
+        <span className={`tag tag--${it.tagVariant}`}>{it.tag}</span>
+      </>
+    );
+    return it.detail ? (
+      <Clickable key={i} className="lst-i" detail={it.detail}>
+        {inner}
+      </Clickable>
+    ) : (
+      <div key={i} className="lst-i">
+        {inner}
+      </div>
+    );
+  });
+
   return (
     <div className="lst">
-      {items.map((it, i) => {
-        const inner = (
-          <>
-            <b>{String(i + 1).padStart(2, "0")}</b>
-            <span className="lst-t">
-              <b>{it.title}</b>
-              {it.sub && <span>{it.sub}</span>}
-            </span>
-            <span className={`tag tag--${it.tagVariant}`}>{it.tag}</span>
-          </>
-        );
-        return it.detail ? (
-          <Clickable key={i} className="lst-i" detail={it.detail}>
-            {inner}
-          </Clickable>
-        ) : (
-          <div key={i} className="lst-i">
-            {inner}
-          </div>
-        );
-      })}
+      {replierApres !== undefined ? (
+        <LstRepli lignes={lignes} visibles={replierApres} nom={nom} />
+      ) : (
+        lignes
+      )}
     </div>
   );
 }

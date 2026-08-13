@@ -15,10 +15,10 @@ import { test, expect, type Cookie } from "@playwright/test";
 
 // Les sept pages du menu.
 const PAGES = [
+  "marche",
   "portefeuille",
   "pipeline",
   "objectifs",
-  "marche",
   "mix-offre",
   "transformation",
   "visites",
@@ -146,6 +146,26 @@ test.describe("Cockpit DC — les onglets rendent tous", () => {
     await expect(page.locator("header.hdr--stacked")).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Chapitres de la vue" })).toHaveCount(0);
     await expect(page.locator(".hdr-nav a")).toHaveCount(PAGES.length);
+  });
+
+  // « Marché » est l'écran d'ouverture du cockpit DC : le profil doit y atterrir
+  // sans avoir à cliquer, et l'onglet doit être surligné à l'arrivée. Le test porte
+  // sur les DEUX points d'entrée — l'URL de vue nue et la racine du profil — parce
+  // qu'ils passent par des redirections distinctes (vision/page.tsx et
+  // [profile]/page.tsx). L'onglet actif se lit sur la rangée de sections, à ne pas
+  // confondre avec les vues internes de la page (« Tendances et marché »).
+  test("le cockpit DC ouvre sur Marché, onglet actif", async ({ page }) => {
+    const sections = page.getByRole("navigation", { name: "Sections de la vue" });
+
+    await page.goto("/dc/vision");
+    await expect(page).toHaveURL(/\/dc\/vision\/marche$/);
+    await expect(sections.locator('a[aria-current="page"]')).toHaveText("Marché");
+    // Premier de la rangée, pas seulement actif.
+    await expect(sections.locator("a").first()).toHaveText("Marché");
+
+    await page.goto("/dc");
+    await expect(page).toHaveURL(/\/dc\/vision\/marche$/);
+    await expect(sections.locator('a[aria-current="page"]')).toHaveText("Marché");
   });
 
   // Les onglets internes portent la vue : le surlignage doit suivre `?vue=`, y

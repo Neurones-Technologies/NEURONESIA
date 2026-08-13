@@ -1157,6 +1157,17 @@ h1.vt{
 .scr-n-b{padding:0 15px 15px}
 /* La première note perd sa marge haute : le padding du panneau la porte déjà. */
 .scr-n-b>.note:first-child{margin-top:0}
+/* Narration repliée (cf. ui/analysis-slot.tsx, option `pliable`).
+   `.narr` porte le même fond `paper-2` que `.scr-n` : imbriqués tels quels, la
+   narration se fondait dans son conteneur et sa boîte ne se lisait plus. On lui
+   rend le fond carte, et le panneau garde le rôle d'enveloppe. */
+.scr-n--narr>.scr-n-b>.narr{background:var(--card)}
+/* Titre en casse normale : c'est une invitation à lire un texte, pas une
+   étiquette de section comme « Ce que cet écran mesure ». */
+.scr-n--narr>summary>.scr-n-t{
+  font-family:var(--disp);font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--t2)
+}
+.scr-n--narr>summary:hover>.scr-n-t{color:var(--accent)}
 .narr{
   font-size:14.5px;line-height:1.68;background:var(--paper-2);border:1px solid var(--line);
   border-radius:var(--r-md);padding:16px 18px;box-shadow:var(--shadow-xs)
@@ -1357,6 +1368,42 @@ table.tb tbody tr:hover{background:var(--paper-2)}
   mask-image:radial-gradient(circle at 100% 100%,#000 0 52%,transparent 78%)
 }
 .brief>*{position:relative;z-index:1}
+/* Marque « généré par l'IA », calée dans le coin haut-droit.
+   Elle est HORS FLUX (`position:absolute`) : dans le flux, elle aurait poussé
+   le kicker et le titre vers le bas alors qu'elle doit seulement signer le
+   panneau. Elle se pose au-dessus du motif d'arcs (`.brief::after`, sans
+   z-index) sans le remplacer — d'où le halo sombre en fond, qui détache
+   l'étincelle des cercles quand les deux se croisent.
+   Le titre a `max-width:34ch` et ne monte donc jamais jusqu'à cette zone. */
+.brief-ia{
+  position:absolute;top:26px;right:30px;width:30px;height:30px;z-index:2;
+  padding:6px;border-radius:50%;box-sizing:content-box;
+  fill:var(--accent-2);opacity:.9;
+  background:radial-gradient(circle,rgba(24,26,30,.85) 40%,transparent 72%);
+  transform-origin:60% 42%
+}
+/* Scintillement : un éclat bref toutes les 3 s, pas un clignotement régulier.
+   L'essentiel du cycle est immobile (0 → 74 %), l'animation ne se joue que sur
+   le dernier quart — c'est ce qui la rend perceptible sans la rendre agaçante
+   sur un panneau qu'on lit ligne à ligne.
+   L'éclat combine opacité et échelle : l'opacité seule, sur une icône déjà à
+   90 %, ne laissait qu'une marge de 10 % — invisible. Le `scale` porte l'effet,
+   l'opacité l'accompagne. Le `transform-origin` est calé sur le centre de la
+   GRANDE étincelle (et non de la boîte, que la petite décentre) : sans cela le
+   dessin semblait glisser vers le bas droit à chaque éclat.
+   La règle globale de `prefers-reduced-motion:reduce` (cf. plus haut) neutralise
+   l'animation : l'icône reste alors simplement affichée, ce qui suffit — elle
+   marque l'origine du texte, elle ne signale pas un événement. */
+@media (prefers-reduced-motion:no-preference){
+  .brief-ia{animation:brief-ia-scintille 3s ease-in-out infinite}
+}
+@keyframes brief-ia-scintille{
+  0%,74%,100%{opacity:.9;transform:scale(1)}
+  82%{opacity:1;transform:scale(1.18)}
+  90%{opacity:.9;transform:scale(1)}
+  94%{opacity:1;transform:scale(1.07)}
+}
+@media (max-width:820px){.brief-ia{top:19px;right:17px;width:24px;height:24px}}
 .brief-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:10px;margin:0 0 14px}
 .brief h2{font-family:var(--disp);font-size:29px;font-weight:300;color:#fff;line-height:1.16;max-width:34ch;margin:0 0 12px;letter-spacing:-.02em}
 .brief p{color:rgba(255,255,255,.7);font-size:15.5px;line-height:1.68;max-width:104ch;margin:0 0 12px}
@@ -1384,6 +1431,15 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
 .t3{grid-column:span 3}.t4{grid-column:span 4}.t5{grid-column:span 5}
 .t6{grid-column:span 6}.t7{grid-column:span 7}.t8{grid-column:span 8}.t12{grid-column:span 12}
+/* Tuile qui tient la hauteur de DEUX rangées, pour faire face à une colonne de
+   tuiles empilées (cf. écran Pics : « Pics d'activité » et « Nature des alertes »
+   à gauche, « Alertes en attente » à droite en vis-à-vis des deux).
+   Sans cela, la grille place la troisième tuile SOUS les deux premières : les
+   colonnes se remplissent rangée par rangée, et une tuile de 5 colonnes ne peut
+   pas s'étendre d'elle-même sur deux rangées.
+   `align-self:stretch` annule le `align-items:start` du conteneur pour cette
+   tuile seule : elle doit couvrir la hauteur des deux qui lui font face. */
+.tile--tall{grid-row:span 2;align-self:stretch}
 .tile{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:19px 21px 21px;
   box-shadow:var(--shadow-sm);transition:border-color .18s ease;min-width:0
@@ -1413,12 +1469,22 @@ table.tb tbody tr:hover{background:var(--paper-2)}
    Ces règles surchargent volontairement `.kpi-row` (cf. plus haut), qui compacte
    toutes ses tuiles de façon uniforme. */
 .stat--p{background:linear-gradient(180deg,#FFFEFB,var(--paper-2));border-color:var(--accent-border)}
+/* Le filet d'accent épouse l'arrondi de la tuile au lieu de le trancher.
+   La bande ne peut pas porter l'arrondi elle-même : un `border-radius` de 18 px
+   sur une boîte large de 3 px est ramené par le navigateur à un demi-cercle de
+   1,5 px — on obtenait un bâtonnet à bouts ronds qui dépassait la courbe du
+   cadre en haut et en bas.
+   Le pseudo-élément fait donc la taille de la TUILE (`inset:0`), reprend son
+   rayon (`border-radius:inherit`) et n'en laisse voir que les 3 premiers pixels
+   par un masque horizontal. La forme vient du cadre, la couleur du dégradé
+   vertical : le filet s'arrête exactement où le congé commence. */
+.stat--p{position:relative;isolation:isolate}
 .stat--p::before{
-  content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background:linear-gradient(180deg,var(--accent-strong),var(--accent));
-  border-radius:var(--r-lg) 0 0 var(--r-lg)
+  -webkit-mask:linear-gradient(90deg,#000 0 3px,transparent 3px);
+  mask:linear-gradient(90deg,#000 0 3px,transparent 3px)
 }
-.stat--p{position:relative}
 .kpi-row>.stat--p .stat-v{font-size:clamp(30px,2.9vw,38px)}
 .stat--c .stat-v{font-size:clamp(18px,1.5vw,22px);color:var(--t2)}
 .stat--c .tile-h h3{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--t3)}
@@ -1451,6 +1517,37 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .lst-t b{display:block;font-size:13.5px;font-weight:500;line-height:1.4}
 .lst-t span{display:block;font-size:12.5px;color:var(--t2);margin-top:2px;line-height:1.5}
 .foot-n{font-family:var(--mono);font-size:10.5px;line-height:1.7;color:var(--t3);border-left:2px solid var(--accent-border);padding-left:12px;margin:16px 0 0}
+/* Repli d'une liste longue (cf. ui/lst-repli.tsx).
+   `display:contents` : `.lst` est une grille, ses lignes doivent en rester les
+   enfants directs — un conteneur ordinaire écraserait la queue dans une seule
+   cellule et désalignerait ses colonnes.
+   Mais `display:contents` l'emporte sur le `display:none` que porte l'attribut
+   `hidden` : le conteneur seul ne peut donc PAS masquer sa queue (constaté au
+   rendu — les quinze lignes restaient visibles sous un bouton « voir les 8
+   autres »). Ce sont les lignes elles-mêmes qu'on masque, via le parent replié. */
+.lst-queue{display:contents}
+.lst-queue[hidden]>*{display:none}
+/* `:first-child` se calcule par rapport au CONTENEUR, pas à la grille aplatie :
+   la première ligne de la queue héritait donc du traitement réservé à la tête de
+   liste (filet supprimé, padding réduit) et se collait à la ligne précédente une
+   fois dépliée. On lui rend son filet. */
+.lst-queue>.lst-i:first-child{border-top:1px solid var(--hair);padding-top:12px}
+/* Le bouton reprend le vocabulaire des affordances discrètes de l'écran (mono,
+   majuscules espacées, cf. `.pay-more`) : c'est une commande de lecture, pas une
+   action métier — elle ne doit pas peser autant qu'un bouton de formulaire. */
+.lst-plus{
+  font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--t3);background:none;border:0;border-top:1px solid var(--hair);
+  padding:11px 0 2px;margin:0;width:100%;text-align:left;cursor:pointer;
+  transition:color .14s ease
+}
+.lst-plus:hover{color:var(--accent)}
+.lst-plus:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:6px}
+/* Chevron orienté par l'état : vers le bas pour déplier, vers le haut pour
+   replier. L'attribut porte déjà l'information pour le lecteur d'écran
+   (`aria-expanded`), le glyphe la donne à l'œil. */
+.lst-plus::after{content:" \2304";font-size:13px;line-height:0}
+.lst-plus[aria-expanded="true"]::after{content:" \2303"}
 
 /* ---------- affordances cliquables ---------- */
 /* `Clickable` rend un <div>/<tr>, pas un <button> : pas de reset de fond ni de
@@ -1497,6 +1594,14 @@ table.tb tr.clk{cursor:pointer}
 
 @media (max-width:1180px){
   .t3,.t4,.t5{grid-column:span 6}.t7,.t8{grid-column:span 12}
+  /* La grille n'a plus deux colonnes de tuiles à cette largeur : une tuile qui
+     tiendrait encore deux rangées créerait un trou sous elle. Elle reprend la
+     pleine largeur et sa hauteur de contenu, comme les autres.
+     `order` rétablit l'ordre de LECTURE une fois en pile : les deux tuiles de la
+     colonne de gauche se suivent, et « Alertes en attente » passe après. Dans le
+     DOM elle est déclarée entre les deux, ce qui n'est qu'une contrainte de
+     remplissage de la grille à deux colonnes (cf. dc/DcPics.tsx). */
+  .tile--tall{grid-row:auto;align-self:start;grid-column:span 12;order:1}
 }
 @media (max-width:820px){
   .t3,.t4,.t5,.t6,.t7,.t8{grid-column:span 12}

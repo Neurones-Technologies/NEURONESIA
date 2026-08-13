@@ -7,7 +7,6 @@ import { ChartNote, LineChart } from "@/components/ui/chart";
 import { SERIE_1 } from "@/components/ui/chart-palette";
 import { sourceKick } from "../dc/source";
 import { ExerciceNav } from "./exercice-nav";
-import { ScreenNotes } from "@/components/ui/screen-notes";
 import { ScreenLede } from "@/components/ui/screen-lede";
 
 /** Montant en millions, avec un plancher lisible.
@@ -131,15 +130,6 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           },
           { label: "cumul = variation, pas un solde" },
         ]}
-      />
-
-      {/* Déplié d'emblée, et sur ce seul écran du cockpit : c'est le seul où une
-          mauvaise lecture coûte de l'argent — le cumul affiché est une VARIATION,
-          aucun solde bancaire n'existe dans le système, et un cumul négatif se
-          lit spontanément comme un découvert. */}
-      <ScreenNotes
-        ouvert
-        notes={[position.note, vigilance.methode, ...atterrissage.hypotheses]}
       />
 
       <div className="kpi-row">

@@ -41,7 +41,7 @@ export async function DcPipeQualite() {
       {/* Titre conservé : sur cet écran la note n'énonce pas des hypothèses de
           mesure mais la règle de tri des trois piles — c'est elle qui explique
           pourquoi une opportunité tombe dans « à closer » plutôt qu'ailleurs. */}
-      <ScreenNotes titre="Règle appliquée" notes={[qualite.note]} />
+      {/* <ScreenNotes titre="Règle appliquée" notes={[qualite.note]} /> */}
 
       <div className="kpi-row">
         {/* « À closer » est la seule des trois piles qui porte une action datée :

@@ -39,6 +39,10 @@ export async function DcPics() {
   }
 
   const { pics } = comptes;
+  // Commande la mise en page à deux colonnes : sans la tuile « Nature », la
+  // colonne de gauche n'a qu'une rangée et « Alertes en attente » ne doit pas en
+  // couvrir deux — elle laisserait une rangée vide sous elle.
+  const natureAffichee = Boolean(alertes && alertes.totaux.par_type.length > 0);
 
   return (
     <>
@@ -134,6 +138,13 @@ export async function DcPics() {
       </div>
 
       <Bento>
+        {/* Deux colonnes : « Pics d'activité » et « Nature des alertes » empilés à
+            gauche, « Alertes en attente » à droite en vis-à-vis des deux (d'où son
+            `rows={2}`). Les deux tuiles de gauche partagent la même largeur.
+            L'ordre du DOM place Pics puis Nature avant Alertes : la grille remplit
+            rangée par rangée, donc Alertes doit être déclarée entre les deux pour
+            démarrer sur la première rangée — ce n'est pas l'ordre de LECTURE, qui
+            reste colonne de gauche puis colonne de droite. */}
         <Tile
           span={7}
           title="Pics d'activité sur la fenêtre récente"
@@ -183,6 +194,7 @@ export async function DcPics() {
 
         <Tile
           span={5}
+          rows={natureAffichee ? 2 : undefined}
           title="Alertes en attente"
           kick={alertes ? `${formatNumber(alertes.totaux.nb_total)} produites` : "indisponible"}
         >
@@ -234,8 +246,11 @@ export async function DcPics() {
           )}
         </Tile>
 
+        {/* Deuxième tuile de la colonne de GAUCHE, sous « Pics d'activité » —
+            déclarée après « Alertes en attente » parce que la grille remplit
+            rangée par rangée. Même largeur que Pics. */}
         {alertes && alertes.totaux.par_type.length > 0 && (
-          <Tile span={12} title="Nature des alertes produites" quiet>
+          <Tile span={7} title="Nature des alertes produites" quiet>
             <Lst
               items={alertes.totaux.par_type.map((t) => ({
                 title: t.libelle,

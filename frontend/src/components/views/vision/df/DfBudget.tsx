@@ -7,7 +7,6 @@ import { ChartNote, ColumnChart, LineChart } from "@/components/ui/chart";
 import { REPERE, SERIE_1, SERIE_2 } from "@/components/ui/chart-palette";
 import { SourceNote, sourceKick } from "../dc/source";
 import { ExerciceNav } from "./exercice-nav";
-import { ScreenNotes } from "@/components/ui/screen-notes";
 import { ScreenLede } from "@/components/ui/screen-lede";
 
 /** Tableau de bord n°1 du DAF — Budget.
@@ -81,8 +80,6 @@ export async function DfBudget({ annee }: { annee?: number }) {
           { label: `${formatNumber(charges.totaux.nb_fournisseurs)} fournisseurs` },
         ]}
       />
-
-      <ScreenNotes notes={[marge.note, lignes.note, resultat.note]} />
 
       <div className="kpi-row">
         {/* L'indice composite est le seul chiffre de l'écran qui porte un verdict :

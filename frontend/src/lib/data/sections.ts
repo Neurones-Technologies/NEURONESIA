@@ -66,12 +66,18 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
   // (formation). L'onglet « Encours et marge » est l'écran financier historique,
   // conservé en tête : il porte le briefing du jour et les narrations IA, que les
   // trois tableaux de bord de la note ne remplacent pas.
+  //
+  // Le volet « Formation et qualité » est RETIRÉ du menu. La navigation DAF est en
+  // mode route et la page valide son segment contre cette liste : retirer l'entrée
+  // ici met aussi `/df/vision/formation` en 404, l'onglet n'est donc pas seulement
+  // masqué à l'œil, il n'est plus atteignable par URL directe. L'écran lui-même est
+  // conservé (components/views/vision/df/DfFormation.tsx, `getFormation` dans
+  // lib/api/daf.ts) : le rétablir tient en une ligne ici et une dans DF_SECTIONS.
   df: [
     { id: "encours", label: "Encours et marge" },
     { id: "budget", label: "Budget" },
     { id: "relation-commerciale", label: "Relation commerciale" },
     { id: "tresorerie", label: "Trésorerie prévisionnelle" },
-    { id: "formation", label: "Formation et qualité" },
   ],
   // Cockpit DC — sept pages, quatorze vues. Les libellés de vue reprennent la
   // formulation du compte-rendu du 04/08/2026 (« Indice de prospection », « À
@@ -92,8 +98,19 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
   // - Aucun contenu n'est retiré : les quatorze vues gardent leurs blocs, leurs
   //   chiffres et leurs notes. Elles changent de point de montage, pas de fond.
   //
-  // L'ordre des vues dans une page suit celui du compte-rendu.
+  // L'ordre des vues dans une page suit celui du compte-rendu. L'ordre des PAGES,
+  // lui, place « Marché » en tête : c'est la page d'ouverture du cockpit DC (cf.
+  // `defaultVisionSection`), la lecture du marché venant avant celle du
+  // portefeuille et du pipeline qu'elle sert à cadrer.
   dc: [
+    {
+      id: "marche",
+      label: "Marché",
+      vues: [
+        { id: "marche", label: "Tendances et marché" },
+        { id: "secteurs", label: "Tendance des secteurs" },
+      ],
+    },
     {
       id: "portefeuille",
       label: "Portefeuille",
@@ -119,14 +136,6 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
         { id: "objectifs", label: "Écart vendu / objectif" },
         { id: "efficacite", label: "Indice d'efficacité" },
         { id: "prospection", label: "Indice de prospection" },
-      ],
-    },
-    {
-      id: "marche",
-      label: "Marché",
-      vues: [
-        { id: "marche", label: "Tendances et marché" },
-        { id: "secteurs", label: "Tendance des secteurs" },
       ],
     },
     { id: "mix-offre", label: "Mix d'offre" },
