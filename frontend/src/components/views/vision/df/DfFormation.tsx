@@ -3,7 +3,9 @@ import { formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { Variant } from "@/lib/types";
-import { SourceNote } from "../dc/source";
+import { estStatique } from "../dc/source";
+import { ScreenNotes } from "@/components/ui/screen-notes";
+import { ScreenLede } from "@/components/ui/screen-lede";
 
 /** Volet transverse de la note DAF — Formation et qualité de la saisie.
  *
@@ -49,9 +51,40 @@ export async function DfFormation() {
 
   return (
     <>
+      <ScreenLede
+        texte={
+          `La qualité de saisie du miroir ressort à ${formatPct(score, 0)} sur 100. ` +
+          `${formatNumber(structurels.length)} ${structurels.length > 1 ? "défauts relèvent" : "défaut relève"} ` +
+          `d'un raccordement de données et non de la formation ; ` +
+          `${formatNumber(data.modules.length)} modules sont proposés, pour ${formatNumber(data.duree_totale_min)} minutes au total.`
+        }
+        signaux={[
+          { label: `score ${formatPct(score, 0)} / 100`, alerte: scoreFaible },
+          {
+            label: `${formatNumber(structurels.length)} défauts structurels`,
+            alerte: structurels.length > 0,
+          },
+          { label: `${formatNumber(data.controles.length)} contrôles mesurés` },
+        ]}
+      />
+
+      {/* La raison de provenance était portée par un `SourceNote` en pied : il ne
+          rend rien quand la source est réelle, et la tuile qui l'accueillait
+          devenait alors vide. Le panneau, lui, se masque de lui-même s'il n'a
+          aucune note à publier. */}
+      <ScreenNotes
+        notes={[
+          data.note,
+          estStatique(data.source)
+            ? "L'ordre des modules n'est pas figé : il est recalculé à chaque consultation sur les compteurs du jour. Une saisie corrigée fait donc reculer son module dans le plan, et c'est la seule façon de vérifier qu'une formation a produit un effet."
+            : null,
+        ]}
+      />
+
       <div className="kpi-row">
         <StatTile
           span={4}
+          rang="principal"
           label="Score de qualité de saisie"
           value={formatPct(score, 0)}
           unit="/ 100"
@@ -78,6 +111,7 @@ export async function DfFormation() {
         />
         <StatTile
           span={4}
+          rang="contexte"
           label="Modules de formation"
           value={formatNumber(data.modules.length)}
           unit="modules"
@@ -233,13 +267,6 @@ export async function DfFormation() {
           </Tile>
         ))}
 
-        <Tile span={12} title="Ce que cet écran mesure et ce qu'il suppose" quiet>
-          <Note style={{ marginTop: 0 }}>{data.note}</Note>
-          <SourceNote
-            source={data.source}
-            raison="L'ordre des modules n'est pas figé : il est recalculé à chaque consultation sur les compteurs du jour. Une saisie corrigée fait donc reculer son module dans le plan, et c'est la seule façon de vérifier qu'une formation a produit un effet."
-          />
-        </Tile>
       </Bento>
     </>
   );

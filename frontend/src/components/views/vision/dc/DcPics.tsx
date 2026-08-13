@@ -43,8 +43,12 @@ export async function DcPics() {
   return (
     <>
       <div className="kpi-row">
+        {/* Les pics sont l'objet de l'écran ; le portefeuille mesurable dit sur
+            quelle fraction du parc la détection est possible — c'est une limite,
+            pas un résultat. */}
         <StatTile
           span={4}
+          rang="principal"
           label="Pics d'activité détectés"
           value={formatNumber(pics.couverture.nb_pics)}
           unit={`sur ${formatNumber(pics.fenetre_mois.length)} mois`}
@@ -70,6 +74,7 @@ export async function DcPics() {
         />
         <StatTile
           span={4}
+          rang="contexte"
           label="Portefeuille mesurable"
           value={formatNumber(pics.couverture.nb_comptes_eligibles)}
           unit={`comptes sur ${formatNumber(pics.couverture.nb_comptes_avec_commande)}`}

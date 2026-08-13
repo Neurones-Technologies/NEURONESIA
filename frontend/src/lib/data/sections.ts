@@ -1,11 +1,23 @@
 import { ProfileKey } from "@/lib/types";
 
+/** Vue interne d'une section — niveau d'onglet DANS une page.
+ *
+ * Sert à regrouper plusieurs écrans sur une même page sans rien retirer : chaque
+ * vue garde son contenu intégral, et l'URL la désigne par `?vue=`. */
+export interface SectionVue {
+  id: string;
+  label: string;
+}
+
 export interface SectionNavItem {
   id: string;
   label: string;
   /** Chapitre auquel la section se rattache, en navigation à deux niveaux.
    * Absent : le profil garde un menu à un seul niveau. */
   group?: string;
+  /** Vues internes, quand la page en regroupe plusieurs. La première est celle
+   * qu'on obtient sans `?vue=`. Une section sans `vues` reste un écran simple. */
+  vues?: readonly SectionVue[];
 }
 
 /** Chapitre de menu — niveau 1 d'un profil en navigation à deux niveaux. */
@@ -21,22 +33,15 @@ export interface SectionGroup {
 
 /** Chapitres du menu, par profil. Leur ordre est celui du menu.
  *
- * Pour le DC, les six chapitres sont ceux du compte-rendu d'entretien du
- * 04/08/2026, dans son ordre : le cockpit doit se lire avec le document sur la
- * table, sans avoir à traduire un intitulé en fonctionnalité.
+ * Vide aujourd'hui : le DC en avait six, pour ranger quatorze sections que la
+ * rangée de menu ne pouvait pas porter. Ses sections ont été regroupées en sept
+ * pages à onglets internes (cf. `VISION_SECTIONS.dc`), qui tiennent sur une
+ * rangée — le second niveau de menu n'a plus d'objet, et les chapitres du
+ * compte-rendu se lisent maintenant dans les onglets de chaque page.
  *
- * Un profil absent d'ici reste à un seul niveau (cas du DAF, dont les cinq
- * onglets tiennent sans regroupement). */
-export const VISION_GROUPS: Partial<Record<ProfileKey, readonly SectionGroup[]>> = {
-  dc: [
-    { id: "pilotage", label: "Pilotage stratégique", title: "1. Pilotage stratégique du portefeuille" },
-    { id: "suivi-compte", label: "Suivi par compte", title: "2. Suivi commercial par compte" },
-    { id: "prospection", label: "Prospection et performance", title: "3. Prospection et performance commerciale" },
-    { id: "pipeline", label: "Secteurs et pipeline", title: "4. Analyse sectorielle et pipeline" },
-    { id: "decision", label: "Aide à la décision", title: "5. Aide à la décision" },
-    { id: "terrain", label: "Traçabilité terrain", title: "6. Traçabilité terrain" },
-  ],
-};
+ * Le mécanisme reste en place : un profil qui déclarerait des chapitres ici
+ * retrouverait le menu à deux niveaux (cf. shell/Header.tsx). */
+export const VISION_GROUPS: Partial<Record<ProfileKey, readonly SectionGroup[]>> = {};
 
 /** Découpage en sections de la vue Cockpit, par profil. Défini ici (et non dans
  * la vue) pour être importable depuis l'en-tête, qui est un composant client.
@@ -68,40 +73,87 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     { id: "tresorerie", label: "Trésorerie prévisionnelle" },
     { id: "formation", label: "Formation et qualité" },
   ],
-  // Cockpit DC : les sections suivent les six chapitres du compte-rendu du
-  // 04/08/2026 (cf. `VISION_GROUPS`), et leurs libellés reprennent la formulation
-  // du document — « Indice de prospection », « À closer / à compléter », « Écart
-  // vendu / objectif ». Le DC doit reconnaître SA demande dans le menu, pas
-  // déduire à quel besoin répond un onglet nommé autrement.
+  // Cockpit DC — sept pages, quatorze vues. Les libellés de vue reprennent la
+  // formulation du compte-rendu du 04/08/2026 (« Indice de prospection », « À
+  // closer / à compléter », « Écart vendu / objectif ») : le DC doit reconnaître
+  // SA demande, pas déduire à quel besoin répond un onglet nommé autrement.
   //
-  // Le découpage est plus fin que les chapitres parce qu'il est aussi un découpage
-  // de CHARGE : une section = une page = ses propres appels. Regrouper « Pilotage
-  // stratégique » sur un seul écran cumulerait quatre appels et recalculerait le
-  // marché, servi aussi au chapitre 4.
+  // Le découpage précédent donnait une page par vue, soit quatorze entrées de
+  // menu sur deux niveaux. Trois raisons de les regrouper :
   //
-  // L'ordre à l'intérieur d'un chapitre suit celui du compte-rendu.
+  // - Quatorze entrées ne débordaient pas seulement d'une rangée : elles
+  //   imposaient un menu à deux étages, et forçaient à couper le prefetch
+  //   (Header.tsx : onze liens visibles × 0,6 à 1,6 s de rendu serveur). Sept
+  //   entrées tiennent sur une rangée et rendent le préchargement finançable.
+  // - Le découpage se calquait sur les chapitres du compte-rendu, c'est-à-dire
+  //   sur un ordre d'entretien, pas sur des tâches. « Pics », « Comptes » et
+  //   « Prospection » étaient trois pages qui découpaient un même appel
+  //   (`getComptesDc`) ; regroupées, elles le partagent.
+  // - Aucun contenu n'est retiré : les quatorze vues gardent leurs blocs, leurs
+  //   chiffres et leurs notes. Elles changent de point de montage, pas de fond.
+  //
+  // L'ordre des vues dans une page suit celui du compte-rendu.
   dc: [
-    // 1. Pilotage stratégique du portefeuille
-    { id: "marche", label: "Tendances et marché", group: "pilotage" },
-    { id: "base-installee", label: "Animation de compte", group: "pilotage" },
-    { id: "pics", label: "Pics et alertes", group: "pilotage" },
-    // 2. Suivi commercial par compte
-    { id: "comptes", label: "Comptes par ventes", group: "suivi-compte" },
-    { id: "cycle-vie", label: "Cycle de vie ≥ 30 M", group: "suivi-compte" },
-    // 3. Prospection et performance commerciale
-    { id: "efficacite", label: "Indice d'efficacité", group: "prospection" },
-    { id: "prospection", label: "Indice de prospection", group: "prospection" },
-    // 4. Analyse sectorielle et pipeline
-    { id: "secteurs", label: "Tendance des secteurs", group: "pipeline" },
-    { id: "pipeline", label: "Pipeline et forecast", group: "pipeline" },
-    { id: "pipe-qualite", label: "À closer / à compléter", group: "pipeline" },
-    { id: "objectifs", label: "Écart vendu / objectif", group: "pipeline" },
-    { id: "mix-offre", label: "Mix d'offre", group: "pipeline" },
-    // 5. Aide à la décision
-    { id: "transformation", label: "Diagnostic et recommandations", group: "decision" },
-    // 6. Traçabilité terrain
-    { id: "visites", label: "Fichier de visite", group: "terrain" },
+    {
+      id: "portefeuille",
+      label: "Portefeuille",
+      vues: [
+        { id: "comptes", label: "Comptes par ventes" },
+        { id: "pics", label: "Pics et alertes" },
+        { id: "base-installee", label: "Animation de compte" },
+      ],
+    },
+    {
+      id: "pipeline",
+      label: "Pipeline",
+      vues: [
+        { id: "pipeline", label: "Pipeline et forecast" },
+        { id: "pipe-qualite", label: "À closer / à compléter" },
+        { id: "cycle-vie", label: "Cycle de vie ≥ 30 M" },
+      ],
+    },
+    {
+      id: "objectifs",
+      label: "Objectifs et performance",
+      vues: [
+        { id: "objectifs", label: "Écart vendu / objectif" },
+        { id: "efficacite", label: "Indice d'efficacité" },
+        { id: "prospection", label: "Indice de prospection" },
+      ],
+    },
+    {
+      id: "marche",
+      label: "Marché",
+      vues: [
+        { id: "marche", label: "Tendances et marché" },
+        { id: "secteurs", label: "Tendance des secteurs" },
+      ],
+    },
+    { id: "mix-offre", label: "Mix d'offre" },
+    { id: "transformation", label: "Diagnostic" },
+    { id: "visites", label: "Fichier de visite" },
   ],
+};
+
+/** Anciennes URL de section DC → page qui porte désormais leur contenu.
+ *
+ * Les quatorze sections d'origine avaient chacune leur URL. Elles ont circulé en
+ * lien (revues de performance, messages) et ne doivent pas tomber en 404 : la
+ * route les redirige vers `/dc/vision/<page>?vue=<ancien-id>`, qui affiche
+ * exactement le même écran.
+ *
+ * Les clés qui sont AUSSI des identifiants de page (`marche`, `pipeline`,
+ * `objectifs`, `mix-offre`, `transformation`, `visites`) n'ont pas à figurer ici :
+ * leur URL reste valide telle quelle et ouvre la page sur sa première vue. */
+export const ANCIENNES_SECTIONS_DC: Readonly<Record<string, string>> = {
+  comptes: "portefeuille",
+  pics: "portefeuille",
+  "base-installee": "portefeuille",
+  "pipe-qualite": "pipeline",
+  "cycle-vie": "pipeline",
+  efficacite: "objectifs",
+  prospection: "objectifs",
+  secteurs: "marche",
 };
 
 /** Chapitres d'un profil, ou `undefined` s'il est à un seul niveau. */
@@ -168,4 +220,23 @@ export function visionEntryPath(profile: ProfileKey): string {
 
 export function isVisionSection(profile: ProfileKey, section: string): boolean {
   return (VISION_SECTIONS[profile] ?? []).some((s) => s.id === section);
+}
+
+/** Vues internes d'une section, ou tableau vide si elle n'en a pas. */
+export function vuesOfSection(profile: ProfileKey, section: string): readonly SectionVue[] {
+  return (VISION_SECTIONS[profile] ?? []).find((s) => s.id === section)?.vues ?? [];
+}
+
+/** Vue à afficher pour une section, `?vue=` éventuel pris en compte.
+ *
+ * Retombe sur la première vue déclarée : une valeur inconnue dans l'URL ne doit
+ * pas produire une page vide. `undefined` pour une section sans vues. */
+export function vueRetenue(
+  profile: ProfileKey,
+  section: string,
+  demandee: string | undefined,
+): string | undefined {
+  const vues = vuesOfSection(profile, section);
+  if (vues.length === 0) return undefined;
+  return vues.some((v) => v.id === demandee) ? demandee : vues[0].id;
 }

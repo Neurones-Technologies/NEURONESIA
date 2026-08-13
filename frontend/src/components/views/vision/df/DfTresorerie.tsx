@@ -1,12 +1,14 @@
 import { getTresoreriePrevisionnelle, CreanceSurveillee } from "@/lib/api/daf";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bento, HintLine, StatTile, Tile } from "@/components/ui/bento";
+import { Bento, HintLine, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Note, Tag } from "@/components/ui/primitives";
 import { ChartNote, LineChart } from "@/components/ui/chart";
 import { SERIE_1 } from "@/components/ui/chart-palette";
-import { SourceNote, sourceKick } from "../dc/source";
+import { sourceKick } from "../dc/source";
 import { ExerciceNav } from "./exercice-nav";
+import { ScreenNotes } from "@/components/ui/screen-notes";
+import { ScreenLede } from "@/components/ui/screen-lede";
 
 /** Montant en millions, avec un plancher lisible.
  *
@@ -109,6 +111,37 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
     <>
       <ExerciceNav basePath="/df/vision/tresorerie" annee={data.annee} annees={data.annees_disponibles} />
 
+      <ScreenLede
+        texte={
+          `${formatMFcfa(arriere.montant_xof)} M FCFA de créances auraient déjà dû être encaissées — ` +
+          `${formatPct(arriere.part_encours_pct, 0)} % de l'encours client, dont ${formatPct(arriere.part_plus_de_2_ans_pct, 0)} % au-delà de deux ans. ` +
+          `Sur l'horizon du calendrier, ${formatMFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)} M FCFA restent attendus.`
+        }
+        signaux={[
+          {
+            label: `${formatNumber(arriere.nb_creances)} créances en arriéré`,
+            alerte: arriere.nb_creances > 0,
+          },
+          {
+            label: `${formatNumber(vigilance.totaux.nb_a_echoir)} à échoir sous ${formatNumber(vigilance.horizon_jours)} j`,
+          },
+          {
+            label: `${formatNumber(atterrissage.totaux.nb_mois_en_alerte)} mois en alerte`,
+            alerte: atterrissage.totaux.nb_mois_en_alerte > 0,
+          },
+          { label: "cumul = variation, pas un solde" },
+        ]}
+      />
+
+      {/* Déplié d'emblée, et sur ce seul écran du cockpit : c'est le seul où une
+          mauvaise lecture coûte de l'argent — le cumul affiché est une VARIATION,
+          aucun solde bancaire n'existe dans le système, et un cumul négatif se
+          lit spontanément comme un découvert. */}
+      <ScreenNotes
+        ouvert
+        notes={[position.note, vigilance.methode, ...atterrissage.hypotheses]}
+      />
+
       <div className="kpi-row">
         <StatTile
           span={3}
@@ -161,8 +194,11 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
             ],
           }}
         />
+        {/* L'arriéré est le seul chiffre actionnable du bandeau : c'est de
+            l'argent déjà dû, sur lequel un appel change quelque chose. */}
         <StatTile
           span={3}
+          rang="principal"
           label="Arriéré hors calendrier"
           value={formatMFcfa(arriere.montant_xof)}
           unit="M FCFA"
@@ -186,8 +222,13 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
             ],
           }}
         />
+        {/* `signeNeutre` : une variation de trésorerie négative est le régime
+            normal d'un exercice qui investit — la colorer en alerte ferait crier
+            l'écran en permanence et brouillerait l'arriéré, qui lui est une
+            alerte. La ligne de lecture porte déjà l'avertissement. */}
         <StatTile
           span={3}
+          signeNeutre
           label="Variation cumulée"
           value={formatMFcfa(atterrissage.totaux.variation_cumulee_xof)}
           unit="M FCFA"
@@ -341,18 +382,21 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
               );
             })}
           </div>
+          {/* Seul l'avertissement de lecture du calendrier reste ici — il porte sur
+              les quatre montants de chaque case, juste au-dessus. Les hypothèses
+              de calcul sont remontées dans le panneau de tête : elles valent pour
+              tout l'écran, et empilées ici elles occupaient un tiers de sa
+              hauteur en gris clair. */}
           <Note accent style={{ marginTop: 16 }}>
             {atterrissage.note}
           </Note>
-          {atterrissage.hypotheses.map((h, i) => (
-            <Note key={i} style={{ marginTop: 10 }}>
-              {h}
-            </Note>
-          ))}
         </Tile>
 
+        {/* 5 + 7 plutôt que 6 + 6 : la vigilance avant échéance porte quelques
+            créances (2 sur ce miroir), le recouvrement en porte dix. À largeur
+            égale, la première colonne restait vide sur la moitié de sa hauteur. */}
         <Tile
-          span={6}
+          span={5}
           title="Créances à relancer avant échéance"
           kick={`${formatNumber(vigilance.a_echoir.length)} sous ${formatNumber(vigilance.horizon_jours)} jours`}
         >
@@ -401,7 +445,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
         </Tile>
 
         <Tile
-          span={6}
+          span={7}
           title="Créances échues à recouvrer"
           kick={`${formatMFcfa(vigilance.totaux.montant_echu_xof)} M FCFA · ${formatNumber(vigilance.totaux.nb_contentieux)} au-delà de 90 j`}
         >
@@ -428,16 +472,20 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
               </tbody>
             </table>
           </div>
+          {/* La table est coupée à 10 lignes dans le composant : sans cette
+              mention, l'écran laissait croire que le recouvrement tenait en dix
+              créances. */}
+          <Reste
+            affiches={Math.min(10, vigilance.echues.length)}
+            total={vigilance.totaux.nb_echues}
+            nom="créances échues"
+            ou={`${formatMFcfa(vigilance.totaux.montant_echu_xof)} M FCFA au total`}
+          />
           <Note accent style={{ marginTop: 14 }}>
             {arriere.lecture}
           </Note>
         </Tile>
 
-        <Tile span={12} title="Ce que cet écran mesure et ce qu'il suppose" quiet>
-          <Note style={{ marginTop: 0 }}>{position.note}</Note>
-          <Note style={{ marginTop: 10 }}>{vigilance.methode}</Note>
-          <SourceNote source={atterrissage.source} raison={atterrissage.hypotheses[1]} />
-        </Tile>
       </Bento>
     </>
   );

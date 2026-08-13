@@ -7,6 +7,8 @@ import { ChartNote, ColumnChart, LineChart } from "@/components/ui/chart";
 import { REPERE, SERIE_1, SERIE_2 } from "@/components/ui/chart-palette";
 import { SourceNote, sourceKick } from "../dc/source";
 import { ExerciceNav } from "./exercice-nav";
+import { ScreenNotes } from "@/components/ui/screen-notes";
+import { ScreenLede } from "@/components/ui/screen-lede";
 
 /** Tableau de bord n°1 du DAF — Budget.
  *
@@ -54,9 +56,40 @@ export async function DfBudget({ annee }: { annee?: number }) {
     <>
       <ExerciceNav basePath="/df/vision/budget" annee={data.annee} annees={data.annees_disponibles} />
 
+      {/* Accroche composée des données déjà chargées : aucun appel de plus. Elle
+          remplace le `Brief` de l'onglet Encours, qui ne peut pas être réutilisé
+          ici — `getBriefing()` produit un briefing par RÔLE, donc le même texte
+          sur les cinq onglets du profil. */}
+      <ScreenLede
+        texte={
+          `L'indice de performance financière ressort à ${formatPct(indice, 0)} sur 100 — verdict « ${performance.verdict} ». ` +
+          `Le résultat net projeté s'établit à ${formatMFcfa(resultat.resultat_net_projete_xof)} M FCFA, ` +
+          `pour ${formatMFcfa(charges.totaux.montant_total_xof)} M FCFA de charges engagées sur l'exercice.`
+        }
+        signaux={[
+          { label: `marge brute ${formatPct(marge.taux_retenu_pct, 1)} %`, alerte: indiceFaible },
+          {
+            label: (() => {
+              const n = lignes.lignes.filter((l) => l.statut === "depasse").length;
+              return n > 1
+                ? `${formatNumber(n)} lignes budgétaires dépassées`
+                : `${formatNumber(n)} ligne budgétaire dépassée`;
+            })(),
+            alerte: lignes.lignes.some((l) => l.statut === "depasse"),
+          },
+          { label: surFlux ? "marge lue sur les flux" : "marge lue par dossier" },
+          { label: `${formatNumber(charges.totaux.nb_fournisseurs)} fournisseurs` },
+        ]}
+      />
+
+      <ScreenNotes notes={[marge.note, lignes.note, resultat.note]} />
+
       <div className="kpi-row">
+        {/* L'indice composite est le seul chiffre de l'écran qui porte un verdict :
+            c'est lui qu'on vient chercher, les trois autres l'expliquent. */}
         <StatTile
           span={3}
+          rang="principal"
           label="Performance"
           value={indice !== null ? formatPct(indice, 0) : "—"}
           unit="/ 100"
@@ -138,8 +171,11 @@ export async function DfBudget({ annee }: { annee?: number }) {
             ],
           }}
         />
+        {/* Assiette de calcul, pas un verdict : le total engagé sert à lire les
+            trois autres indicateurs, il ne se lit pas seul. */}
         <StatTile
           span={3}
+          rang="contexte"
           label="Charges engagées"
           value={formatMFcfa(charges.totaux.montant_total_xof)}
           unit="M FCFA"
@@ -573,11 +609,6 @@ export async function DfBudget({ annee }: { annee?: number }) {
           )}
         </Tile>
 
-        <Tile span={12} title="Ce que cet écran mesure et ce qu'il suppose" quiet>
-          <Note style={{ marginTop: 0 }}>{marge.note}</Note>
-          <Note style={{ marginTop: 10 }}>{lignes.note}</Note>
-          <Note style={{ marginTop: 10 }}>{resultat.note}</Note>
-        </Tile>
       </Bento>
     </>
   );

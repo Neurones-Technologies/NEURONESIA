@@ -8,6 +8,8 @@ import { RAMPE_AGE, SERIE_1 } from "@/components/ui/chart-palette";
 import { Variant } from "@/lib/types";
 import { SourceNote, sourceKick } from "../dc/source";
 import { ExerciceNav } from "./exercice-nav";
+import { ScreenNotes } from "@/components/ui/screen-notes";
+import { ScreenLede } from "@/components/ui/screen-lede";
 
 /** Tableau de bord n°2 du DAF — Relation commerciale.
  *
@@ -65,9 +67,47 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
     <>
       <ExerciceNav basePath="/df/vision/relation-commerciale" annee={data.annee} annees={data.annees_disponibles} />
 
+      <ScreenLede
+        texte={
+          `Les clients règlent en ${formatPct(dso.delai_encaissement_moyen_jours, 0)} jours en moyenne, ` +
+          `pour une cible de ${formatNumber(dso.cible_dso_jours)} — ${auDela ? "au-delà" : "dans la cible"}. ` +
+          `${formatNumber(payeurs.totaux.nb_clients_a_risque)} clients sur ${formatNumber(payeurs.totaux.nb_clients_factures)} concentrent le risque de recouvrement.`
+        }
+        signaux={[
+          {
+            label: `DSO ${formatPct(dso.delai_encaissement_moyen_jours, 0)} j vs cible ${formatNumber(dso.cible_dso_jours)} j`,
+            alerte: auDela,
+          },
+          {
+            label: `${formatPct(contentieux?.part_pct ?? null, 0)} % de l'encours au-delà de 90 j`,
+            alerte: (contentieux?.part_pct ?? 0) > 50,
+          },
+          { label: `recouvrement ${formatPct(dso.taux_recouvrement_pct, 0)} %` },
+          {
+            label: dpo.source === "reel" ? `DPO ${formatPct(dpo.dpo_jours, 0)} j` : "DPO non mesurable",
+            alerte: dpo.source !== "reel",
+          },
+        ]}
+      />
+
+      <ScreenNotes
+        notes={[
+          dso.note,
+          dpo.note,
+          // Même phrase que la note de pied précédente, composée en chaîne : le
+          // panneau prend des textes, pas du JSX.
+          `Couverture de la mesure : ${formatNumber(dso.couverture.nb_reglees_datees)} factures portent une date de règlement sur ${formatNumber(dso.couverture.nb_factures)} (${formatPct(dso.couverture.part_datee_pct, 1)} %).${
+            balance.nb_sans_echeance > 0
+              ? ` ${formatNumber(balance.nb_sans_echeance)} facture(s) ouverte(s) n'ont pas d'échéance exploitable (${formatMFcfa(balance.montant_sans_echeance_xof)} M FCFA) : elles sortent de la balance âgée.`
+              : ""
+          }`,
+        ]}
+      />
+
       <div className="kpi-row">
         <StatTile
           span={3}
+          rang="principal"
           label="DSO constaté"
           value={formatPct(dso.delai_encaissement_moyen_jours, 0)}
           unit="jours"
@@ -122,8 +162,13 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             ],
           }}
         />
+        {/* Le DPO recule d'un plan tant qu'aucune facture fournisseur n'est
+            synchronisée : la valeur affichée est posée, pas mesurée. Le rang suit
+            la source — le jour où les dettes arrivent, l'indicateur reprend sa
+            place sans modification d'écran. */}
         <StatTile
           span={3}
+          rang={dpo.source === "reel" ? "secondaire" : "contexte"}
           label="DPO"
           value={formatPct(dpo.dpo_jours, 0)}
           unit="jours"
@@ -433,17 +478,6 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           />
         </Tile>
 
-        <Tile span={12} title="Ce que cet écran mesure et ce qu'il suppose" quiet>
-          <Note style={{ marginTop: 0 }}>{dso.note}</Note>
-          <Note style={{ marginTop: 10 }}>{dpo.note}</Note>
-          <Note style={{ marginTop: 10 }}>
-            Couverture de la mesure : {formatNumber(dso.couverture.nb_reglees_datees)} factures portent une date de
-            règlement sur {formatNumber(dso.couverture.nb_factures)} ({formatPct(dso.couverture.part_datee_pct, 1)} %).
-            {balance.nb_sans_echeance > 0
-              ? ` ${formatNumber(balance.nb_sans_echeance)} facture(s) ouverte(s) n'ont pas d'échéance exploitable (${formatMFcfa(balance.montant_sans_echeance_xof)} M FCFA) : elles sortent de la balance âgée.`
-              : ""}
-          </Note>
-        </Tile>
       </Bento>
     </>
   );

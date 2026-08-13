@@ -83,6 +83,18 @@ export function Brief({
   );
 }
 
+/** Rang de lecture d'un indicateur dans un bandeau.
+ *
+ * Quatre indicateurs de taille rigoureusement identique ne désignent aucun
+ * premier : le lecteur doit lire les quatre libellés pour trouver celui qui
+ * compte. Le rang porte cette hiérarchie sans rien retirer de l'écran — un
+ * indicateur de couverture ou de fiabilité passe en `contexte`, il n'est pas
+ * supprimé.
+ *
+ * `secondaire` est le défaut et reproduit exactement le rendu antérieur : un
+ * écran qui n'a pas encore été hiérarchisé ne change pas d'apparence. */
+export type RangStat = "principal" | "secondaire" | "contexte";
+
 /** Tuile d'indicateur : grand chiffre + lecture + histogramme de tendance. */
 export function StatTile({
   span = 4,
@@ -94,6 +106,8 @@ export function StatTile({
   spark,
   sparkAxis,
   detail,
+  rang = "secondaire",
+  signeNeutre,
 }: {
   span?: Span;
   label: string;
@@ -104,14 +118,23 @@ export function StatTile({
   spark?: number[];
   sparkAxis?: string[];
   detail?: DetailCard;
+  rang?: RangStat;
+  /** Coupe la coloration automatique du négatif. À poser quand un montant
+   *  négatif est le régime normal de l'indicateur (une variation de trésorerie
+   *  n'est pas une alerte), sans quoi l'écran crie en permanence. */
+  signeNeutre?: boolean;
 }) {
+  // Un montant négatif se lit d'abord au signe, pas à la ligne de lecture
+  // dessous : « -1712 M FCFA » en encre neutre se lisait comme un montant
+  // ordinaire. La règle ne vaut que pour le vrai signe moins d'un nombre.
+  const negatif = !signeNeutre && /^-\s*\d/.test(value.trim());
   const body = (
     <>
       <div className="tile-h">
         <h3>{label}</h3>
       </div>
-      <div>
-        <span className="stat-v num">{value}</span>
+      <div className="stat-l">
+        <span className={`stat-v num${negatif ? " neg" : ""}`}>{value}</span>
         {unit && <span className="stat-u">{unit}</span>}
       </div>
       {reading && <div className={`stat-d${readingVariant ? " " + readingVariant : ""}`}>{reading}</div>}
@@ -133,9 +156,10 @@ export function StatTile({
       )}
     </>
   );
-  if (!detail) return <div className={`tile t${span}`}>{body}</div>;
+  const cls = `tile t${span}${rang !== "secondaire" ? ` stat--${rang === "principal" ? "p" : "c"}` : ""}`;
+  if (!detail) return <div className={cls}>{body}</div>;
   return (
-    <Clickable className={`tile t${span}`} detail={detail}>
+    <Clickable className={cls} detail={detail}>
       {body}
     </Clickable>
   );
@@ -218,6 +242,39 @@ export function Lst({ items }: { items: LstItem[] }) {
 
 export function FootNote({ children }: { children: ReactNode }) {
   return <p className="foot-n">{children}</p>;
+}
+
+/** Pied de liste tronquée : dit combien de lignes ne sont pas affichées.
+ *
+ * Les listes des écrans sont coupées à 5, 6, 8 ou 10 lignes par un `.slice()`.
+ * Sans mention, l'écran se lit comme exhaustif : sur les comptes du portefeuille,
+ * « 650 comptes classés » côtoyait une liste de 8 lignes sans que rien ne dise où
+ * étaient passés les 642 autres. Le total est déjà connu du composant appelant —
+ * il ne coûte qu'une ligne de le publier.
+ *
+ * Ne rend rien quand la liste est complète : pas de « et 0 autres ». */
+export function Reste({
+  affiches,
+  total,
+  nom = "lignes",
+  /** Où retrouver le reste, quand une autre vue le porte. */
+  ou,
+}: {
+  affiches: number;
+  total: number;
+  nom?: string;
+  ou?: string;
+}) {
+  const reste = total - affiches;
+  if (reste <= 0) return null;
+  // Formulation sans accord : `nom` est fourni par l'appelant et peut être des
+  // deux genres (« comptes », « créances »).
+  return (
+    <p className="reste">
+      {affiches} {nom} sur {total} · reste {reste}
+      {ou ? ` · ${ou}` : ""}
+    </p>
+  );
 }
 
 export function HintLine({ children }: { children: ReactNode }) {

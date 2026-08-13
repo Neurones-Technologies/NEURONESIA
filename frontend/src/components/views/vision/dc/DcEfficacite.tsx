@@ -47,11 +47,23 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
 
   return (
     <>
-      <PeriodeNav basePath="/dc/vision/efficacite" periode={periode} annee={eff.annee} />
+      {/* La page porte la vue dans `?vue=` : le lien de cadence doit la reconduire,
+          sinon changer de cadence ramène sur la première vue de la page. */}
+      <PeriodeNav
+        basePath="/dc/vision/objectifs"
+        vue="efficacite"
+        periode={periode}
+        annee={eff.annee}
+      />
 
       <div className="kpi-row">
+        {/* Les trois indicateurs de ce bandeau qualifient le classement affiché
+            plus bas ; aucun n'est une performance. Le rang principal va à la
+            couverture du CA nominatif, qui est la limite décisive : un palmarès
+            individuel ne peut pas expliquer plus que cette fraction. */}
         <StatTile
           span={4}
+          rang="contexte"
           label="Commerciaux identifiés"
           value={formatNumber(fi.nb_personnes)}
           unit={`sur ${formatNumber(fi.nb_orthographes_observees)} orthographes`}
@@ -78,6 +90,7 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
         />
         <StatTile
           span={4}
+          rang="principal"
           label="CA rattaché à une personne"
           value={formatPct(fi.part_ca_nominative_pct, 0)}
           unit="% du CA de l'exercice"
@@ -102,6 +115,7 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
         />
         <StatTile
           span={4}
+          rang="contexte"
           label="Seuil de significativité"
           value={formatNumber(eff.seuil_significativite_closes)}
           unit="affaires closes minimum"

@@ -1,7 +1,7 @@
 import { getCrossSellAnalysis, getCrossSellSignals } from "@/lib/api/crosssell";
 import { getAccountActivity } from "@/lib/api/dashboard";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, Reste, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
 import { DORMANCE_TAG, DORMANCE_VARIANT } from "./shared";
@@ -142,6 +142,11 @@ export async function DcBaseInstallee() {
                 // note: "Commercial repris de la dernière commande du compte. Le référentiel commercial d'Odoo est en texte libre, sans notion d'équipe.",
               },
             }))}
+          />
+          <Reste
+            affiches={Math.min(6, dormance.decrochages.length)}
+            total={dormance.decrochages.length}
+            nom="comptes décrochés"
           />
         </Tile>
       )}

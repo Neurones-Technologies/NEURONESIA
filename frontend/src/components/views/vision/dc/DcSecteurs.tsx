@@ -47,8 +47,13 @@ export async function DcSecteurs() {
   return (
     <>
       <div className="kpi-row">
+        {/* Écran en gabarit assumé : le seul chiffre mesuré est le taux de
+            renseignement, et c'est lui qui explique pourquoi les deux autres ne
+            sont pas des tendances. Il porte donc le rang principal — la
+            nomenclature proposée, elle, est du cadrage et recule d'un plan. */}
         <StatTile
           span={4}
+          rang="principal"
           label="Secteur renseigné"
           value={formatNumber(reel.nb_avec_secteur)}
           unit={`client sur ${formatNumber(reel.nb_clients)}`}
@@ -77,6 +82,7 @@ export async function DcSecteurs() {
         />
         <StatTile
           span={4}
+          rang="contexte"
           label="Nomenclature proposée"
           value={formatNumber(secteurs.secteurs.length)}
           unit="catégories à valider"

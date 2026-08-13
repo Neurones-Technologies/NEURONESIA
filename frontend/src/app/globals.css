@@ -1073,6 +1073,90 @@ h1.vt{
   font-family:var(--mono);font-size:11px;line-height:1.65;color:var(--t2);
   border-left:2px solid var(--accent-border);padding-left:12px;margin:14px 0 0
 }
+
+/* ---------- onglets internes d'une page ----------
+   Second niveau de navigation, dans la page. Il remplace la seconde rangée du
+   menu qu'imposaient les quatorze sections DC : ici les onglets sont dans le
+   contenu, sous les yeux, et la rangée d'en-tête reste unique.
+
+   Des pastilles et non des onglets soulignés : le soulignement est réservé à la
+   navigation d'en-tête, et deux niveaux d'onglets de même dessin se
+   disputeraient la lecture. */
+.vue-nav{
+  display:flex;gap:4px;min-width:0;overflow-x:auto;margin-bottom:14px;
+  padding:4px;background:var(--paper-2);border:1px solid var(--line);
+  border-radius:999px;width:fit-content;max-width:100%
+}
+/* Onglets suivis d'une cadence : les deux bandes se resserrent. Elles restent
+   empilées (elles vivent dans deux arbres distincts — la page rend les onglets,
+   l'écran rend sa cadence) mais cessent de repousser le premier chiffre. */
+.vue-nav+.dc-seg-w{margin-top:-2px}
+.vue-nav>a{
+  display:flex;align-items:center;border-radius:999px;padding:6px 15px;
+  font-family:var(--sans);font-size:12.5px;color:var(--t3);text-decoration:none;
+  white-space:nowrap;transition:background-color .16s ease,color .16s ease
+}
+.vue-nav>a:hover{color:var(--ink);background:var(--card)}
+.vue-nav>a[aria-current="page"]{
+  background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-xs)
+}
+.vue-nav>a:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
+/* Sous 820 px la barre défile horizontalement plutôt que de rétrécir ses
+   pastilles au point de tronquer les libellés du compte-rendu. */
+@media (max-width:820px){
+  .vue-nav{width:100%;border-radius:var(--r-md)}
+  .vue-nav>a{font-size:12px;padding:6px 12px}
+}
+
+/* ---------- accroche d'écran ----------
+   Une phrase de synthèse composée des données de l'écran. Sur fond papier et non
+   sur l'encre du `Brief` : ce n'est pas le briefing du jour, et deux panneaux
+   sombres en tête se disputeraient l'ouverture. */
+.lede{margin-bottom:16px}
+.lede-t{
+  font-family:var(--disp);font-size:19px;font-weight:300;line-height:1.45;
+  letter-spacing:-.012em;color:var(--t1);margin:0;max-width:78ch
+}
+.lede-s{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.lede-p{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--t3);background:var(--paper-2);border:1px solid var(--line);
+  border-radius:999px;padding:4px 11px
+}
+.lede-p--a{color:var(--alert);background:var(--alert-soft);border-color:var(--alert-border)}
+@media (max-width:820px){.lede-t{font-size:17px}}
+
+/* ---------- hypothèses d'écran, repliées en tête ----------
+   Le panneau fermé ne coûte qu'une ligne : il met l'avertissement AVANT le
+   contenu sans repousser l'écran vers le bas. Le compteur à droite dit combien
+   d'hypothèses attendent, ce qui donne envie de l'ouvrir sans l'imposer. */
+.scr-n{
+  border:1px solid var(--line);border-radius:var(--r-md);background:var(--paper-2);
+  margin-bottom:16px
+}
+.scr-n>summary{
+  display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;
+  padding:10px 15px;font-family:var(--mono);font-size:10px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--t3);border-radius:var(--r-md)
+}
+.scr-n>summary::-webkit-details-marker{display:none}
+/* Chevron en CSS pur : il tourne à l'ouverture, sans image ni JS. */
+.scr-n>summary::before{
+  content:"";width:5px;height:5px;flex:0 0 5px;border-right:1.5px solid var(--accent-strong);
+  border-bottom:1.5px solid var(--accent-strong);transform:rotate(-45deg);
+  transition:transform .18s ease;margin-right:1px
+}
+.scr-n[open]>summary::before{transform:rotate(45deg)}
+.scr-n>summary:hover{color:var(--t2)}
+.scr-n>summary:focus-visible{outline:none;box-shadow:var(--ring)}
+.scr-n-t{flex:1;min-width:0}
+.scr-n-c{
+  font-size:9.5px;color:var(--t3);background:var(--card);border:1px solid var(--line);
+  border-radius:999px;padding:2px 8px;letter-spacing:.06em
+}
+.scr-n-b{padding:0 15px 15px}
+/* La première note perd sa marge haute : le padding du panneau la porte déjà. */
+.scr-n-b>.note:first-child{margin-top:0}
 .narr{
   font-size:14.5px;line-height:1.68;background:var(--paper-2);border:1px solid var(--line);
   border-radius:var(--r-md);padding:16px 18px;box-shadow:var(--shadow-xs)
@@ -1292,8 +1376,12 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 }
 .bpill--hot{background:rgba(247,156,49,.16);border-color:rgba(247,156,49,.44);color:var(--accent-2)}
 
-/* ---------- grille bento ---------- */
-.bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+/* ---------- grille bento ----------
+   `align-items:start` : deux tuiles côte à côte de contenus très inégaux (sur la
+   trésorerie, 2 créances à échoir face à 10 créances échues) s'étiraient à la
+   hauteur de la plus haute, laissant ~700 px de vide dans la première. Chaque
+   tuile prend désormais la hauteur de son contenu. */
+.bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
 .t3{grid-column:span 3}.t4{grid-column:span 4}.t5{grid-column:span 5}
 .t6{grid-column:span 6}.t7{grid-column:span 7}.t8{grid-column:span 8}.t12{grid-column:span 12}
 .tile{
@@ -1305,10 +1393,39 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .tile-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:15px}
 .tile-h h3{font-family:var(--disp);font-size:17px;font-weight:400;letter-spacing:-.01em;margin:0}
 .tile-k{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);white-space:nowrap}
-.stat-v{font-family:var(--disp);font-weight:300;font-size:44px;letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums lining-nums}
-.stat-u{font-family:var(--mono);font-size:11px;color:var(--t3);margin-left:8px;letter-spacing:.06em}
+/* Le chiffre est fluide, pas fixe : « -1712 » et « 2774 M FCFA » saturaient
+   leur tuile à 44 px et l'unité venait coller le nombre. `clamp` rend la borne
+   haute inchangée (44 px, cas courant) et laisse le chiffre se réduire quand la
+   tuile se resserre, au lieu de déborder. */
+.stat-v{font-family:var(--disp);font-weight:300;font-size:clamp(26px,2.5vw,44px);letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums lining-nums}
+/* Ligne chiffre + unité : `baseline` garde l'unité assise sur le chiffre, et le
+   `wrap` l'envoie à la ligne plutôt que de la faire déborder sur une tuile
+   étroite. */
+.stat-l{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 2px;min-width:0}
+.stat-u{font-family:var(--mono);font-size:11px;color:var(--t3);margin-left:6px;letter-spacing:.06em;white-space:nowrap}
 .stat-d{font-family:var(--mono);font-size:11.5px;margin-top:12px;display:flex;align-items:center;gap:7px}
 .pos{color:var(--signal)}.neg{color:var(--alert)}.wat{color:var(--watch)}
+
+/* ---------- rang de lecture d'un indicateur ----------
+   Quatre chiffres de même taille ne désignent aucun premier. Le rang hiérarchise
+   sans rien retirer : `contexte` accueille les indicateurs de couverture et de
+   fiabilité, qui restent affichés mais cessent de concurrencer la mesure.
+   Ces règles surchargent volontairement `.kpi-row` (cf. plus haut), qui compacte
+   toutes ses tuiles de façon uniforme. */
+.stat--p{background:linear-gradient(180deg,#FFFEFB,var(--paper-2));border-color:var(--accent-border)}
+.stat--p::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+  background:linear-gradient(180deg,var(--accent-strong),var(--accent));
+  border-radius:var(--r-lg) 0 0 var(--r-lg)
+}
+.stat--p{position:relative}
+.kpi-row>.stat--p .stat-v{font-size:clamp(30px,2.9vw,38px)}
+.stat--c .stat-v{font-size:clamp(18px,1.5vw,22px);color:var(--t2)}
+.stat--c .tile-h h3{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--t3)}
+/* Fond papier plutôt que transparent : la tuile reste une tuile (le bandeau
+   garderait sinon un trou), mais elle recule d'un plan. */
+.stat--c{background:var(--paper-2);box-shadow:none;border-color:var(--hair)}
+.stat--c .stat-d{font-size:10px;margin-top:6px}
 .spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:16px}
 .spark i{flex:1;background:var(--hair);border-radius:2px}
 .spark i.on{background:linear-gradient(180deg,var(--accent-2),var(--accent-strong))}
@@ -1347,6 +1464,12 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .clk:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:10px}
 table.tb tr.clk td:last-child::after{content:"\203A";font-family:var(--mono);color:var(--t3);margin-left:9px}
 table.tb tr.clk{cursor:pointer}
+/* Pied de liste tronquée. Filet haut plutôt que bordure gauche : il clôt la
+   liste au lieu de se lire comme une ligne de plus. */
+.reste{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--t3);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--hair)
+}
 .hintline{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin:0 0 14px;display:flex;align-items:center;gap:9px}
 .hintline i{width:5px;height:5px;border-radius:50%;background:var(--accent-strong);display:block;flex:0 0 5px}
 

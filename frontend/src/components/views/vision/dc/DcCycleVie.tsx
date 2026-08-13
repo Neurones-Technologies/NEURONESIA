@@ -3,6 +3,7 @@ import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { SourceNote, sourceKick } from "./source";
+import { ScreenNotes } from "@/components/ui/screen-notes";
 
 /** Onglet « Cycle de vie » — §2 du compte-rendu DC.
  *
@@ -44,6 +45,8 @@ export async function DcCycleVie() {
 
   return (
     <>
+      <ScreenNotes notes={[cycle.note]} />
+
       <div className="kpi-row">
         <StatTile
           span={4}
@@ -70,8 +73,11 @@ export async function DcCycleVie() {
             ],
           }}
         />
+        {/* Les affaires enlisées sont ce sur quoi on agit ; le stock au-dessus du
+            seuil et la durée de cycle donnent l'échelle et la norme. */}
         <StatTile
           span={4}
+          rang="principal"
           label="Affaires enlisées"
           value={formatNumber(stock.nb_enlisees)}
           unit={`ouvertes depuis ${stock.seuil_enlisement_jours} jours+`}
@@ -313,9 +319,6 @@ export async function DcCycleVie() {
           </Tile>
         )}
 
-        <Tile span={12} title="Ce que cet écran mesure et ce qu'il suppose" quiet>
-          <Note style={{ marginTop: 0 }}>{cycle.note}</Note>
-        </Tile>
       </Bento>
     </>
   );

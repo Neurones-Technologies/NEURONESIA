@@ -1,6 +1,6 @@
 import { getComptesDc } from "@/lib/api/commercial";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 
 /** « Comptes par ventes » — chapitre 2 du compte-rendu DC.
@@ -40,8 +40,11 @@ export async function DcComptes() {
   return (
     <>
       <div className="kpi-row">
+        {/* Le CA cumulé du portefeuille est l'assiette de l'écran : c'est lui
+            qu'on vient situer, le pipe et les divergences le qualifient. */}
         <StatTile
           span={4}
+          rang="principal"
           label="CA réalisé du portefeuille"
           value={formatMFcfa(top.totaux.ca_realise_xof)}
           unit="M FCFA historiques"
@@ -85,6 +88,7 @@ export async function DcComptes() {
         />
         <StatTile
           span={4}
+          rang="contexte"
           label="Comptes à lecture divergente"
           value={formatNumber(top.totaux.nb_lectures_divergentes)}
           unit="jugés différemment selon l'axe"
@@ -161,6 +165,14 @@ export async function DcComptes() {
                 ],
               },
             }))}
+          />
+          {/* Le `kick` annonce 650 comptes classés, la liste en montre 20 : sans
+              cette ligne, l'écart ne se lit nulle part. */}
+          <Reste
+            affiches={top.comptes.length}
+            total={top.totaux.nb_comptes_classes}
+            nom="comptes"
+            ou={`top affiché = ${formatPct(top.totaux.part_ca_top_pct, 0)} % du CA`}
           />
           <Note style={{ marginTop: 14 }}>{top.note}</Note>
         </Tile>

@@ -86,8 +86,12 @@ export async function DcMarche() {
       />
 
       <div className="kpi-row">
+        {/* L'axe dominant est le seul des trois indicateurs mesuré sur le pipe
+            réel ; la part de marché est supposée et les signaux de veille ne sont
+            pas encore collectés — les deux reculent d'un plan sans disparaître. */}
         <StatTile
           span={4}
+          rang="principal"
           label="Axe dominant du pipe"
           value={axes.dominante?.axe ?? "—"}
           unit={axes.dominante ? `${formatPct(axes.dominante.part_montant_pct, 0)} % du pipe qualifié` : ""}
@@ -148,6 +152,7 @@ export async function DcMarche() {
         />
         <StatTile
           span={4}
+          rang="contexte"
           label="Signaux de veille exploitables"
           value={formatNumber(veille.qualite.nb_avec_url)}
           unit={`sur ${formatNumber(veille.qualite.nb_total)} collectés`}

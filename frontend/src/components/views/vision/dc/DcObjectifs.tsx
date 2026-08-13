@@ -1,9 +1,12 @@
 import { getObjectifs, Periode } from "@/lib/api/commercial";
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { PeriodeNav } from "./periode-nav";
 import { SourceNote, sourceKick } from "./source";
+import { ScreenNotes } from "@/components/ui/screen-notes";
+import { ChartNote, ColumnChart } from "@/components/ui/chart";
+import { REPERE, SERIE_2 } from "@/components/ui/chart-palette";
 
 /** Onglet « Objectifs et Gap » — §3 et §4 du compte-rendu DC.
  *
@@ -50,6 +53,8 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
         annee={gap.annee}
         annees={gap.annees_disponibles}
       />
+
+      <ScreenNotes notes={[gap.note]} />
 
       <div className="kpi-row">
         <StatTile
@@ -107,8 +112,15 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             ],
           }}
         />
+        {/* Le gap donne son nom à l'écran : c'est le chiffre qu'on vient chercher.
+            L'objectif et le réalisé sont ses deux termes de calcul.
+            `signeNeutre` : le signe est déjà porté explicitement (« + » ou « − »)
+            et la ligne de lecture qualifie l'écart — le colorer en rouge ferait
+            doublon avec `readingVariant`, qui distingue avance et retard. */}
         <StatTile
           span={4}
+          rang="principal"
+          signeNeutre
           label="Gap vendu / objectif"
           value={`${equipe.ecart_xof > 0 ? "+" : ""}${formatMFcfa(equipe.ecart_xof)}`}
           unit="M FCFA"
@@ -147,6 +159,34 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           title="Objectif et réalisé par période"
           kick={sourceKick(gap.source, gap.periode === "mois" ? "mensuel" : gap.periode === "trimestre" ? "trimestriel" : "annuel")}
         >
+          {/* Colonnes du réalisé, ligne de l'objectif — dans la MÊME unité, donc
+              sans second axe (cf. l'avertissement de chart.tsx). Le classement en
+              barres qui suit reste la vue cliquable, période par période : le
+              graphe donne la trajectoire, les barres donnent le détail.
+              Les périodes à venir sont atténuées : leur réalisé à zéro n'est pas
+              un décrochage, c'est une période non commencée. */}
+          <ColumnChart
+            colonnes={gap.periodes.map((p) => ({
+              x: p.libelle,
+              y: p.realise_xof / 1_000_000,
+              attenue: p.statut === "a_venir",
+              info: `${p.libelle} · réalisé ${formatMFcfa(p.realise_xof)} M FCFA sur un objectif de ${formatMFcfa(p.objectif_xof)} M FCFA${
+                p.taux_pct !== null ? ` (${formatPct(p.taux_pct, 0)} %)` : ""
+              }`,
+            }))}
+            cumul={gap.periodes.map((p) => p.objectif_xof / 1_000_000)}
+            couleurCumul={REPERE}
+            libelleColonnes="Réalisé"
+            libelleCumul="Objectif posé"
+            couleur={SERIE_2}
+            formatY={(v) => `${formatNumber(Math.round(v))} M`}
+            hauteur={200}
+          />
+          <ChartNote>
+            Les colonnes portent le réalisé mesuré, la ligne l&apos;objectif posé sur la période — même
+            unité, donc pas de second axe. Les périodes à venir sont atténuées : leur réalisé nul ne se
+            lit pas comme un écart.
+          </ChartNote>
           <HintLine>Cliquez une période pour son écart détaillé</HintLine>
           <Bars
             rows={gap.periodes.map((p) => {
@@ -246,6 +286,11 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                   };
                 })}
               />
+              <Reste
+                affiches={Math.min(8, commerciauxAvecObjectif.length)}
+                total={commerciauxAvecObjectif.length}
+                nom="commerciaux"
+              />
             </>
           ) : (
             <Note style={{ marginTop: 0 }}>
@@ -335,9 +380,6 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           </Tile>
         )}
 
-        <Tile span={12} title="Ce que cet écran mesure et ce qu'il suppose" quiet>
-          <Note style={{ marginTop: 0 }}>{gap.note}</Note>
-        </Tile>
       </Bento>
     </>
   );

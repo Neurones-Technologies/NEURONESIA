@@ -45,8 +45,12 @@ export async function DcVisites() {
   return (
     <>
       <div className="kpi-row">
+        {/* Le fichier de visite est un gabarit : les visites « enregistrées » sont
+            de démonstration et reculent d'un plan. Le seul chiffre mesuré de
+            l'écran est la liste des comptes actifs sans visite, plus bas. */}
         <StatTile
           span={4}
+          rang="contexte"
           label="Visites enregistrées"
           value={formatNumber(c.nb_visites_enregistrees)}
           unit="au fichier"
@@ -97,6 +101,7 @@ export async function DcVisites() {
         />
         <StatTile
           span={4}
+          rang="principal"
           label="Comptes à couvrir en priorité"
           value={formatNumber(fichier.comptes_a_visiter.length)}
           unit="affichés"

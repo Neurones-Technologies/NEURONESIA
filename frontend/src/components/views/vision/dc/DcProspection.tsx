@@ -46,11 +46,20 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
 
   return (
     <>
-      <PeriodeNav basePath="/dc/vision/prospection" periode={prosp.periode} annee={prosp.annee} />
+      <PeriodeNav
+        basePath="/dc/vision/objectifs"
+        vue="prospection"
+        periode={prosp.periode}
+        annee={prosp.annee}
+      />
 
       <div className="kpi-row">
+        {/* L'indice de prospection est en gabarit ; l'acquisition de comptes, elle,
+            est mesurée sur les premières commandes réelles. Le rang principal va
+            donc au chiffre mesuré, pas au chiffre posé. */}
         <StatTile
           span={4}
+          rang="contexte"
           label="Opportunités générées"
           value={formatNumber(prosp.totaux.nb_opportunites)}
           unit={`objectif ${formatNumber(prosp.objectif_annuel_nb)}`}
@@ -77,6 +86,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
         {acquisition ? (
           <StatTile
             span={4}
+            rang="principal"
             label={`Nouveaux comptes ${acquisition.annee_courante.annee}`}
             value={formatNumber(acquisition.annee_courante.nb_comptes)}
             unit="premières commandes"

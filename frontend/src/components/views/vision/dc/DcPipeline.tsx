@@ -60,6 +60,7 @@ export async function DcPipeline() {
         {dormanceSegments.length > 0 && (
           <StatTile
             span={4}
+            rang="principal"
             label="Portefeuille en sommeil"
             value={formatMFcfa(dormance.sommeil.ca_historique_xof)}
             unit="M FCFA historiques"

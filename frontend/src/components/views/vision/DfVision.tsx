@@ -66,8 +66,12 @@ export async function DfVision() {
       />
 
       <Bento>
+        {/* Ces trois tuiles vivent dans le Bento (chiffre à pleine taille) et non
+            dans une `.kpi-row` : le rang n'y change que le fond et le filet.
+            L'encours est l'exposition, c'est-à-dire l'objet de l'écran. */}
         <StatTile
           span={4}
+          rang="principal"
           label="Encours client"
           value={formatMFcfa(exposition)}
           unit="M FCFA"

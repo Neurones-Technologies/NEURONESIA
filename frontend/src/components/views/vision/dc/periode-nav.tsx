@@ -19,18 +19,25 @@ import { Periode, PERIODES } from "@/lib/api/commercial";
  */
 export function PeriodeNav({
   basePath,
+  vue,
   periode,
   annee,
   annees,
 }: {
-  /** Chemin de la section, p. ex. `/dc/vision/objectifs`. */
+  /** Chemin de la page, p. ex. `/dc/vision/objectifs`. */
   basePath: string;
+  /** Vue interne à reconduire dans le lien, quand la page en porte plusieurs et
+   *  que celle-ci n'est pas la première. Sans elle, changer de cadence ramènerait
+   *  sur la vue par défaut de la page. */
+  vue?: string;
   periode: Periode;
   annee?: number;
   annees?: number[];
 }) {
   const lien = (p: Periode, a?: number) => {
-    const q = new URLSearchParams({ periode: p });
+    const q = new URLSearchParams();
+    if (vue) q.set("vue", vue);
+    q.set("periode", p);
     if (a) q.set("annee", String(a));
     return `${basePath}?${q}`;
   };
