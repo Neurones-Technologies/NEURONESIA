@@ -1,38 +1,41 @@
+import { getBriefing } from "@/lib/api/briefing";
 import { getMarcheDc } from "@/lib/api/commercial";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
-import { SourceNote, sourceKick } from "./source";
 
-/** Onglet « Secteurs et marché » — §1 et §4 du compte-rendu DC.
+/** « Tendances et marché » — chapitre 1 du compte-rendu DC, et ÉCRAN D'OUVERTURE
+ * du cockpit commercial.
  *
- * « Évaluer les tendances : part du marché et selon aussi la santé du marché
- * orienté (Ex : Intelligence Artificielle et infrastructure…) », et « Tendance des
- * secteurs : performance commerciale ventilée par secteur d'activité ».
+ * « Axe prioritaire à développer : évaluer les tendances : part du marché et selon
+ * aussi la santé du marché orienté (Ex : Intelligence Artificielle et
+ * infrastructure…) »
  *
- * Trois demandes, trois régimes de faisabilité — et l'écran est ordonné pour que
- * la différence saute aux yeux plutôt qu'elle se devine :
+ * C'est le premier point du compte-rendu, donc le premier onglet du premier
+ * chapitre, donc l'écran sur lequel le cockpit s'ouvre : il porte à ce titre le
+ * briefing du jour, que le DC doit voir sans avoir à le chercher.
  *
- * 1. les AXES DE MARCHÉ sont mesurés sur nos propres affaires, via une grille de
- *    motifs appliquée aux libellés. C'est ce qui répond réellement à « la santé du
- *    marché orienté IA et infrastructure » — sur notre positionnement, pas sur le
- *    marché ;
- * 2. les SECTEURS sont un gabarit : le secteur d'activité n'est renseigné que pour
- *    une poignée de clients. Le tableau sert à faire valider la NOMENCLATURE, car
- *    c'est elle qui déterminera la saisie à mener ;
- * 3. la PART DE MARCHÉ est hors d'atteinte sans source externe. Elle est affichée
- *    à côté de la part de portefeuille, nommée différemment : les confondre
- *    conduirait à des décisions erronées.
+ * Deux demandes distinctes cohabitent dans ce chapitre, et l'écran doit empêcher de
+ * les confondre :
  *
- * La veille, elle, est réelle mais jeune : son taux de déchet est affiché avec elle.
+ * - la SANTÉ DU MARCHÉ ORIENTÉ (IA, infrastructure) est mesurable — sur NOS
+ *   affaires. Une grille de motifs appliquée aux libellés d'opportunité ventile le
+ *   pipe par axe de marché. C'est notre positionnement, pas l'état du marché ;
+ * - la PART DE MARCHÉ ne l'est pas, et pour une raison qui ne se corrigera pas par
+ *   de la saisie : il manque un univers de référence externe. Elle est donc affichée
+ *   à côté de la part de portefeuille, nommée différemment — les confondre
+ *   conduirait à des décisions erronées.
+ *
+ * La veille externe, elle, est réelle mais jeune : son taux de déchet est servi avec
+ * elle, sans quoi une collecte à moitié inexploitable se lirait comme un panorama.
  */
 export async function DcMarche() {
-  const marche = await getMarcheDc(12);
+  const [marche, briefing] = await Promise.all([getMarcheDc(12), getBriefing()]);
 
   if (!marche) {
     return (
       <Bento>
-        <Tile span={12} title="Secteurs et marché">
+        <Tile span={12} title="Tendances et marché">
           <Note style={{ marginTop: 0 }}>
             L&apos;analyse de marché n&apos;est pas accessible depuis ce profil.
           </Note>
@@ -43,11 +46,45 @@ export async function DcMarche() {
 
   const { axes, secteurs, veille } = marche;
   const maxAxe = Math.max(...axes.axes.map((a) => a.montant_ouvert_xof), 1);
-  const maxSecteur = Math.max(...secteurs.secteurs.map((s) => s.ca_xof), 1);
   const couvertureFaible = axes.coverage.couverture_montant_pct < 70;
+
+  const briefLines = briefing?.section?.resume?.length
+    ? briefing.section.resume
+    : (briefing?.section?.bullets ?? []).slice(0, 5);
+
+  const totalOuvert = axes.axes.reduce((s, a) => s + a.montant_ouvert_xof, 0);
 
   return (
     <>
+      <Brief
+        kicker="Cockpit commercial · briefing du jour"
+        headline={
+          axes.dominante
+            ? `${axes.dominante.axe} porte ${formatPct(axes.dominante.part_montant_pct, 0)} % du pipe qualifié, sur ${formatNumber(axes.coverage.nb_axes)} axes de marché.`
+            : "Aucun axe de marché n'est qualifiable sur le pipe ouvert."
+        }
+        lines={briefLines}
+        paragraphs={
+          briefLines.length
+            ? undefined
+            : [
+                `Le pipe ouvert qualifié se répartit sur ${formatNumber(axes.coverage.nb_axes)} axes pour ${formatMFcfa(totalOuvert)} M FCFA. Le briefing du jour n'est pas encore généré pour ce profil.`,
+              ]
+        }
+        pills={[
+          { label: `${formatNumber(axes.coverage.nb_axes)} axes de marché` },
+          {
+            label: `Pipe qualifié à ${formatPct(axes.coverage.couverture_montant_pct, 0)} %`,
+            hot: couvertureFaible,
+          },
+          {
+            label: `Secteur renseigné : ${formatNumber(secteurs.couverture_reelle.nb_avec_secteur)} client sur ${formatNumber(secteurs.couverture_reelle.nb_clients)}`,
+            hot: true,
+          },
+          { label: `${formatNumber(veille.qualite.nb_avec_url)} signaux de veille exploitables` },
+        ]}
+      />
+
       <div className="kpi-row">
         <StatTile
           span={4}
@@ -78,29 +115,34 @@ export async function DcMarche() {
         />
         <StatTile
           span={4}
-          label="Secteur renseigné"
-          value={formatNumber(secteurs.couverture_reelle.nb_avec_secteur)}
-          unit={`client sur ${formatNumber(secteurs.couverture_reelle.nb_clients)}`}
-          reading="analyse sectorielle réelle impossible en l'état"
+          label="Part de marché"
+          value={
+            secteurs.totaux.part_marche_globale_pct !== null
+              ? formatPct(secteurs.totaux.part_marche_globale_pct, 2)
+              : "—"
+          }
+          unit="% — supposé, non mesuré"
+          reading="aucune source externe de taille de marché"
           readingVariant="neg"
           detail={{
-            kicker: "Indicateur · qualité du référentiel clients",
-            title: "Taux de renseignement du secteur d'activité",
-            tag: `${formatPct(secteurs.couverture_reelle.couverture_pct, 2)} %`,
-            tagVariant: "r",
+            kicker: "Indicateur · part de marché",
+            title: "Ce qui est calculable et ce qui ne l'est pas",
+            tag: "donnée statique",
+            tagVariant: "n",
             body: [
-              secteurs.couverture_reelle.verdict,
-              secteurs.raison,
-              "Ce chiffre est affiché précisément parce qu'il est mauvais : un écran vide sans explication se lit comme une panne, alors qu'il s'agit d'une donnée à saisir.",
+              secteurs.part_marche.distinction,
+              secteurs.part_marche.raison,
+              `La valeur affichée rapporte un CA de gabarit à une taille de marché supposée de ${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA. Elle montre la forme de l'indicateur ; elle ne mesure rien.`,
             ],
             kv: [
-              ["Clients au référentiel", formatNumber(secteurs.couverture_reelle.nb_clients)],
-              ["Avec un secteur", formatNumber(secteurs.couverture_reelle.nb_avec_secteur)],
-              ["Couverture", `${formatPct(secteurs.couverture_reelle.couverture_pct, 2)} %`],
-              ["Valeurs distinctes", formatNumber(secteurs.couverture_reelle.nb_secteurs_distincts)],
-              ...secteurs.couverture_reelle.valeurs
-                .slice(0, 4)
-                .map((v) => [v.secteur, `${formatNumber(v.nb_clients)} client(s)`] as [string, string]),
+              [
+                "Part de marché supposée",
+                secteurs.totaux.part_marche_globale_pct !== null
+                  ? `${formatPct(secteurs.totaux.part_marche_globale_pct, 2)} %`
+                  : "—",
+              ],
+              ["Taille de marché supposée", `${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA`],
+              ["Source externe raccordée", "aucune"],
             ],
           }}
         />
@@ -139,7 +181,7 @@ export async function DcMarche() {
       <Bento>
         <Tile
           span={12}
-          title="Axes de marché du pipe ouvert"
+          title="Santé du marché orienté — axes du pipe ouvert"
           kick={`mesuré · calculé sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe`}
         >
           <HintLine>Cliquez un axe pour son poids et son taux de réussite</HintLine>
@@ -184,51 +226,12 @@ export async function DcMarche() {
           <Note style={{ marginTop: 14 }}>{axes.note}</Note>
         </Tile>
 
-        <Tile span={7} title="Performance par secteur d'activité" kick={sourceKick(secteurs.source, "nomenclature à valider")}>
-          <HintLine>Cliquez un secteur pour sa part de marché supposée</HintLine>
-          <Bars
-            rows={secteurs.secteurs.map((s) => ({
-              name: s.secteur,
-              sub: [
-                `${formatNumber(s.nb_clients)} clients`,
-                `${formatPct(s.part_ca_pct, 0)} % du CA`,
-                `croissance ${s.croissance_pct > 0 ? "+" : ""}${formatPct(s.croissance_pct, 1)} %`,
-              ].join(" · "),
-              value: `${formatMFcfa(s.ca_xof)} M`,
-              pct: (s.ca_xof / maxSecteur) * 100,
-              variant: s.croissance_pct < 0 ? ("r" as const) : undefined,
-              detail: {
-                kicker: "Secteur · gabarit",
-                title: s.secteur,
-                tag: "donnée statique",
-                tagVariant: "n" as const,
-                body: [
-                  `Le gabarit pose ${formatMFcfa(s.ca_xof)} M FCFA de CA sur ${formatNumber(s.nb_clients)} clients pour ce secteur, soit ${formatPct(s.part_ca_pct, 0)} % du CA, avec une croissance de ${formatPct(s.croissance_pct, 1)} %.`,
-                  s.part_marche_pct !== null
-                    ? `Rapporté à une taille de marché supposée de ${formatMFcfa(s.taille_marche_xof)} M FCFA, cela donnerait une part de marché de ${formatPct(s.part_marche_pct, 2)} %. Cette taille de marché est un ordre de grandeur de travail, à remplacer par une étude ou des données publiques.`
-                    : "Aucune taille de marché n'est associée à ce secteur.",
-                  secteurs.raison,
-                ],
-                kv: [
-                  ["CA (gabarit)", `${formatMFcfa(s.ca_xof)} M FCFA`],
-                  ["Clients (gabarit)", formatNumber(s.nb_clients)],
-                  ["Part du CA", `${formatPct(s.part_ca_pct, 0)} %`],
-                  ["Croissance", `${formatPct(s.croissance_pct, 1)} %`],
-                  ["Taille de marché supposée", `${formatMFcfa(s.taille_marche_xof)} M FCFA`],
-                  ["Part de marché supposée", s.part_marche_pct !== null ? `${formatPct(s.part_marche_pct, 2)} %` : "—"],
-                ],
-              },
-            }))}
-          />
-          <SourceNote source={secteurs.source} raison={secteurs.raison} avertissement={secteurs.avertissement} />
-        </Tile>
-
-        <Tile span={5} title="Part de marché : ce qui est calculable et ce qui ne l'est pas" quiet>
+        <Tile span={12} title="Part de marché : ce qui est calculable et ce qui ne l'est pas" quiet>
           <Bars
             rows={[
               {
                 name: "Part de marché globale supposée",
-                sub: `notre CA rapporté à une taille de marché de ${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA`,
+                sub: `notre CA rapporté à une taille de marché de ${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA — aucune source externe raccordée`,
                 value:
                   secteurs.totaux.part_marche_globale_pct !== null
                     ? `${formatPct(secteurs.totaux.part_marche_globale_pct, 2)} %`
@@ -237,11 +240,11 @@ export async function DcMarche() {
                 variant: "w" as const,
               },
               {
-                name: "Secteurs réellement renseignés",
-                sub: `sur ${formatNumber(secteurs.couverture_reelle.nb_clients)} clients du référentiel`,
-                value: formatNumber(secteurs.couverture_reelle.nb_avec_secteur),
-                pct: Math.max(1, secteurs.couverture_reelle.couverture_pct),
-                variant: "r" as const,
+                name: "Part de portefeuille de l'axe dominant",
+                sub: "notre CA rapporté à notre propre total — calculable dès aujourd'hui",
+                value: `${formatPct(axes.dominante?.part_montant_pct ?? null, 0)} %`,
+                pct: axes.dominante?.part_montant_pct ?? 0,
+                variant: "s" as const,
               },
             ]}
           />

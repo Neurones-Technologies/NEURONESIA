@@ -111,6 +111,33 @@ table{border-spacing:0}
 .hdr-nav-btn[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent-strong);font-weight:500}
 .hdr-nav-btn:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-3px}
 
+/* En-tête à DEUX NIVEAUX (cockpit DC) : chapitres en haut, écrans du chapitre
+   ouvert en dessous. Le cockpit DC porte quatorze écrans — sur une seule rangée,
+   la moitié restait derrière un ascenseur horizontal sans que rien ne l'annonce.
+
+   `.hdr` passe en colonne et sa première rangée reprend la disposition d'origine
+   (menu à gauche, puce de profil à droite). Le décalage négatif du menu ne vaut
+   plus que vers le haut : le soulignement du chapitre actif tombe alors juste
+   au-dessus de sa propre rangée d'écrans, ce qui montre laquelle commande l'autre.
+   Sans chapitres, rien ne change — la règle ne s'applique qu'à `.hdr--stacked`. */
+.hdr--stacked{flex-direction:column;align-items:stretch;gap:0;padding-bottom:9px}
+.hdr--stacked .hdr-row{display:flex;align-items:center;gap:14px;min-width:0}
+.hdr--stacked .hdr-nav{margin:-13px 0 0}
+
+/* Rangée de niveau 2 : des pastilles, pas des onglets. Deux rangées d'onglets de
+   même poids se disputeraient la lecture. */
+.hdr-subnav{display:flex;gap:3px;min-width:0;overflow-x:auto;padding-top:7px}
+.hdr-subnav-btn{
+  position:relative;display:flex;align-items:center;border-radius:999px;padding:5px 13px;
+  font-family:var(--sans);font-size:12.5px;color:var(--t3);text-decoration:none;white-space:nowrap;
+  transition:background-color .16s ease,color .16s ease
+}
+.hdr-subnav-btn:hover{color:var(--ink);background:var(--paper-2)}
+.hdr-subnav-btn[aria-current="page"]{background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-xs)}
+.hdr-subnav-btn:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
+/* La barre d'attente suit la courbe de la pastille au lieu de la traverser. */
+.hdr-subnav-btn .nav-busy{left:9px;right:9px;bottom:3px}
+
 /* ---------- navigation en attente ---------- */
 /* `.nav-busy` n'est dans le DOM que pendant qu'une navigation est en vol : il est
    monté par components/shell/NavLink.tsx d'après useLinkStatus().

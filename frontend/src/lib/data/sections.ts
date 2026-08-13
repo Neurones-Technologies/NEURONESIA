@@ -3,7 +3,40 @@ import { ProfileKey } from "@/lib/types";
 export interface SectionNavItem {
   id: string;
   label: string;
+  /** Chapitre auquel la section se rattache, en navigation à deux niveaux.
+   * Absent : le profil garde un menu à un seul niveau. */
+  group?: string;
 }
+
+/** Chapitre de menu — niveau 1 d'un profil en navigation à deux niveaux. */
+export interface SectionGroup {
+  id: string;
+  /** Libellé affiché, nécessairement court : six chapitres doivent tenir sur une
+   * ligne à côté de la puce de profil. */
+  label: string;
+  /** Intitulé complet, en infobulle. C'est lui qui porte la formulation exacte du
+   * document de référence, que le libellé court ne peut pas contenir. */
+  title?: string;
+}
+
+/** Chapitres du menu, par profil. Leur ordre est celui du menu.
+ *
+ * Pour le DC, les six chapitres sont ceux du compte-rendu d'entretien du
+ * 04/08/2026, dans son ordre : le cockpit doit se lire avec le document sur la
+ * table, sans avoir à traduire un intitulé en fonctionnalité.
+ *
+ * Un profil absent d'ici reste à un seul niveau (cas du DAF, dont les cinq
+ * onglets tiennent sans regroupement). */
+export const VISION_GROUPS: Partial<Record<ProfileKey, readonly SectionGroup[]>> = {
+  dc: [
+    { id: "pilotage", label: "Pilotage stratégique", title: "1. Pilotage stratégique du portefeuille" },
+    { id: "suivi-compte", label: "Suivi par compte", title: "2. Suivi commercial par compte" },
+    { id: "prospection", label: "Prospection et performance", title: "3. Prospection et performance commerciale" },
+    { id: "pipeline", label: "Secteurs et pipeline", title: "4. Analyse sectorielle et pipeline" },
+    { id: "decision", label: "Aide à la décision", title: "5. Aide à la décision" },
+    { id: "terrain", label: "Traçabilité terrain", title: "6. Traçabilité terrain" },
+  ],
+};
 
 /** Découpage en sections de la vue Cockpit, par profil. Défini ici (et non dans
  * la vue) pour être importable depuis l'en-tête, qui est un composant client.
@@ -23,12 +56,6 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     { id: "trajectoire", label: "Trajectoire financière" },
     { id: "risques", label: "Dépendances et risques" },
   ],
-  // Ordre voulu, du chiffre vers le terrain : pilotage du chiffre (pipeline,
-  // objectifs), animation du portefeuille (comptes, base installée), tenue du pipe
-  // (à closer, cycle de vie), lecture de marché (mix d'offre, secteurs), équipe
-  // (équipe, transformation), terrain (visites). Le menu défile horizontalement
-  // au-delà de la largeur disponible (`.hdr-nav` est en `overflow-x:auto`), d'où
-  // des libellés courts sur les onglets ajoutés.
   // Note « Point DAF financier » du 04/08/2026 : trois tableaux de bord (budget,
   // relation commerciale, trésorerie prévisionnelle) et un volet transverse
   // (formation). L'onglet « Encours et marge » est l'écran financier historique,
@@ -41,20 +68,63 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     { id: "tresorerie", label: "Trésorerie prévisionnelle" },
     { id: "formation", label: "Formation et qualité" },
   ],
+  // Cockpit DC : les sections suivent les six chapitres du compte-rendu du
+  // 04/08/2026 (cf. `VISION_GROUPS`), et leurs libellés reprennent la formulation
+  // du document — « Indice de prospection », « À closer / à compléter », « Écart
+  // vendu / objectif ». Le DC doit reconnaître SA demande dans le menu, pas
+  // déduire à quel besoin répond un onglet nommé autrement.
+  //
+  // Le découpage est plus fin que les chapitres parce qu'il est aussi un découpage
+  // de CHARGE : une section = une page = ses propres appels. Regrouper « Pilotage
+  // stratégique » sur un seul écran cumulerait quatre appels et recalculerait le
+  // marché, servi aussi au chapitre 4.
+  //
+  // L'ordre à l'intérieur d'un chapitre suit celui du compte-rendu.
   dc: [
-    { id: "pipeline", label: "Pipeline et forecast" },
-    { id: "objectifs", label: "Objectifs et Gap" },
-    { id: "comptes", label: "Comptes" },
-    { id: "base-installee", label: "Base installée" },
-    { id: "pipe-qualite", label: "À closer / compléter" },
-    { id: "cycle-vie", label: "Cycle de vie" },
-    { id: "mix-offre", label: "Mix d'offre" },
-    { id: "marche", label: "Secteurs et marché" },
-    { id: "equipe", label: "Équipe" },
-    { id: "transformation", label: "Transformation" },
-    { id: "visites", label: "Visites" },
+    // 1. Pilotage stratégique du portefeuille
+    { id: "marche", label: "Tendances et marché", group: "pilotage" },
+    { id: "base-installee", label: "Animation de compte", group: "pilotage" },
+    { id: "pics", label: "Pics et alertes", group: "pilotage" },
+    // 2. Suivi commercial par compte
+    { id: "comptes", label: "Comptes par ventes", group: "suivi-compte" },
+    { id: "cycle-vie", label: "Cycle de vie ≥ 30 M", group: "suivi-compte" },
+    // 3. Prospection et performance commerciale
+    { id: "efficacite", label: "Indice d'efficacité", group: "prospection" },
+    { id: "prospection", label: "Indice de prospection", group: "prospection" },
+    // 4. Analyse sectorielle et pipeline
+    { id: "secteurs", label: "Tendance des secteurs", group: "pipeline" },
+    { id: "pipeline", label: "Pipeline et forecast", group: "pipeline" },
+    { id: "pipe-qualite", label: "À closer / à compléter", group: "pipeline" },
+    { id: "objectifs", label: "Écart vendu / objectif", group: "pipeline" },
+    { id: "mix-offre", label: "Mix d'offre", group: "pipeline" },
+    // 5. Aide à la décision
+    { id: "transformation", label: "Diagnostic et recommandations", group: "decision" },
+    // 6. Traçabilité terrain
+    { id: "visites", label: "Fichier de visite", group: "terrain" },
   ],
 };
+
+/** Chapitres d'un profil, ou `undefined` s'il est à un seul niveau. */
+export function visionGroups(profile: ProfileKey): readonly SectionGroup[] | undefined {
+  return VISION_GROUPS[profile];
+}
+
+/** Sections d'un chapitre, dans l'ordre du menu. */
+export function sectionsOfGroup(profile: ProfileKey, group: string): readonly SectionNavItem[] {
+  return (VISION_SECTIONS[profile] ?? []).filter((s) => s.group === group);
+}
+
+/** Chapitre auquel appartient une section. `undefined` si la section est inconnue
+ * ou si le profil n'a pas de chapitres. */
+export function groupOfSection(profile: ProfileKey, section: string | undefined): string | undefined {
+  if (!section) return undefined;
+  return (VISION_SECTIONS[profile] ?? []).find((s) => s.id === section)?.group;
+}
+
+/** Première section d'un chapitre — cible d'un clic sur le chapitre lui-même. */
+export function firstSectionOfGroup(profile: ProfileKey, group: string): string | undefined {
+  return sectionsOfGroup(profile, group)[0]?.id;
+}
 
 export type VisionNavMode = "scroll" | "route";
 
@@ -70,7 +140,11 @@ export function visionNavMode(profile: ProfileKey): VisionNavMode {
 }
 
 /** Section par défaut d'un profil en mode `"route"` — cible de la redirection
- * depuis `/{profile}/vision`. */
+ * depuis `/{profile}/vision`.
+ *
+ * C'est la PREMIÈRE section déclarée, donc le premier onglet du premier chapitre.
+ * Conséquence à connaître avant de réordonner la liste : cette section est l'écran
+ * d'ouverture du cockpit, et c'est elle qui doit porter le briefing du jour. */
 export function defaultVisionSection(profile: ProfileKey): string | undefined {
   return VISION_SECTIONS[profile]?.[0]?.id;
 }

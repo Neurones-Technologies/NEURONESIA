@@ -6,10 +6,13 @@ import { DcMixOffre } from "./DcMixOffre";
 import { DcTransformation } from "./DcTransformation";
 import { DcObjectifs } from "./DcObjectifs";
 import { DcComptes } from "./DcComptes";
+import { DcPics } from "./DcPics";
 import { DcPipeQualite } from "./DcPipeQualite";
 import { DcCycleVie } from "./DcCycleVie";
-import { DcEquipe } from "./DcEquipe";
+import { DcEfficacite } from "./DcEfficacite";
+import { DcProspection } from "./DcProspection";
 import { DcMarche } from "./DcMarche";
+import { DcSecteurs } from "./DcSecteurs";
 import { DcVisites } from "./DcVisites";
 
 /** Paramètres d'URL communs aux onglets DC.
@@ -37,22 +40,31 @@ function anneeDe(params: DcSectionParams): number | undefined {
 /** Registre des onglets du cockpit DC : chaque clé est un segment d'URL
  * (`/dc/vision/<clé>`) et doit avoir son entrée dans `VISION_SECTIONS.dc`
  * (cf. lib/data/sections.ts) — sinon le menu affiche un onglet sans page, ou
- * l'inverse. La route valide le segment avant d'appeler ce registre.
+ * l'inverse. La route valide le segment avant d'appeler ce registre, et un test
+ * e2e parcourt les deux listes.
  *
- * L'ordre suit celui du menu : pilotage du chiffre (pipeline, objectifs), puis
- * animation du portefeuille (comptes, base installée), puis tenue du pipe
- * (à closer, cycle de vie), puis lecture de marché (mix d'offre, secteurs), puis
- * équipe (équipe, transformation), et enfin le terrain (visites). */
+ * L'ordre et le regroupement suivent les six chapitres du compte-rendu d'entretien
+ * du 04/08/2026 : le DC doit reconnaître SA demande dans le menu. Chaque écran
+ * reste une page distincte, pour ne payer que ses propres appels. */
 export const DC_SECTIONS: Record<string, (params: DcSectionParams) => ReactNode> = {
-  pipeline: () => <DcPipeline />,
-  objectifs: (p) => <DcObjectifs periode={periodeDe(p, "trimestre")} annee={anneeDe(p)} />,
-  comptes: () => <DcComptes />,
-  "base-installee": () => <DcBaseInstallee />,
-  "pipe-qualite": () => <DcPipeQualite />,
-  "cycle-vie": () => <DcCycleVie />,
-  "mix-offre": () => <DcMixOffre />,
+  // 1. Pilotage stratégique du portefeuille
   marche: () => <DcMarche />,
-  equipe: (p) => <DcEquipe periode={periodeDe(p, "mois")} annee={anneeDe(p)} />,
+  "base-installee": () => <DcBaseInstallee />,
+  pics: () => <DcPics />,
+  // 2. Suivi commercial par compte
+  comptes: () => <DcComptes />,
+  "cycle-vie": () => <DcCycleVie />,
+  // 3. Prospection et performance commerciale
+  efficacite: (p) => <DcEfficacite periode={periodeDe(p, "mois")} annee={anneeDe(p)} />,
+  prospection: (p) => <DcProspection periode={periodeDe(p, "mois")} annee={anneeDe(p)} />,
+  // 4. Analyse sectorielle et pipeline
+  secteurs: () => <DcSecteurs />,
+  pipeline: () => <DcPipeline />,
+  "pipe-qualite": () => <DcPipeQualite />,
+  objectifs: (p) => <DcObjectifs periode={periodeDe(p, "trimestre")} annee={anneeDe(p)} />,
+  "mix-offre": () => <DcMixOffre />,
+  // 5. Aide à la décision
   transformation: () => <DcTransformation />,
+  // 6. Traçabilité terrain
   visites: () => <DcVisites />,
 };

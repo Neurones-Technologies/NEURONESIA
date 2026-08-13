@@ -3,33 +3,36 @@ import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { PeriodeNav } from "./periode-nav";
-import { SourceNote, sourceKick } from "./source";
 
-/** Onglet « Équipe commerciale » — §3 du compte-rendu DC.
+/** « Indice d'efficacité » — chapitre 3 du compte-rendu DC.
  *
- * Deux indicateurs demandés ensemble, de faisabilité opposée :
+ * « Nombre de deals par commercial, à transformer en un ratio / indice d'efficacité
+ * individuel, permettant de comparer objectivement les performances entre
+ * commerciaux. »
  *
- * - l'INDICE D'EFFICACITÉ est mesurable. Ce qui manquait n'était pas la donnée
- *   mais une identité stable par commercial : le CRM ne stocke que du texte libre.
- * - l'INDICE DE PROSPECTION ne l'est pas. Il compte un FLUX d'opportunités
- *   générées, et les dates de création du miroir sont des dates d'import.
+ * L'indicateur est mesurable : les issues gagné/perdu et les montants existent. Ce
+ * qui manquait n'était pas la donnée mais une IDENTITÉ stable par commercial — le
+ * CRM ne stocke que du texte libre.
  *
- * L'indice d'efficacité expose ses trois composantes séparément, à dessein : le
- * cadrage laisse ouvertes les questions 25 à 28 (quel numérateur, faut-il pondérer
- * par le montant, faut-il neutraliser le portefeuille hérité). Trancher à la place
- * du DC produirait un classement que personne ne pourrait discuter.
+ * Deux principes de présentation, tenus de bout en bout :
  *
- * La fiabilité du référentiel est affichée AVANT le classement, et non en note de
- * bas de page : tant que les alias ne sont pas validés, le palmarès est indicatif,
- * et l'ordre de lecture doit le dire.
+ * 1. LA FIABILITÉ PASSE AVANT LE CLASSEMENT. Tant que les rattachements d'alias ne
+ *    sont pas validés et que la moitié du CA reste portée par des entités non
+ *    nominatives, le palmarès est indicatif. L'ordre de lecture le dit : les tuiles
+ *    de fiabilité sont au-dessus du classement, pas en note de bas de page.
+ * 2. L'INDICE S'OUVRE. Le cadrage laisse ouvertes les questions 25 à 28 (quel
+ *    numérateur, faut-il pondérer par le montant, faut-il neutraliser le
+ *    portefeuille hérité). Trancher à la place du DC produirait un classement que
+ *    personne ne pourrait discuter : les trois composantes restent donc lisibles
+ *    séparément, et les limites sont affichées comme telles.
  */
-export async function DcEquipe({ periode, annee }: { periode: Periode; annee?: number }) {
+export async function DcEfficacite({ periode, annee }: { periode: Periode; annee?: number }) {
   const equipe = await getEquipeDc(annee, periode);
 
   if (!equipe) {
     return (
       <Bento>
-        <Tile span={12} title="Équipe commerciale">
+        <Tile span={12} title="Indice d'efficacité">
           <Note style={{ marginTop: 0 }}>
             Le suivi de performance n&apos;est pas accessible depuis ce profil.
           </Note>
@@ -38,14 +41,13 @@ export async function DcEquipe({ periode, annee }: { periode: Periode; annee?: n
     );
   }
 
-  const { efficacite: eff, prospection: prosp, referentiel: ref } = equipe;
+  const { efficacite: eff, referentiel: ref } = equipe;
   const fi = eff.fiabilite;
   const maxCa = Math.max(...eff.commerciaux.map((c) => c.ca_signe_xof), 1);
-  const maxProsp = Math.max(...prosp.lignes.map((l) => l.nb_opportunites), 1);
 
   return (
     <>
-      <PeriodeNav basePath="/dc/vision/equipe" periode={prosp.periode} annee={eff.annee} />
+      <PeriodeNav basePath="/dc/vision/efficacite" periode={periode} annee={eff.annee} />
 
       <div className="kpi-row">
         <StatTile
@@ -100,26 +102,24 @@ export async function DcEquipe({ periode, annee }: { periode: Periode; annee?: n
         />
         <StatTile
           span={4}
-          label="Indice de prospection"
-          value={formatNumber(prosp.totaux.nb_opportunites)}
-          unit={`opportunités générées · objectif ${formatNumber(prosp.objectif_annuel_nb)}`}
-          reading="données statiques — flux non mesurable"
-          readingVariant="wat"
+          label="Seuil de significativité"
+          value={formatNumber(eff.seuil_significativite_closes)}
+          unit="affaires closes minimum"
+          reading="en dessous, le taux s'affiche mais ne classe pas"
           detail={{
-            kicker: "Indicateur · prospection (gabarit)",
-            title: "Opportunités générées sur l'exercice",
-            tag: "donnée statique",
-            tagVariant: "n",
+            kicker: "Indicateur · garde-fou du classement",
+            title: "Pourquoi certains taux ne comptent pas dans l'indice",
+            tag: "mesuré",
+            tagVariant: "s",
             body: [
-              `Le gabarit pose ${formatNumber(prosp.totaux.nb_opportunites)} opportunités générées pour un objectif de ${formatNumber(prosp.objectif_annuel_nb)}, soit ${formatPct(prosp.totaux.taux_atteinte_pct, 0)} % d'atteinte.`,
-              prosp.raison,
-              prosp.note,
+              `Sous ${formatNumber(eff.seuil_significativite_closes)} affaires closes, un taux de transformation n'est pas un indicateur mais un accident d'échantillon.`,
+              "Constaté sur ce miroir : plusieurs porteurs affichent 100 % en valeur avec zéro affaire perdue, ce qui les placerait en tête d'un classement qu'ils n'ont pas gagné. Leur taux reste affiché — il est vrai — mais n'entre pas dans l'indice.",
+              "Un commercial sans affaire close n'est pas pénalisé d'un taux de 0 % : il est classé sur ses composantes disponibles.",
             ],
             kv: [
-              ["Opportunités générées (gabarit)", formatNumber(prosp.totaux.nb_opportunites)],
-              ["Objectif annuel", formatNumber(prosp.objectif_annuel_nb)],
-              ["Nouveaux comptes (gabarit)", formatNumber(prosp.totaux.nb_nouveaux_comptes)],
-              ["Montant généré (gabarit)", `${formatMFcfa(prosp.totaux.montant_genere_xof)} M FCFA`],
+              ["Seuil retenu", `${formatNumber(eff.seuil_significativite_closes)} affaires closes`],
+              ["Transformation mesurée sur", eff.periodes_mesure.transformation],
+              ["CA signé mesuré sur", eff.periodes_mesure.ca_signe],
             ],
           }}
         />
@@ -243,43 +243,6 @@ export async function DcEquipe({ periode, annee }: { periode: Periode; annee?: n
             />
           </Tile>
         ) : null}
-
-        <Tile
-          span={12}
-          title="Indice de prospection"
-          kick={sourceKick(prosp.source, prosp.periode === "mois" ? "mensuel" : prosp.periode === "trimestre" ? "trimestriel" : "annuel")}
-        >
-          <HintLine>Cliquez une période pour l&apos;écart à l&apos;objectif</HintLine>
-          <Bars
-            rows={prosp.lignes.map((l) => ({
-              name: l.libelle,
-              sub: `objectif ${formatNumber(l.objectif_nb)} · ${formatNumber(l.nb_nouveaux_comptes)} nouveaux comptes · ${formatMFcfa(l.montant_genere_xof)} M FCFA générés`,
-              value: formatNumber(l.nb_opportunites),
-              pct: (l.nb_opportunites / maxProsp) * 100,
-              variant: l.ecart_nb < 0 ? ("r" as const) : ("s" as const),
-              detail: {
-                kicker: "Période · prospection (gabarit)",
-                title: l.libelle,
-                tag: "donnée statique",
-                tagVariant: "n" as const,
-                body: [
-                  `${formatNumber(l.nb_opportunites)} opportunités générées pour un objectif de ${formatNumber(l.objectif_nb)}, soit un écart de ${l.ecart_nb > 0 ? "+" : ""}${formatNumber(l.ecart_nb)}. Dont ${formatNumber(l.nb_nouveaux_comptes)} sur des comptes nouveaux, pour ${formatMFcfa(l.montant_genere_xof)} M FCFA.`,
-                  prosp.raison,
-                  "Ce qui EST mesurable aujourd'hui et remplace utilement cet écran : le nombre de comptes ayant passé leur première commande, visible dans l'onglet Comptes.",
-                ],
-                kv: [
-                  ["Opportunités générées", formatNumber(l.nb_opportunites)],
-                  ["Objectif", formatNumber(l.objectif_nb)],
-                  ["Écart", formatNumber(l.ecart_nb)],
-                  ["Nouveaux comptes", formatNumber(l.nb_nouveaux_comptes)],
-                  ["Montant généré", `${formatMFcfa(l.montant_genere_xof)} M FCFA`],
-                ],
-              },
-            }))}
-          />
-          <SourceNote source={prosp.source} raison={prosp.raison} avertissement={prosp.avertissement} />
-          <Note style={{ marginTop: 14 }}>{prosp.note}</Note>
-        </Tile>
       </Bento>
     </>
   );

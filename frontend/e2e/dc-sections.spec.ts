@@ -13,17 +13,27 @@ import { test, expect, type Cookie } from "@playwright/test";
 // Les onglets DC appellent le backend en composant serveur : une page qui rend son
 // `main.canvas` prouve que l'appel a abouti ET que la désérialisation a tenu.
 
+// Les quatorze écrans, dans l'ordre des six chapitres du compte-rendu.
 const SECTIONS = [
-  "pipeline",
-  "objectifs",
-  "comptes",
-  "base-installee",
-  "pipe-qualite",
-  "cycle-vie",
-  "mix-offre",
+  // 1. Pilotage stratégique du portefeuille
   "marche",
-  "equipe",
+  "base-installee",
+  "pics",
+  // 2. Suivi commercial par compte
+  "comptes",
+  "cycle-vie",
+  // 3. Prospection et performance commerciale
+  "efficacite",
+  "prospection",
+  // 4. Analyse sectorielle et pipeline
+  "secteurs",
+  "pipeline",
+  "pipe-qualite",
+  "objectifs",
+  "mix-offre",
+  // 5. Aide à la décision
   "transformation",
+  // 6. Traçabilité terrain
   "visites",
 ] as const;
 
@@ -78,6 +88,37 @@ test.describe("Cockpit DC — les onglets rendent tous", () => {
     // Une valeur absurde retombe sur le défaut de l'onglet plutôt que de vider l'écran.
     await page.goto("/dc/vision/objectifs?periode=nimportequoi");
     await expect(cadence.locator('a[aria-current="page"]')).toHaveText("Trimestriel");
+  });
+
+  // Le menu est à deux niveaux : les six chapitres du compte-rendu en haut, les
+  // écrans du chapitre ouvert en dessous. Ce test protège les deux propriétés qui
+  // font tenir ce dessin : le chapitre de la section courante est surligné même
+  // quand on l'atteint par lien direct, et la seconde rangée ne montre que ses
+  // écrans — pas les quatorze.
+  test("le chapitre actif et ses écrans suivent la section ouverte", async ({ page }) => {
+    const chapitres = page.getByRole("navigation", { name: "Chapitres de la vue" });
+    const ecrans = page.getByRole("navigation", { name: "Écrans du chapitre" });
+
+    await page.goto("/dc/vision/pics");
+    await expect(chapitres.locator('a[aria-current="page"]')).toHaveText("Pilotage stratégique");
+    await expect(ecrans.locator("a")).toHaveText([
+      "Tendances et marché",
+      "Animation de compte",
+      "Pics et alertes",
+    ]);
+    await expect(ecrans.locator('a[aria-current="page"]')).toHaveText("Pics et alertes");
+
+    await page.goto("/dc/vision/cycle-vie");
+    await expect(chapitres.locator('a[aria-current="page"]')).toHaveText("Suivi par compte");
+    await expect(ecrans.locator("a")).toHaveCount(2);
+  });
+
+  // Un chapitre à un seul écran n'affiche pas de seconde rangée : elle ne
+  // proposerait qu'un onglet, déjà actif.
+  test("un chapitre à un seul écran n'a pas de seconde rangée", async ({ page }) => {
+    await page.goto("/dc/vision/visites");
+    await expect(page.getByRole("navigation", { name: "Chapitres de la vue" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Écrans du chapitre" })).toHaveCount(0);
   });
 
   // Une section inventée doit tomber en 404 plutôt que rendre une page vide.
