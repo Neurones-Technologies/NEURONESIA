@@ -15,6 +15,7 @@ export function Tile({
   kick,
   quiet,
   rows,
+  fill,
   children,
 }: {
   span?: Span;
@@ -24,10 +25,15 @@ export function Tile({
   /** `2` : la tuile tient la hauteur de deux rangées, pour faire face à une
    *  colonne de deux tuiles empilées. Sans valeur, comportement d'avant. */
   rows?: 2;
+  /** Étire la tuile à la hauteur de sa rangée, pour qu'elle ait le même cadre que
+   *  sa voisine malgré un contenu plus court. */
+  fill?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={`tile t${span}${quiet ? " tile--q" : ""}${rows === 2 ? " tile--tall" : ""}`}>
+    <div
+      className={`tile t${span}${quiet ? " tile--q" : ""}${rows === 2 ? " tile--tall" : ""}${fill ? " tile--fill" : ""}`}
+    >
       {(title || kick) && (
         <div className="tile-h">
           {title && <h3>{title}</h3>}
@@ -190,32 +196,53 @@ export interface BarRow {
   detail?: DetailCard;
 }
 
-export function Bars({ rows }: { rows: BarRow[] }) {
+/** Barres classées d'un écran.
+ *
+ * `replierApres` replie la queue derrière une bascule « Voir les N autres », même
+ * mécanique que `Lst` (cf. ui/lst-repli.tsx). Option et non défaut : les autres
+ * appels affichent des listes déjà coupées à la source. */
+export function Bars({
+  rows,
+  replierApres,
+  nom,
+}: {
+  rows: BarRow[];
+  /** Nombre de barres visibles avant repli. Omis : toutes, comme avant. */
+  replierApres?: number;
+  /** Nom des lignes au pluriel, pour le libellé de la bascule. */
+  nom?: string;
+}) {
+  const lignes = rows.map((r, i) => {
+    const inner = (
+      <>
+        <div className="bar-n">
+          {r.name}
+          {r.sub && <span>{r.sub}</span>}
+          <div className="bar-t">
+            <i className={r.variant} style={{ width: `${Math.max(2, Math.min(100, r.pct))}%` }} />
+          </div>
+        </div>
+        <div className="bar-v">{r.value}</div>
+      </>
+    );
+    return r.detail ? (
+      <Clickable key={i} className="bar-r" detail={r.detail}>
+        {inner}
+      </Clickable>
+    ) : (
+      <div key={i} className="bar-r">
+        {inner}
+      </div>
+    );
+  });
+
   return (
     <div className="bars">
-      {rows.map((r, i) => {
-        const inner = (
-          <>
-            <div className="bar-n">
-              {r.name}
-              {r.sub && <span>{r.sub}</span>}
-              <div className="bar-t">
-                <i className={r.variant} style={{ width: `${Math.max(2, Math.min(100, r.pct))}%` }} />
-              </div>
-            </div>
-            <div className="bar-v">{r.value}</div>
-          </>
-        );
-        return r.detail ? (
-          <Clickable key={i} className="bar-r" detail={r.detail}>
-            {inner}
-          </Clickable>
-        ) : (
-          <div key={i} className="bar-r">
-            {inner}
-          </div>
-        );
-      })}
+      {replierApres !== undefined ? (
+        <LstRepli lignes={lignes} visibles={replierApres} nom={nom} />
+      ) : (
+        lignes
+      )}
     </div>
   );
 }

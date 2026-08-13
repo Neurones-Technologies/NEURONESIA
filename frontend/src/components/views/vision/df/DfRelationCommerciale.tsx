@@ -291,83 +291,10 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           </ChartNote>
         </Tile>
 
-        <Tile span={12} title="Suivi des mauvais payeurs" kick={`${formatNumber(payeurs.clients.length)} clients classés par risque`}>
-          <HintLine>Cliquez un client pour son comportement de paiement et son exposition</HintLine>
-          <div style={{ overflowX: "auto" }}>
-            <table className="tb">
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th className="r">Encours échu</th>
-                  <th className="r">Retard courant</th>
-                  <th className="r">Retard habituel</th>
-                  <th className="r">Indice</th>
-                  <th>Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payeurs.clients.map((c) => (
-                  <Clickable
-                    key={`${c.client_id ?? c.client}`}
-                    as="tr"
-                    detail={{
-                      kicker: "Client · risque de paiement",
-                      title: c.client,
-                      tag: STATUT_LIBELLE[c.statut],
-                      tagVariant: STATUT_TAG[c.statut],
-                      body: [
-                        `${formatMFcfa(c.encours_echu_xof)} M FCFA d'encours échu sur ${formatNumber(c.nb_factures_ouvertes)} facture(s) ouverte(s), avec un retard courant maximal de ${formatNumber(c.retard_courant_max_jours)} jours (échéance la plus ancienne : ${formatDate(c.echeance_la_plus_ancienne)}).`,
-                        c.comportement_significatif
-                          ? `Son comportement de paiement est mesuré sur ${formatNumber(c.nb_factures_reglees)} factures réglées : ${formatPct(c.retard_moyen_regle_jours, 1)} jours de retard en moyenne. C'est un payeur ${(c.retard_moyen_regle_jours ?? 0) > 30 ? "structurellement lent" : "globalement fiable"}.`
-                          : `Il n'a réglé que ${formatNumber(c.nb_factures_reglees)} facture(s) : son retard moyen est affiché mais n'entre pas dans l'indice — sur si peu de factures, un retard est un incident, pas un comportement.`,
-                        c.retard_courant_max_jours > 2 * 365
-                          ? "Cette créance dépasse deux ans. À cette ancienneté, la relance n'est plus l'outil : la question est celle de la provision ou du passage en perte."
-                          : c.retard_courant_max_jours > payeurs.regle.seuil_contentieux_jours
-                            ? "Au-delà de 90 jours, la relance commerciale simple a généralement déjà échoué : l'escalade se décide (mise en demeure, blocage des livraisons, étalement négocié)."
-                            : "Le retard reste dans une zone où une relance ferme suffit habituellement.",
-                        c.client_connu ? "" : "Ce client n'existe pas dans le référentiel : la facture est rattachée à un tiers supprimé ou hors périmètre. À corriger dans l'ERP.",
-                      ].filter(Boolean),
-                      kv: [
-                        ["Encours échu", `${formatMFcfa(c.encours_echu_xof)} M FCFA`],
-                        ["Encours total", `${formatMFcfa(c.encours_xof)} M FCFA`],
-                        ["Factures ouvertes", formatNumber(c.nb_factures_ouvertes)],
-                        ["Retard courant max", `${formatNumber(c.retard_courant_max_jours)} j`],
-                        [
-                          "Retard habituel",
-                          c.retard_moyen_regle_jours !== null
-                            ? `${formatPct(c.retard_moyen_regle_jours, 1)} j sur ${formatNumber(c.nb_factures_reglees)} factures`
-                            : "aucune facture réglée",
-                        ],
-                        ["Part de l'encours échu", `${formatPct(c.part_encours_echu_pct, 1)} %`],
-                        ["Indice de risque", formatPct(c.indice_risque, 1)],
-                        ["Total facturé", `${formatMFcfa(c.montant_facture_xof)} M FCFA`],
-                      ],
-                    }}
-                  >
-                    <td>{c.client}</td>
-                    <td className="r mono">{formatMFcfa(c.encours_echu_xof)} M</td>
-                    <td className="r mono">{formatNumber(c.retard_courant_max_jours)} j</td>
-                    <td className="r mono">
-                      {c.retard_moyen_regle_jours !== null
-                        ? `${formatPct(c.retard_moyen_regle_jours, 0)} j${c.comportement_significatif ? "" : " *"}`
-                        : "—"}
-                    </td>
-                    <td className="r mono">{formatPct(c.indice_risque, 0)}</td>
-                    <td>
-                      <Tag variant={STATUT_TAG[c.statut]}>{STATUT_LIBELLE[c.statut]}</Tag>
-                    </td>
-                  </Clickable>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Note style={{ marginTop: 14 }}>
-            Indice de risque : {payeurs.regle.composantes}. Un retard habituel suivi d&apos;un
-            astérisque est calculé sur moins de {formatNumber(payeurs.regle.min_factures_comportement)}{" "}
-            factures réglées — affiché, mais non retenu dans l&apos;indice.
-          </Note>
-        </Tile>
-
+        {/* Deuxième ligne : les trois états de l'encours (créances, dettes, écart
+            entre les deux). Ils viennent après les courbes, qui montrent
+            l'évolution, et avant le tableau des payeurs, qui descend au client :
+            du général au particulier. */}
         <Tile span={4} title="Balance âgée des créances" kick={`${formatMFcfa(balance.total_xof)} M FCFA d'encours`}>
           <Bars
             rows={balance.tranches.map((t) => ({
@@ -461,6 +388,83 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             raison={cycle.fiabilite}
             avertissement={dpo.source === "reel" ? null : dpo.avertissement}
           />
+        </Tile>
+
+        <Tile span={12} title="Suivi des mauvais payeurs" kick={`${formatNumber(payeurs.clients.length)} clients classés par risque`}>
+          <HintLine>Cliquez un client pour son comportement de paiement et son exposition</HintLine>
+          <div style={{ overflowX: "auto" }}>
+            <table className="tb">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th className="r">Encours échu</th>
+                  <th className="r">Retard courant</th>
+                  <th className="r">Retard habituel</th>
+                  <th className="r">Indice</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payeurs.clients.map((c) => (
+                  <Clickable
+                    key={`${c.client_id ?? c.client}`}
+                    as="tr"
+                    detail={{
+                      kicker: "Client · risque de paiement",
+                      title: c.client,
+                      tag: STATUT_LIBELLE[c.statut],
+                      tagVariant: STATUT_TAG[c.statut],
+                      body: [
+                        `${formatMFcfa(c.encours_echu_xof)} M FCFA d'encours échu sur ${formatNumber(c.nb_factures_ouvertes)} facture(s) ouverte(s), avec un retard courant maximal de ${formatNumber(c.retard_courant_max_jours)} jours (échéance la plus ancienne : ${formatDate(c.echeance_la_plus_ancienne)}).`,
+                        c.comportement_significatif
+                          ? `Son comportement de paiement est mesuré sur ${formatNumber(c.nb_factures_reglees)} factures réglées : ${formatPct(c.retard_moyen_regle_jours, 1)} jours de retard en moyenne. C'est un payeur ${(c.retard_moyen_regle_jours ?? 0) > 30 ? "structurellement lent" : "globalement fiable"}.`
+                          : `Il n'a réglé que ${formatNumber(c.nb_factures_reglees)} facture(s) : son retard moyen est affiché mais n'entre pas dans l'indice — sur si peu de factures, un retard est un incident, pas un comportement.`,
+                        c.retard_courant_max_jours > 2 * 365
+                          ? "Cette créance dépasse deux ans. À cette ancienneté, la relance n'est plus l'outil : la question est celle de la provision ou du passage en perte."
+                          : c.retard_courant_max_jours > payeurs.regle.seuil_contentieux_jours
+                            ? "Au-delà de 90 jours, la relance commerciale simple a généralement déjà échoué : l'escalade se décide (mise en demeure, blocage des livraisons, étalement négocié)."
+                            : "Le retard reste dans une zone où une relance ferme suffit habituellement.",
+                        c.client_connu ? "" : "Ce client n'existe pas dans le référentiel : la facture est rattachée à un tiers supprimé ou hors périmètre. À corriger dans l'ERP.",
+                      ].filter(Boolean),
+                      kv: [
+                        ["Encours échu", `${formatMFcfa(c.encours_echu_xof)} M FCFA`],
+                        ["Encours total", `${formatMFcfa(c.encours_xof)} M FCFA`],
+                        ["Factures ouvertes", formatNumber(c.nb_factures_ouvertes)],
+                        ["Retard courant max", `${formatNumber(c.retard_courant_max_jours)} j`],
+                        [
+                          "Retard habituel",
+                          c.retard_moyen_regle_jours !== null
+                            ? `${formatPct(c.retard_moyen_regle_jours, 1)} j sur ${formatNumber(c.nb_factures_reglees)} factures`
+                            : "aucune facture réglée",
+                        ],
+                        ["Part de l'encours échu", `${formatPct(c.part_encours_echu_pct, 1)} %`],
+                        ["Indice de risque", formatPct(c.indice_risque, 1)],
+                        ["Total facturé", `${formatMFcfa(c.montant_facture_xof)} M FCFA`],
+                      ],
+                    }}
+                  >
+                    <td>{c.client}</td>
+                    <td className="r mono">{formatMFcfa(c.encours_echu_xof)} M</td>
+                    <td className="r mono">{formatNumber(c.retard_courant_max_jours)} j</td>
+                    <td className="r mono">
+                      {c.retard_moyen_regle_jours !== null
+                        ? `${formatPct(c.retard_moyen_regle_jours, 0)} j${c.comportement_significatif ? "" : " *"}`
+                        : "—"}
+                    </td>
+                    <td className="r mono">{formatPct(c.indice_risque, 0)}</td>
+                    <td>
+                      <Tag variant={STATUT_TAG[c.statut]}>{STATUT_LIBELLE[c.statut]}</Tag>
+                    </td>
+                  </Clickable>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Note style={{ marginTop: 14 }}>
+            Indice de risque : {payeurs.regle.composantes}. Un retard habituel suivi d&apos;un
+            astérisque est calculé sur moins de {formatNumber(payeurs.regle.min_factures_comportement)}{" "}
+            factures réglées — affiché, mais non retenu dans l&apos;indice.
+          </Note>
         </Tile>
 
       </Bento>

@@ -4,12 +4,32 @@ import { Bars, Bento, HintLine, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Note } from "@/components/ui/primitives";
 
-/** Onglet « Mix d'offre » : sur quoi le pipe se positionne et où l'on gagne.
+/** Page « Mix d'offre » — conservée pour son URL.
+ *
+ * Son entrée de menu est commentée (cf. lib/data/sections.ts) et ses tuiles sont
+ * désormais affichées dans « Diagnostic ». La page reste servie parce que
+ * `/dc/vision/mix-offre` a circulé en lien : elle doit continuer d'ouvrir son
+ * contenu plutôt que de tomber en 404. */
+export async function DcMixOffre() {
+  return (
+    <Bento>
+      <DcMixOffreTuiles />
+    </Bento>
+  );
+}
+
+/** Tuiles du mix d'offre, SANS leur grille — pour être composées dans le `Bento`
+ * d'un autre écran.
+ *
+ * Le mix a été replié dans « Diagnostic » (cf. DcTransformation) : ses deux
+ * tuiles y prennent place parmi les autres plutôt que dans une grille imbriquée,
+ * qui aurait rompu l'alignement sur douze colonnes. C'est la seule raison de
+ * cette séparation — le contenu est inchangé.
  *
  * La famille est déduite du libellé de l'opportunité (Odoo ne porte aucune
  * catégorie sur crm.lead) : les parts affichées portent sur le pipe CLASSÉ, et
  * `couvertureMontant` doit rester visible partout où elles apparaissent. */
-export async function DcMixOffre() {
+export async function DcMixOffreTuiles() {
   const offerMix = await getOfferMix();
 
   const mixFamilies = offerMix.families.filter((f) => f.nb > 0);
@@ -23,21 +43,22 @@ export async function DcMixOffre() {
 
   if (mixFamilies.length === 0) {
     return (
-      <Bento>
-        <Tile span={12} title="Mix d'offre du pipeline">
-          <Note style={{ marginTop: 0 }}>
-            Aucune opportunité du pipe ouvert ne porte un libellé permettant d&apos;en déduire la famille
-            d&apos;offre.
-          </Note>
-        </Tile>
-      </Bento>
+      <Tile span={12} title="Mix d'offre du pipeline">
+        <Note style={{ marginTop: 0 }}>
+          Aucune opportunité du pipe ouvert ne porte un libellé permettant d&apos;en déduire la famille
+          d&apos;offre.
+        </Note>
+      </Tile>
     );
   }
 
   return (
-    <Bento>
+    <>
+      {/* Les deux tuiles du mix partagent une rangée (6 + 6) : elles se lisent
+          ensemble — sur quoi le pipe se positionne, et sur quelles échéances il
+          atterrit. En pleine largeur chacune, elles occupaient deux écrans. */}
       <Tile
-        span={12}
+        span={6}
         title="Mix d'offre du pipeline"
         kick={`calculé sur ${formatPct(couvertureMontant, 0)} % du pipe`}
       >
@@ -130,12 +151,19 @@ export async function DcMixOffre() {
 
       {periodesAffichees.length > 0 && (
         <Tile
-          span={12}
+          span={6}
+          fill
           title="Mix d'atterrissage par trimestre d'échéance"
           kick={offerMix.historique_reel ? "évolution mesurée" : "projection · non historisée"}
         >
           <HintLine>Cliquez un trimestre pour la répartition de son échéance</HintLine>
+          {/* Repli calé sur le NOMBRE DE FAMILLES de la tuile de gauche, et non
+              sur un seuil fixe : les deux listes ont alors autant de lignes, donc
+              les deux tuiles la même hauteur. Les trimestres sont plus nombreux
+              que les familles (huit contre quatre ici) et débordaient seuls. */}
           <Bars
+            replierApres={mixFamilies.length}
+            nom="trimestres"
             rows={periodesAffichees.map((p) => {
               const maxMontant = Math.max(...periodesAffichees.map((q) => q.montant_total_xof), 1);
               const repartition = p.families
@@ -195,6 +223,6 @@ export async function DcMixOffre() {
           </Note>
         </Tile>
       )}
-    </Bento>
+    </>
   );
 }

@@ -13,7 +13,8 @@ import { test, expect, type Cookie } from "@playwright/test";
 // Les pages DC appellent le backend en composant serveur : une page qui rend son
 // `main.canvas` prouve que l'appel a abouti ET que la désérialisation a tenu.
 
-// Les sept pages du menu.
+// Les sept pages servies. Toutes doivent rendre, y compris celles qui ne sont
+// plus au menu : leur URL a circulé en lien et ne doit pas tomber en 404.
 const PAGES = [
   "marche",
   "portefeuille",
@@ -23,6 +24,11 @@ const PAGES = [
   "transformation",
   "visites",
 ] as const;
+
+// Les pages VISIBLES dans le menu. « Mix d'offre » n'y figure plus : ses tuiles
+// sont affichées dans « Diagnostic » et son entrée est commentée (cf.
+// lib/data/sections.ts), mais sa page reste servie — d'où l'écart avec `PAGES`.
+const PAGES_MENU = PAGES.filter((p) => p !== "mix-offre");
 
 // Les quatorze vues, par la page qui les porte. Chacune doit rendre son contenu :
 // c'est ce qui garantit que le regroupement en sept pages n'a rien perdu.
@@ -145,7 +151,7 @@ test.describe("Cockpit DC — les onglets rendent tous", () => {
     await expect(page.locator("header.hdr")).toBeVisible();
     await expect(page.locator("header.hdr--stacked")).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Chapitres de la vue" })).toHaveCount(0);
-    await expect(page.locator(".hdr-nav a")).toHaveCount(PAGES.length);
+    await expect(page.locator(".hdr-nav a")).toHaveCount(PAGES_MENU.length);
   });
 
   // « Marché » est l'écran d'ouverture du cockpit DC : le profil doit y atterrir

@@ -1126,6 +1126,56 @@ h1.vt{
 .lede-p--a{color:var(--alert);background:var(--alert-soft);border-color:var(--alert-border)}
 @media (max-width:820px){.lede-t{font-size:17px}}
 
+/* ---------- respiration des étiquettes d'alerte ----------
+   La bordure d'une étiquette rouge respire pour l'appeler du coin de l'œil : sur
+   une rangée de quatre signaux, celui qui alerte doit se distinguer avant qu'on
+   ait lu les quatre libellés.
+
+   Sur la BORDURE et non sur le fond ou l'opacité : le texte reste à contraste
+   constant, donc lisible pendant tout le cycle. Une pastille qui pâlit se relit
+   deux fois.
+
+   Lent (2,4 s) et de faible amplitude : c'est un signal d'ambiance, pas un
+   clignotement d'urgence. Une alerte qui bat vite se fait ignorer en une journée
+   — et le rouge dit déjà la gravité.
+
+   Le `box-shadow` porte le halo plutôt qu'une seconde bordure : il ne participe
+   pas à la mise en page, donc rien ne bouge autour de la pastille pendant le
+   cycle. `border-color` est animé de pair pour que le trait lui-même se densifie.
+
+   La règle globale `prefers-reduced-motion:reduce` (cf. plus haut) neutralise
+   l'animation ; la pastille garde alors sa couleur d'alerte, qui suffit à la
+   désigner. C'est aussi pourquoi le repos (`0%`/`100%`) est l'état sans halo :
+   l'animation ajoute, elle ne retire jamais.
+
+   PORTÉE — les seules étiquettes de SYNTHÈSE, en tête d'écran : `.lede-p--a`
+   (ScreenLede) et `.bpill--hot` (pastilles du Brief). Deux ou trois par écran au
+   maximum, et jamais répétées.
+
+   `.tag--r` en est délibérément EXCLU, bien qu'il porte le même rouge : ce tag
+   est rendu ligne par ligne dans les listes et les tableaux (balance âgée,
+   registre d'arbitrage, cycle de vie…), où dix lignes en alerte ne sont pas
+   rares. Dix pastilles battant à l'unisson ne désignent plus rien — c'est un
+   écran qui vibre, et l'œil apprend à l'ignorer. Une animation ne distingue que
+   ce qui est rare : l'étendre à tout reviendrait à la supprimer. */
+@media (prefers-reduced-motion:no-preference){
+  .lede-p--a,.bpill--hot{animation:alerte-respire 2.4s ease-in-out infinite}
+}
+@keyframes alerte-respire{
+  0%,100%{border-color:var(--alert-border);box-shadow:0 0 0 0 rgba(164,55,42,0)}
+  50%{border-color:var(--alert);box-shadow:0 0 0 3px rgba(164,55,42,.13)}
+}
+/* Le Brief est un panneau SOMBRE et sa pastille chaude est ambre, pas rouge : le
+   halo carmin ci-dessus y virait au brun sale. Même respiration, teinte de
+   l'ambiance — d'où ce second jeu d'images plutôt qu'une couleur partagée. */
+@media (prefers-reduced-motion:no-preference){
+  .bpill--hot{animation-name:alerte-respire-sombre}
+}
+@keyframes alerte-respire-sombre{
+  0%,100%{border-color:rgba(247,156,49,.44);box-shadow:0 0 0 0 rgba(247,156,49,0)}
+  50%{border-color:rgba(247,156,49,.9);box-shadow:0 0 0 3px rgba(247,156,49,.17)}
+}
+
 /* ---------- hypothèses d'écran, repliées en tête ----------
    Le panneau fermé ne coûte qu'une ligne : il met l'avertissement AVANT le
    contenu sans repousser l'écran vers le bas. Le compteur à droite dit combien
@@ -1440,6 +1490,16 @@ table.tb tbody tr:hover{background:var(--paper-2)}
    `align-self:stretch` annule le `align-items:start` du conteneur pour cette
    tuile seule : elle doit couvrir la hauteur des deux qui lui font face. */
 .tile--tall{grid-row:span 2;align-self:stretch}
+/* Tuile qui s'étire à la hauteur de sa rangée, au lieu de s'arrêter à celle de
+   son contenu (`align-items:start` du conteneur). Sert quand deux tuiles côte à
+   côte doivent avoir le même cadre alors que leurs contenus n'ont pas la même
+   hauteur — ici « Mix d'offre » porte en plus un bloc « Famille dominante », que
+   le mix d'atterrissage n'a pas : ramener les deux listes au même nombre de
+   lignes ne suffisait pas à égaliser les cadres (93 px d'écart mesuré).
+   La tuile est en `flex` colonne pour que le vide ainsi créé tombe en bas, sous
+   la note, plutôt que d'étirer une barre au milieu. */
+.tile--fill{align-self:stretch;display:flex;flex-direction:column}
+.tile--fill>:last-child{margin-bottom:0}
 .tile{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:19px 21px 21px;
   box-shadow:var(--shadow-sm);transition:border-color .18s ease;min-width:0
@@ -1543,6 +1603,10 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 }
 .lst-plus:hover{color:var(--accent)}
 .lst-plus:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:6px}
+/* Dans une liste de barres, les lignes ne portent pas de filet de séparation et
+   la grille pose déjà son `gap` : le bouton n'a donc ni filet ni marge haute à
+   ajouter, sinon il se détache d'un cran de trop. */
+.bars>.lst-plus{border-top:0;padding-top:2px}
 /* Chevron orienté par l'état : vers le bas pour déplier, vers le haut pour
    replier. L'attribut porte déjà l'information pour le lecteur d'écran
    (`aria-expanded`), le glyphe la donne à l'œil. */

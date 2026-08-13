@@ -192,6 +192,11 @@ export async function DcPics() {
           <Note style={{ marginTop: 14 }}>{pics.note}</Note>
         </Tile>
 
+        {/* Colonne de droite, en vis-à-vis des DEUX tuiles de gauche. Sa liste est
+            repliée à 5 lignes : c'est elle qui dictait la hauteur des deux rangées,
+            et l'excédent retombait en espace vide entre « Pics » et « Nature ».
+            Repliée, elle cadre sur la colonne de gauche ; les alertes suivantes
+            restent à un clic. */}
         <Tile
           span={5}
           rows={natureAffichee ? 2 : undefined}
@@ -202,6 +207,8 @@ export async function DcPics() {
             <>
               <HintLine>Cliquez une alerte pour l&apos;action recommandée</HintLine>
               <Lst
+                replierApres={5}
+                nom="alertes"
                 items={alertes.alertes.slice(0, 10).map((a) => ({
                   title: a.titre,
                   sub: [a.commercial || null, a.depuis ? `signalé depuis le ${formatDate(a.depuis)}` : null]
