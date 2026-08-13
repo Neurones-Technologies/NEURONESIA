@@ -13,21 +13,46 @@ export interface SectionNavItem {
  * - `"scroll"` (DG) : une seule page, les `id` correspondent aux `<Section id=…>`
  *   de la vue et le menu fait son scroll-spy dessus. L'ordre du menu doit alors
  *   suivre l'ordre du document, sinon le surlignage saute.
- * - `"route"` (DC) : une page par section, les `id` sont des segments d'URL
+ * - `"route"` (DC, DF) : une page par section, les `id` sont des segments d'URL
  *   (`/dc/vision/pipeline`). Le menu rend des liens ; l'ordre est libre. Chaque
- *   `id` doit avoir son entrée dans le registre de la vue (cf.
- *   components/views/vision/dc/index.tsx). */
+ *   `id` doit avoir son entrée dans le registre de son profil (cf.
+ *   components/views/vision/registry.ts). */
 export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem[]>> = {
   dg: [
     { id: "tableau-de-bord", label: "Tableau de bord" },
     { id: "trajectoire", label: "Trajectoire financière" },
     { id: "risques", label: "Dépendances et risques" },
   ],
+  // Ordre voulu, du chiffre vers le terrain : pilotage du chiffre (pipeline,
+  // objectifs), animation du portefeuille (comptes, base installée), tenue du pipe
+  // (à closer, cycle de vie), lecture de marché (mix d'offre, secteurs), équipe
+  // (équipe, transformation), terrain (visites). Le menu défile horizontalement
+  // au-delà de la largeur disponible (`.hdr-nav` est en `overflow-x:auto`), d'où
+  // des libellés courts sur les onglets ajoutés.
+  // Note « Point DAF financier » du 04/08/2026 : trois tableaux de bord (budget,
+  // relation commerciale, trésorerie prévisionnelle) et un volet transverse
+  // (formation). L'onglet « Encours et marge » est l'écran financier historique,
+  // conservé en tête : il porte le briefing du jour et les narrations IA, que les
+  // trois tableaux de bord de la note ne remplacent pas.
+  df: [
+    { id: "encours", label: "Encours et marge" },
+    { id: "budget", label: "Budget" },
+    { id: "relation-commerciale", label: "Relation commerciale" },
+    { id: "tresorerie", label: "Trésorerie prévisionnelle" },
+    { id: "formation", label: "Formation et qualité" },
+  ],
   dc: [
     { id: "pipeline", label: "Pipeline et forecast" },
+    { id: "objectifs", label: "Objectifs et Gap" },
+    { id: "comptes", label: "Comptes" },
     { id: "base-installee", label: "Base installée" },
+    { id: "pipe-qualite", label: "À closer / compléter" },
+    { id: "cycle-vie", label: "Cycle de vie" },
     { id: "mix-offre", label: "Mix d'offre" },
+    { id: "marche", label: "Secteurs et marché" },
+    { id: "equipe", label: "Équipe" },
     { id: "transformation", label: "Transformation" },
+    { id: "visites", label: "Visites" },
   ],
 };
 
@@ -37,6 +62,7 @@ export type VisionNavMode = "scroll" | "route";
  * `"scroll"` — le comportement historique. */
 export const VISION_NAV_MODE: Partial<Record<ProfileKey, VisionNavMode>> = {
   dc: "route",
+  df: "route",
 };
 
 export function visionNavMode(profile: ProfileKey): VisionNavMode {

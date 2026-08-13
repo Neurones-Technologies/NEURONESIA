@@ -23,6 +23,11 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Neurones Intelligence — cockpit décisionnel",
   description: "Cockpit décisionnel · miroir Odoo",
+  // Doublon volontaire de app/robots.ts : robots.txt règle l'exploration,
+  // ce <meta> règle l'indexation. Un crawler qui a déjà l'URL (lien, historique,
+  // barre d'adresse) peut indexer une page sans jamais relire robots.txt — seule
+  // /login est atteignable sans session, c'est donc elle qu'on protège ici.
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

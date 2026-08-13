@@ -562,6 +562,23 @@ table{border-spacing:0}
 .arb-queue-h h3{font-family:var(--disp);font-size:16px;font-weight:400;letter-spacing:-.01em;margin:0}
 .arb-queue-s{font-size:11.5px;color:var(--t3);line-height:1.5;margin:10px 0 12px}
 
+/* Segmenté en LIENS (cadence de lecture du cockpit DC : mensuel / trimestriel /
+   annuel). Même dessin que `.arb-seg`, mais sur des <a> : la cadence vit dans
+   l'URL (?periode=…) et non dans un état client, ce qui garde les onglets DC en
+   composants serveur — aucun JS embarqué, et la période est partageable par lien.
+   L'état actif se lit sur aria-current="page", posé par next/link. */
+.dc-seg{display:inline-flex;gap:3px;padding:3px;background:var(--paper-2);border:1px solid var(--line);border-radius:999px;margin-bottom:14px}
+.dc-seg a{
+  display:flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 16px;
+  font-family:var(--sans);font-size:12.5px;color:var(--t2);text-decoration:none;white-space:nowrap;
+  transition:background-color .16s ease,color .16s ease,box-shadow .16s ease
+}
+.dc-seg a:hover{color:var(--ink)}
+.dc-seg a[aria-current="page"]{background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-xs)}
+.dc-seg a:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
+.dc-seg-l{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);align-self:center;margin-right:10px}
+.dc-seg-w{display:flex;align-items:center;flex-wrap:wrap;gap:0 4px}
+
 /* bascule de périmètre / de filtre — un vrai segmenté, pas deux boutons */
 .arb-seg{display:flex;gap:3px;padding:3px;background:var(--paper-2);border:1px solid var(--line);border-radius:999px}
 .arb-seg button{
@@ -1068,6 +1085,74 @@ table.tb tr:last-child td{border-bottom:0}
 table.tb tbody tr{transition:background-color .15s ease}
 table.tb tbody tr:hover{background:var(--paper-2)}
 .mono{font-family:var(--mono);font-size:12.5px}
+
+/* ---------- graphes (SVG rendu serveur, cf. components/ui/chart.tsx) ----------
+   Le SVG s'étire en largeur (viewBox fixe + `preserveAspectRatio:none`) et garde
+   une hauteur imposée : les tuiles du bento n'ont pas toutes la même largeur, et
+   un graphe dont la hauteur suivrait sa colonne casserait l'alignement de la
+   grille.
+
+   Les textes du SVG portent des classes plutôt que des attributs de présentation,
+   pour rester sur les jetons de couleur et de fonte du reste de l'interface : une
+   étiquette de graphe est du texte, elle ne prend jamais la couleur de la série. */
+.cht{margin-top:4px}
+.cht-svg{width:100%;height:212px;display:block;overflow:visible}
+.cht-tick{font-family:var(--mono);font-size:9.5px;fill:var(--t3);letter-spacing:.02em}
+.cht-val{font-family:var(--mono);font-size:10px;fill:var(--t2)}
+.cht-end{font-family:var(--mono);font-size:11px;fill:var(--t1);font-weight:500}
+.cht-ref{font-family:var(--mono);font-size:9px;fill:var(--t3);letter-spacing:.06em;text-transform:uppercase}
+/* Légende : la pastille porte l'identité, le texte reste en encre — une teinte
+   claire est illisible en texte, et c'est la faute la plus commune des graphes. */
+.cht-lg{display:flex;flex-wrap:wrap;gap:4px 16px;list-style:none;margin:10px 0 0;padding:0}
+.cht-lg li{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--t2)}
+.cht-lg i{width:10px;height:10px;border-radius:3px;flex:0 0 10px}
+.cht-nt{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--t3);margin:10px 0 0}
+@media (max-width:820px){.cht-svg{height:184px}}
+
+/* ---------- calendrier d'atterrissage (cockpit DAF) ----------
+   Le DAF a demandé l'atterrissage mensuel « sur une vue calendaire » : une
+   grille de mois, pas un tableau de lignes. Chaque case porte quatre montants
+   (encaissement et décaissement, constatés et prévus) plus le solde du mois et
+   le cumul — d'où une case assez haute et une grille qui n'essaie jamais de
+   tenir douze colonnes sur un écran de portable.
+
+   `auto-fill` avec un minimum de 132px : quatre colonnes sur un grand écran
+   (trimestre par ligne, ce qui est la lecture naturelle d'un DAF), deux sur une
+   tablette, une sur un téléphone. Un mois RÉVOLU est neutre, le mois EN COURS
+   porte l'anneau d'accent, un mois À VENIR est en papier — la distinction est
+   celle du mesuré et du projeté, jamais un simple habillage. */
+.daf-cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(148px,100%),1fr));gap:9px}
+.daf-m{
+  border:1px solid var(--line);border-radius:var(--r-md);padding:11px 12px 12px;background:var(--card);
+  box-shadow:var(--shadow-xs)
+}
+.daf-m--v{background:var(--paper-2)}
+.daf-m--c{border-color:var(--accent-strong);background:var(--accent-soft);box-shadow:var(--ring)}
+.daf-m--a{background:var(--paper-2);border-style:dashed}
+.daf-m--al{border-color:var(--alert-border);background:var(--alert-soft)}
+.daf-m-h{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:9px}
+.daf-m-l{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2)}
+.daf-m--c .daf-m-l{color:var(--accent)}
+.daf-m-s{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3)}
+.daf-m-r{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:11.5px;line-height:1.5}
+.daf-m-r b{font-family:var(--mono);font-size:11.5px;font-weight:400}
+.daf-m-r span{color:var(--t3);font-size:10.5px}
+.daf-m-in b{color:var(--signal)}
+.daf-m-out b{color:var(--alert)}
+.daf-m-sd{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:9px;padding-top:8px;
+  border-top:1px solid var(--hair)
+}
+/* `nowrap` sur les deux : un solde de « -167 M » cassé en deux lignes se lisait
+   comme deux nombres, et la hauteur des cases devenait irrégulière selon le
+   nombre de chiffres du montant. */
+.daf-m-sd b{font-family:var(--disp);font-size:16px;font-weight:400;letter-spacing:-.015em;white-space:nowrap}
+.daf-m-sd b.neg{color:var(--alert)}
+.daf-m-sd b.pos{color:var(--signal)}
+.daf-m-sd span{font-family:var(--mono);font-size:9.5px;color:var(--t3);white-space:nowrap}
+/* Trait de provenance : un mois dont le montant retenu est PROJETÉ ne doit pas
+   se lire comme un mois mesuré. Repris du marquage `source` du backend. */
+.daf-m-p{font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:var(--t3);margin-top:7px}
 
 .scen{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .sc{
