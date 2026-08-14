@@ -243,6 +243,27 @@ export function isVisionSection(profile: ProfileKey, section: string): boolean {
   return (VISION_SECTIONS[profile] ?? []).some((s) => s.id === section);
 }
 
+/** Sections DC servies à leur URL sans figurer au menu.
+ *
+ * `VISION_SECTIONS` décrit le MENU. Commenter une entrée l'en retire — mais la
+ * route la validait aussi contre cette même liste, si bien que masquer une
+ * entrée mettait sa page en 404, à rebours de ce qu'annoncent les commentaires
+ * de `dc` (« la page reste servie à son URL »). Les identifiants listés ici
+ * restent donc servis : leur URL a circulé en lien et doit continuer d'ouvrir
+ * l'écran. Ils n'apparaissent pas pour autant au menu — rétablir la ligne
+ * commentée dans `VISION_SECTIONS` reste ce qui les y ramène. */
+const SECTIONS_DC_HORS_MENU: readonly string[] = ["mix-offre", "visites"];
+
+/** Section servie à son URL : au menu, ou explicitement gardée hors menu.
+ *
+ * C'est le test de la ROUTE, distinct de `isVisionSection` qui répond « est-ce
+ * au menu ». Les deux ont divergé le jour où des pages ont été démenuisées sans
+ * être retirées. */
+export function isVisionRoute(profile: ProfileKey, section: string): boolean {
+  if (isVisionSection(profile, section)) return true;
+  return profile === "dc" && SECTIONS_DC_HORS_MENU.includes(section);
+}
+
 /** Vues internes d'une section, ou tableau vide si elle n'en a pas. */
 export function vuesOfSection(profile: ProfileKey, section: string): readonly SectionVue[] {
   return (VISION_SECTIONS[profile] ?? []).find((s) => s.id === section)?.vues ?? [];

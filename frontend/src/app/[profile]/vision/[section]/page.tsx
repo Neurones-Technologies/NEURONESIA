@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { View } from "@/components/shell/AppShell";
 import { PROFILE_KEYS, ProfileKey } from "@/lib/types";
-import { ANCIENNES_SECTIONS_DC, isVisionSection, visionNavMode } from "@/lib/data/sections";
+import { ANCIENNES_SECTIONS_DC, isVisionRoute, visionNavMode } from "@/lib/data/sections";
 import { SECTION_REGISTRIES } from "@/components/views/vision/registry";
 
 /** Une page par section, pour les profils en mode "route" (cf.
@@ -38,7 +38,7 @@ export default async function VisionSectionPage({
   // circulé. Celles qui sont devenues des vues internes sont redirigées vers la
   // page qui les porte, avec leur `?vue=` — l'écran affiché est le même. Les
   // autres paramètres (cadence, exercice) sont reconduits.
-  if (key === "dc" && !isVisionSection(key, section)) {
+  if (key === "dc" && !isVisionRoute(key, section)) {
     const page = ANCIENNES_SECTIONS_DC[section];
     if (page) {
       const q = new URLSearchParams({ vue: section });
@@ -50,7 +50,7 @@ export default async function VisionSectionPage({
     }
   }
 
-  if (!isVisionSection(key, section)) notFound();
+  if (!isVisionRoute(key, section)) notFound();
 
   const render = SECTION_REGISTRIES[key]?.[section];
   if (!render) notFound();
