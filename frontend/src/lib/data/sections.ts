@@ -79,8 +79,9 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     { id: "relation-commerciale", label: "Relation commerciale" },
     { id: "tresorerie", label: "Trésorerie prévisionnelle" },
   ],
-  // Cockpit DC — six entrées de menu pour sept pages servies (« Mix d'offre » est
-  // commentée plus bas, sans être supprimée). Les libellés de vue reprennent la
+  // Cockpit DC — cinq entrées de menu pour sept pages servies (« Mix d'offre » et
+  // « Fichier de visite » sont commentées plus bas, sans être supprimées : leurs
+  // URL restent valides). Les libellés de vue reprennent la
   // formulation du compte-rendu du 04/08/2026 (« Indice de prospection », « À
   // closer / à compléter », « Écart vendu / objectif ») : le DC doit reconnaître
   // SA demande, pas déduire à quel besoin répond un onglet nommé autrement.
@@ -146,7 +147,12 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     // à la faire réapparaître dans le menu.
     // { id: "mix-offre", label: "Mix d'offre" },
     { id: "transformation", label: "Diagnostic" },
-    { id: "visites", label: "Fichier de visite" },
+    // Fichier de visite : entrée retirée du menu. Contrairement au mix d'offre,
+    // son contenu n'est repris nulle part — l'écran n'est simplement plus proposé.
+    // Sa page reste servie à `/dc/vision/visites` (toujours déclarée dans
+    // DC_SECTIONS) pour ne pas casser les liens partagés. Rétablir cette ligne
+    // suffit à la faire réapparaître dans le menu.
+    // { id: "visites", label: "Fichier de visite" },
   ],
 };
 

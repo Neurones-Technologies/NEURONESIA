@@ -25,10 +25,13 @@ const PAGES = [
   "visites",
 ] as const;
 
-// Les pages VISIBLES dans le menu. « Mix d'offre » n'y figure plus : ses tuiles
-// sont affichées dans « Diagnostic » et son entrée est commentée (cf.
-// lib/data/sections.ts), mais sa page reste servie — d'où l'écart avec `PAGES`.
-const PAGES_MENU = PAGES.filter((p) => p !== "mix-offre");
+// Les pages VISIBLES dans le menu. « Mix d'offre » et « Fichier de visite » n'y
+// figurent plus : leurs entrées sont commentées (cf. lib/data/sections.ts) — le
+// mix parce que ses tuiles sont affichées dans « Diagnostic », le fichier de
+// visite parce qu'il n'est plus proposé. Leurs pages restent servies, d'où
+// l'écart avec `PAGES`.
+const HORS_MENU = ["mix-offre", "visites"];
+const PAGES_MENU = PAGES.filter((p) => !HORS_MENU.includes(p));
 
 // Les quatorze vues, par la page qui les porte. Chacune doit rendre son contenu :
 // c'est ce qui garantit que le regroupement en sept pages n'a rien perdu.
@@ -194,9 +197,11 @@ test.describe("Cockpit DC — les onglets rendent tous", () => {
   });
 
   // Une page à vue unique n'affiche pas d'onglets : ils ne proposeraient qu'une
-  // entrée, déjà active.
+  // entrée, déjà active. L'exemple porte sur « Diagnostic », page à vue unique
+  // TOUJOURS au menu — « Fichier de visite » servait avant, mais une page hors
+  // menu est un mauvais témoin pour une règle d'affichage du menu.
   test("une page à vue unique n'a pas d'onglets internes", async ({ page }) => {
-    await page.goto("/dc/vision/visites");
+    await page.goto("/dc/vision/transformation");
     await expect(page.locator("main.canvas")).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Vues de la page" })).toHaveCount(0);
   });
