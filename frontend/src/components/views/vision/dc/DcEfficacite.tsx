@@ -43,7 +43,6 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
 
   const { efficacite: eff, referentiel: ref } = equipe;
   const fi = eff.fiabilite;
-  const maxCa = Math.max(...eff.commerciaux.map((c) => c.ca_signe_xof), 1);
 
   return (
     <>
@@ -96,6 +95,12 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
           unit="% du CA de l'exercice"
           reading={`${formatNumber(fi.nb_commandes_sans_commercial)} commandes et ${formatNumber(fi.nb_opportunites_sans_commercial)} opportunités sans commercial`}
           readingVariant={fi.part_ca_nominative_pct < 70 ? "neg" : undefined}
+          // Couverture du classement : une part du CA, donc un arc. Le ton suit
+          // le seuil de 70 % déjà porté par la ligne de lecture et le verdict.
+          cadran={{
+            pct: fi.part_ca_nominative_pct,
+            ton: fi.part_ca_nominative_pct < 70 ? "r" : "s",
+          }}
           detail={{
             kicker: "Indicateur · couverture du classement",
             title: "Part du chiffre imputable à une personne nommée",
@@ -140,25 +145,42 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
       </div>
 
       <Bento>
+        {/* `span={7}` : les barres se lisent sur une largeur bornée (cf. `.bars`
+            dans globals.css), une tuile pleine largeur laissait un tiers de carte
+            vide. Les limites du classement viennent en vis-à-vis — elles se
+            lisent AVEC le classement, pas après lui. */}
         <Tile
-          span={12}
+          span={7}
           title="Indice d'efficacité par commercial"
-          kick={`${formatNumber(eff.commerciaux.length)} classés · ${eff.periodes_mesure.ca_signe}`}
+          kick={`${formatNumber(eff.commerciaux.length)} classés · indice sur 100`}
         >
           <HintLine>Cliquez un commercial pour ouvrir le calcul de son indice</HintLine>
           <Bars
             rows={eff.commerciaux.map((c) => ({
               name: `#${c.rang} ${c.display_name}`,
+              // La ligne de lecture porte les DEUX grandeurs qui font l'indice
+              // (transformation, volume signé) plus le volume d'affaires qui dit
+              // si elles sont fiables. Le panier moyen en est retiré : il valait
+              // « 0 M » pour la moitié des porteurs — la commande de l'exercice
+              // n'est pas rattachée nominativement — et une colonne de zéros
+              // n'apprend rien.
               sub: [
-                `indice ${c.indice_efficacite !== null ? formatPct(c.indice_efficacite, 0) : "—"}`,
                 `${formatNumber(c.nb_gagnees)} gagnées / ${formatNumber(c.nb_perdues)} perdues`,
                 c.taux_valeur_pct !== null
-                  ? `transformation ${formatPct(c.taux_valeur_pct, 0)} %${c.taux_significatif ? "" : " (non significatif)"}`
+                  ? `transformation ${formatPct(c.taux_valeur_pct, 0)} %${c.taux_significatif ? "" : " · hors indice"}`
                   : "aucune affaire close",
-                `panier ${formatMFcfa(c.panier_moyen_xof)} M`,
+                `${formatMFcfa(c.ca_signe_xof)} M signés`,
               ].join(" · "),
-              value: `${formatMFcfa(c.ca_signe_xof)} M`,
-              pct: (c.ca_signe_xof / maxCa) * 100,
+              // La BARRE TRACE L'INDICE, et non le CA signé comme auparavant.
+              // La carte classe par indice (« #1 », « #2 »…) : une barre qui
+              // mesurait autre chose donnait un classement décroissant surmonté
+              // de longueurs en désordre — le premier du tableau y avait la barre
+              // la plus courte. On ne peut pas trier sur une grandeur et en
+              // dessiner une autre.
+              // L'indice est déjà une note sur 100 : sa course n'a pas besoin
+              // d'être rapportée à un maximum.
+              value: c.indice_efficacite !== null ? formatPct(c.indice_efficacite, 0) : "—",
+              pct: c.indice_efficacite ?? 0,
               variant: c.taux_significatif ? undefined : ("w" as const),
               detail: {
                 kicker: "Commercial · indice d'efficacité",
@@ -188,29 +210,31 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
                 ],
               },
             }))}
+            // Vingt commerciaux face à une tuile de limites : la carte faisait
+            // trois fois la hauteur de sa voisine. Les huit premiers portent le
+            // classement, la queue reste dépliable.
+            replierApres={8}
+            nom="commerciaux"
           />
           <Note style={{ marginTop: 14 }}>
             {eff.note} {fi.avertissement}
           </Note>
         </Tile>
 
-        <Tile span={6} title="Limites assumées de ce classement" quiet>
-          <Lst
-            items={eff.limites.map((l, i) => ({
-              title: `Limite ${i + 1}`,
-              sub: l,
-              tag: "à trancher",
-              tagVariant: "n" as const,
-            }))}
-          />
-          <Note style={{ marginTop: 14 }}>
-            Transformation mesurée sur {eff.periodes_mesure.transformation}. CA signé mesuré sur{" "}
-            {eff.periodes_mesure.ca_signe}.
-          </Note>
-        </Tile>
+        {/* « Limites assumées de ce classement » a été retiré : ses deux entrées
+            (portefeuille hérité non neutralisé, composantes de l'indice non
+            tranchées) sont des questions de cadrage adressées à la Direction
+            Commerciale, pas une lecture de l'écran. Elles restent portées par
+            `eff.limites` côté API — les rétablir tient en une tuile.
+            Les deux périodes de mesure qu'elle rappelait en pied sont déjà dites
+            par la note du classement (`eff.note`) et par le détail de chaque
+            ligne, où elles servent réellement à lire un chiffre.
 
+            « Référentiel à valider » prend sa place en vis-à-vis du classement :
+            c'est le bon voisinage, puisque c'est cette qualité de référentiel qui
+            décide de qui apparaît dans le classement et sous quel nom. */}
         {ref.doublons_orthographe.length > 0 || ref.porteurs_non_nominatifs.length > 0 ? (
-          <Tile span={6} title="Référentiel à valider" kick={`${formatNumber(fi.nb_alias_non_confirmes)} alias`}>
+          <Tile span={5} title="Référentiel à valider" kick={`${formatNumber(fi.nb_alias_non_confirmes)} alias`}>
             <Lst
               items={[
                 ...ref.doublons_orthographe.map((d) => ({

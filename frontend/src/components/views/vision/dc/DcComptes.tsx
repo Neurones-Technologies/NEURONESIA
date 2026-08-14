@@ -1,6 +1,7 @@
 import { getComptesDc } from "@/lib/api/commercial";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, Orbit, OrbitPart, Reste, StatTile, Tile } from "@/components/ui/bento";
+import { RAMPE_PART } from "@/components/ui/chart-palette";
 import { Note } from "@/components/ui/primitives";
 
 /** « Comptes par ventes » — chapitre 2 du compte-rendu DC.
@@ -36,6 +37,60 @@ export async function DcComptes() {
   const { top_comptes: top } = comptes;
   const maxCa = Math.max(...top.comptes.map((c) => c.ca_realise_xof), 1);
   const divergents = top.comptes.filter((c) => c.lecture_divergente);
+
+  // ── Concentration du CA sur les premiers comptes ────────────────────────
+  // La part se calcule sur le CA DU PORTEFEUILLE ENTIER (`totaux`), pas sur la
+  // somme du top affiché : rapporter les six premiers à eux-mêmes donnerait
+  // 100 % et masquerait précisément ce que l'anneau doit montrer — quelle
+  // fraction du portefeuille tient dans une poignée de comptes.
+  const caPortefeuille = top.totaux.ca_realise_xof || 1;
+  // ÉCHELLE DE L'ANNEAU. Un portefeuille de 650 comptes est peu concentré : le
+  // premier pèse 11 %, les suivants 5 %. Tracés sur une course de 100 %, les
+  // arcs se réduisaient à trois onglets à peine visibles — l'anneau ne montrait
+  // plus rien. Ils sont donc rapportés au PREMIER compte, qui devient le tour
+  // complet : on lit alors les rangs les uns par rapport aux autres, ce qui est
+  // la question posée (« le deuxième pèse-t-il autant que le premier ? »).
+  // Les pourcentages écrits en légende restent, eux, la part réelle du
+  // portefeuille : l'arc donne la comparaison, le chiffre donne la mesure.
+  const comptesClasses = [...top.comptes].sort((a, b) => b.ca_realise_xof - a.ca_realise_xof);
+  const caTete = comptesClasses[0]?.ca_realise_xof || 1;
+  const TETE = 6;
+  const tete = comptesClasses.slice(0, TETE);
+  const orbitComptes: OrbitPart[] = tete.map((c, i) => ({
+    name: c.compte,
+    value: `${formatMFcfa(c.ca_realise_xof)} M`,
+    // `pct` sert DEUX rôles dans `Orbit` : la course de l'arc et le chiffre de
+    // légende. Ici les deux échelles diffèrent (cf. commentaire ci-dessus), on
+    // passe donc la course en `pct` et la part réelle en `pctLabel`.
+    // Plafond à 88 % : un arc qui boucle se lit comme « la totalité », ce que le
+    // premier compte n'est pas (il pèse 11 % du portefeuille). L'anneau reste
+    // ouvert, donc lisible comme un rang et non comme un tout.
+    pct: (c.ca_realise_xof / caTete) * 88,
+    pctLabel: (c.ca_realise_xof / caPortefeuille) * 100,
+    couleur: RAMPE_PART[Math.min(i, RAMPE_PART.length - 1)],
+    detail: {
+      kicker: "Compte · part du portefeuille",
+      title: c.compte,
+      tag: `${formatPct((c.ca_realise_xof / caPortefeuille) * 100, 1)} % du CA`,
+      tagVariant: c.alerte_impaye ? ("r" as const) : c.lecture_divergente ? ("w" as const) : ("a" as const),
+      body: [
+        `Ce compte porte ${formatMFcfa(c.ca_realise_xof)} M FCFA sur ${formatNumber(c.nb_commandes)} commandes, soit ${formatPct((c.ca_realise_xof / caPortefeuille) * 100, 1)} % du chiffre d'affaires cumulé du portefeuille.`,
+        `Panier moyen : ${formatMFcfa(c.panier_moyen_xof)} M FCFA. Pipe à venir : ${formatMFcfa(c.pipe_a_venir_xof)} M FCFA sur ${formatNumber(c.nb_opp_a_venir)} opportunités.`,
+        c.alerte_impaye
+          ? "Ce compte porte un impayé échu : toute relance commerciale se coordonne avec la Direction Financière."
+          : "Aucun impayé échu sur ce compte.",
+      ],
+      kv: [
+        ["CA réalisé", `${formatMFcfa(c.ca_realise_xof)} M FCFA`],
+        ["Part du portefeuille", `${formatPct((c.ca_realise_xof / caPortefeuille) * 100, 1)} %`],
+        ["Commandes", formatNumber(c.nb_commandes)],
+        ["Panier moyen", `${formatMFcfa(c.panier_moyen_xof)} M FCFA`],
+        ["Pipe à venir", `${formatMFcfa(c.pipe_a_venir_xof)} M FCFA`],
+        ["Dernière commande", formatDate(c.derniere_commande)],
+      ],
+    },
+  }));
+  const partTete = tete.reduce((s, c) => s + c.ca_realise_xof, 0) / caPortefeuille * 100;
 
   return (
     <>
@@ -114,10 +169,34 @@ export async function DcComptes() {
       </div>
 
       <Bento>
+        {/* CONCENTRATION DU PORTEFEUILLE — même présentation que l'écran Marché :
+            l'anneau à gauche, les lignes à droite, sur une seule rangée.
+            L'anneau répond à la question d'ouverture du chapitre (« sur combien
+            de comptes repose notre chiffre ? ») que la liste des vingt comptes,
+            elle, ne peut pas montrer d'un coup d'œil. Le classement détaillé
+            reste juste en dessous : l'anneau cadre, il ne remplace pas. */}
         <Tile
-          span={12}
-          title="Comptes générant le plus de ventes — en quantité et en montant"
+          span={7}
+          title="Concentration du chiffre d'affaires"
           kick={`${formatNumber(top.totaux.nb_comptes_classes)} comptes classés`}
+        >
+          <Orbit parts={orbitComptes} />
+          <Note style={{ marginTop: 14 }}>
+            Les trois anneaux portent les trois premiers comptes. Les {TETE} premiers
+            réunis pèsent {formatPct(partTete, 0)} % du chiffre d&apos;affaires cumulé du
+            portefeuille — la part restante se répartit sur{" "}
+            {formatNumber(Math.max(0, top.totaux.nb_comptes_classes - TETE))} autres comptes.
+          </Note>
+        </Tile>
+
+        {/* Classement détaillé : les quatre mesures brutes, compte par compte.
+            C'est lui qui porte l'exigence du compte-rendu (« en quantité ET en
+            montant simultanément ») ; l'anneau ci-dessus n'en donne que la
+            silhouette. */}
+        <Tile
+          span={5}
+          title="Comptes générant le plus de ventes — en quantité et en montant"
+          kick={`${formatNumber(top.comptes.length)} affichés`}
         >
           <HintLine>Cliquez un compte pour ses quatre mesures</HintLine>
           <Bars
@@ -165,6 +244,11 @@ export async function DcComptes() {
                 ],
               },
             }))}
+            // La carte partage sa rangée avec l'anneau : vingt barres l'auraient
+            // rendue trois fois plus haute que sa voisine. La queue reste
+            // dépliable, et `Reste` continue d'annoncer les comptes non affichés.
+            replierApres={8}
+            nom="comptes"
           />
           {/* Le `kick` annonce 650 comptes classés, la liste en montre 20 : sans
               cette ligne, l'écart ne se lit nulle part. */}
@@ -177,6 +261,10 @@ export async function DcComptes() {
           <Note style={{ marginTop: 14 }}>{top.note}</Note>
         </Tile>
 
+        {/* Pleine largeur : les deux tuiles de la rangée précédente (anneau et
+            classement) l'occupent déjà entièrement, et cette liste porte des
+            phrases longues (« 42 % en montant contre 8 % en quantité ») qui se
+            coupaient sur une colonne étroite. */}
         {divergents.length > 0 && (
           <Tile
             span={12}

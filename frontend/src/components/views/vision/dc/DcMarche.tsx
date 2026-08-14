@@ -1,8 +1,26 @@
 import { getBriefing } from "@/lib/api/briefing";
-import { getMarcheDc } from "@/lib/api/commercial";
+import { getMarcheDc, SecteurStatique } from "@/lib/api/commercial";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, Brief, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, HintLine, Orbit, OrbitPart, StatTile, Tile } from "@/components/ui/bento";
+import { RAMPE_PART } from "@/components/ui/chart-palette";
 import { Note } from "@/components/ui/primitives";
+
+/** Verdict de lecture d'un secteur — un secteur ne se pilote pas au seul poids.
+ *
+ * Les seuils sont posés ici et nulle part ailleurs. Ils portent une convention
+ * de LECTURE (à partir de quand un secteur est un socle, à partir de quand sa
+ * décroissance mérite d'être signalée), pas une donnée : les déplacer change ce
+ * que l'écran dit, ce qui est normal et voulu.
+ *
+ * L'ordre des tests compte : une décroissance forte l'emporte sur le poids, un
+ * gros secteur qui recule est précisément ce qu'il faut voir en premier. */
+function lectureSecteur(s: SecteurStatique): { libelle: string; ton: "s" | "w" | "r" | "n" | "a" } {
+  if (s.croissance_pct <= -10) return { libelle: "en recul", ton: "r" };
+  if (s.part_ca_pct >= 20) return { libelle: "socle", ton: "s" };
+  if (s.croissance_pct >= 10) return { libelle: "en progression", ton: "a" };
+  if (s.part_ca_pct < 5) return { libelle: "dispersé", ton: "n" };
+  return { libelle: "stable", ton: "n" };
+}
 
 /** « Tendances et marché » — chapitre 1 du compte-rendu DC, et ÉCRAN D'OUVERTURE
  * du cockpit commercial.
@@ -54,6 +72,46 @@ export async function DcMarche() {
 
   const totalOuvert = axes.axes.reduce((s, a) => s + a.montant_ouvert_xof, 0);
 
+  // Secteurs classés du plus lourd au plus léger : l'anneau extérieur de
+  // `Orbit` doit être la part dominante, et le tableau se lit dans le même
+  // ordre que l'anneau.
+  const secteursClasses = [...secteurs.secteurs].sort((a, b) => b.ca_xof - a.ca_xof);
+  const orbitParts: OrbitPart[] = secteursClasses.map((s, i) => ({
+    name: s.secteur,
+    value: `${formatMFcfa(s.ca_xof)} M`,
+    pct: s.part_ca_pct,
+    // La rampe est plus courte que la liste quand le miroir porte beaucoup de
+    // secteurs : la queue reprend alors sa dernière teinte, qui est le neutre
+    // le plus pâle — exactement le rôle qu'on veut lui donner.
+    couleur: RAMPE_PART[Math.min(i, RAMPE_PART.length - 1)],
+    detail: {
+      kicker: "Secteur · part de portefeuille",
+      title: s.secteur,
+      tag: `${formatPct(s.part_ca_pct, 0)} % du CA`,
+      tagVariant: lectureSecteur(s).ton,
+      body: [
+        `${formatNumber(s.nb_clients)} clients de ce secteur portent ${formatMFcfa(s.ca_xof)} M FCFA de chiffre d'affaires, soit ${formatPct(s.part_ca_pct, 0)} % du portefeuille renseigné.`,
+        `Sa croissance observée est de ${s.croissance_pct >= 0 ? "+" : ""}${formatPct(s.croissance_pct, 0)} %.`,
+        "Cette part est une part de NOTRE portefeuille, pas une part de marché : elle ne dit rien de ce que pèsent nos concurrents sur le même secteur.",
+      ],
+      kv: [
+        ["Chiffre d'affaires", `${formatMFcfa(s.ca_xof)} M FCFA`],
+        ["Clients", formatNumber(s.nb_clients)],
+        ["Part du portefeuille", `${formatPct(s.part_ca_pct, 0)} %`],
+        ["Croissance", `${s.croissance_pct >= 0 ? "+" : ""}${formatPct(s.croissance_pct, 0)} %`],
+      ],
+    },
+  }));
+  const troisPremiers = secteursClasses.slice(0, 3);
+  const partTroisPremiers = troisPremiers.reduce((s, x) => s + x.part_ca_pct, 0);
+  const clientsTroisPremiers = troisPremiers.reduce((s, x) => s + x.nb_clients, 0);
+  // Effectif du GABARIT sectoriel, à ne pas confondre avec
+  // `secteurs.couverture_reelle.nb_avec_secteur`, qui compte les clients du
+  // miroir RÉEL portant un secteur (1 sur 1 381 à ce jour). Les deux chiffres
+  // ne parlent pas de la même population : afficher la couverture réelle en
+  // tête d'un tableau statique laisserait croire que ce tableau est mesuré.
+  const clientsSecteurs = secteursClasses.reduce((s, x) => s + x.nb_clients, 0);
+
   return (
     <>
       <Brief
@@ -97,6 +155,12 @@ export async function DcMarche() {
           unit={axes.dominante ? `${formatPct(axes.dominante.part_montant_pct, 0)} % du pipe qualifié` : ""}
           reading={`calculé sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe en montant`}
           readingVariant={couvertureFaible ? "wat" : undefined}
+          // L'arc porte la PART DE L'AXE dominant, pas la couverture : c'est la
+          // grandeur que le chiffre annonce. La couverture reste en ligne de
+          // lecture, où elle nuance la mesure sans la concurrencer.
+          cadran={
+            axes.dominante ? { pct: axes.dominante.part_montant_pct ?? 0 } : undefined
+          }
           detail={{
             kicker: "Indicateur · positionnement de marché",
             title: `${axes.dominante?.axe ?? "—"}, axe dominant`,
@@ -162,6 +226,13 @@ export async function DcMarche() {
               : "aucune collecte"
           }
           readingVariant={veille.qualite.part_exploitable_pct < 60 ? "wat" : undefined}
+          // Part de la collecte réellement exploitable : une proportion, donc un
+          // arc. Le ton suit le même seuil que la ligne de lecture — les deux
+          // marques disent la même chose, l'une en couleur, l'autre en mots.
+          cadran={{
+            pct: veille.qualite.part_exploitable_pct,
+            ton: veille.qualite.part_exploitable_pct < 60 ? "w" : undefined,
+          }}
           detail={{
             kicker: "Indicateur · veille externe",
             title: "Signaux de marché réellement exploitables",
@@ -183,9 +254,19 @@ export async function DcMarche() {
         />
       </div>
 
+      {/* SECTION « POSITIONNEMENT » — les axes et les signaux se lisent ensemble :
+          ce que nos affaires ouvertes disent du marché d'un côté, ce que la veille
+          en dit de l'autre. Les deux tuiles étaient empilées sur toute la largeur,
+          ce qui obligeait à faire défiler pour passer de l'une à l'autre alors
+          qu'elles répondent à la même question. */}
+      <div className="sec-h">
+        <b>Positionnement</b>
+        <span>ce que nos affaires ouvertes disent de notre marché</span>
+      </div>
+
       <Bento>
         <Tile
-          span={12}
+          span={7}
           title="Santé du marché orienté — axes du pipe ouvert"
           kick={`mesuré · calculé sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe`}
         >
@@ -227,11 +308,56 @@ export async function DcMarche() {
                 ],
               },
             }))}
+            // Le miroir porte dix axes ; les six premiers couvrent l'essentiel
+            // du pipe et tiennent en face de l'anneau de concentration. Le repli
+            // ne retire rien — la queue reste dépliable, et les parts affichées
+            // portent toujours sur le pipe entier.
+            replierApres={6}
+            nom="axes"
           />
           <Note style={{ marginTop: 14 }}>{axes.note}</Note>
         </Tile>
 
-        <Tile span={12} title="Part de marché : ce qui est calculable et ce qui ne l'est pas" quiet>
+        {/* CONCENTRATION DU PORTEFEUILLE — en vis-à-vis des axes, et non sous
+            eux : les deux tuiles répondent à la même question (où pèse notre
+            activité), l'une par le pipe ouvert, l'autre par le CA constaté.
+            Elle occupe aussi la colonne de droite, que la veille — souvent
+            vide — laissait en blanc sur toute la hauteur des axes. */}
+        {secteursClasses.length > 0 && (
+          <Tile
+            span={5}
+            title="Concentration du portefeuille"
+            kick={`gabarit · ${formatNumber(clientsSecteurs)} clients`}
+          >
+            <Orbit parts={orbitParts} />
+            <Note style={{ marginTop: 14 }}>
+              Les trois anneaux portent les trois premiers secteurs : ensemble,{" "}
+              {formatPct(partTroisPremiers, 0)} % du CA sur{" "}
+              {formatNumber(clientsTroisPremiers)} clients.
+            </Note>
+          </Tile>
+        )}
+
+        {/* PART DE MARCHÉ — sous la concentration du portefeuille, dans la même
+            colonne : les deux tuiles parlent de la même grandeur (ce que pèse
+            notre CA), l'une répartie par secteur, l'autre rapportée au marché.
+            Les lire l'une sous l'autre est ce qui empêche de confondre part de
+            PORTEFEUILLE et part de MARCHÉ, distinction que la tuile elle-même
+            passe deux notes à établir.
+
+            « Signaux de marché détectés » a été retiré : la collecte de veille
+            ne remonte aucune entrée exploitable (0 sur 0), et la tuile ne
+            servait qu'à afficher deux notes expliquant cette absence. Le fait
+            est déjà porté par l'indicateur « Signaux de veille exploitables »
+            du bandeau, qui l'affiche chiffré. `marche.veille` reste servi par
+            l'API et alimente cet indicateur — seule la LISTE des signaux n'est
+            plus rendue. */}
+        <Tile
+          span={5}
+          col={8}
+          title="Part de marché : ce qui est calculable et ce qui ne l'est pas"
+          quiet
+        >
           <Bars
             rows={[
               {
@@ -259,55 +385,53 @@ export async function DcMarche() {
           <Note style={{ marginTop: 12 }}>{secteurs.part_marche.raison}</Note>
         </Tile>
 
-        <Tile
-          span={12}
-          title="Signaux de marché détectés"
-          kick={`mesuré · ${formatNumber(veille.signaux.length)} signaux exploitables`}
-        >
-          {veille.signaux.length > 0 ? (
-            <>
-              <HintLine>Cliquez un signal pour sa lecture commerciale</HintLine>
-              <Lst
-                items={veille.signaux.map((s) => ({
-                  title: s.titre,
-                  sub: [s.source, s.pays, s.detecte_le ? `détecté le ${formatDate(s.detecte_le)}` : null]
-                    .filter(Boolean)
-                    .join(" · "),
-                  tag: s.criticite >= 70 ? "à traiter" : s.criticite >= 40 ? "à qualifier" : "à surveiller",
-                  tagVariant: s.criticite >= 70 ? ("r" as const) : s.criticite >= 40 ? ("w" as const) : ("n" as const),
-                  detail: {
-                    kicker: `Signal de marché · ${s.source}`,
-                    title: s.titre,
-                    tag: `criticité ${formatNumber(s.criticite)}`,
-                    tagVariant: s.criticite >= 70 ? ("r" as const) : ("w" as const),
-                    body: [
-                      s.so_what || "Aucune lecture commerciale n'a encore été rédigée pour ce signal.",
-                      s.action ? `Action suggérée : ${s.action}` : "",
-                      s.risque ? `Risque identifié : ${s.risque}` : "",
-                      s.publie_le
-                        ? `Publié le ${formatDate(s.publie_le)}.`
-                        : "La source ne remonte pas de date de publication : seule la date de détection est connue, l'ancienneté réelle du signal ne l'est pas.",
-                    ].filter(Boolean),
-                    kv: [
-                      ["Source", s.source],
-                      ["Pays", s.pays || "—"],
-                      ["Criticité", formatNumber(s.criticite)],
-                      ["Détecté le", formatDate(s.detecte_le)],
-                      ["Offre associée", s.offre || "—"],
-                      ["Lien", s.url || "—"],
-                    ],
-                  },
-                }))}
-              />
-            </>
-          ) : (
-            <Note style={{ marginTop: 0 }}>
-              Aucun signal exploitable dans la veille : {formatNumber(veille.qualite.nb_total)} entrées
-              collectées, aucune ne portant de lien utilisable.
-            </Note>
-          )}
-          <Note style={{ marginTop: 14 }}>{veille.note}</Note>
-        </Tile>
+        {/* PART DE PORTEFEUILLE PAR SECTEUR — le détail chiffré de l'anneau
+            ci-dessus. Un tableau et non des barres : cinq grandeurs par ligne
+            (clients, CA, part, pipe, lecture) ne tiennent pas sur une piste, et
+            c'est leur mise en regard qui fait la lecture — un secteur qui pèse
+            10 % du CA avec un pipe ouvert important ne se pilote pas comme un
+            secteur qui pèse autant sans rien devant lui. */}
+        {secteursClasses.length > 0 && (
+          <Tile
+            span={12}
+            title="Part de portefeuille par secteur"
+            kick={`gabarit · ${formatNumber(clientsSecteurs)} clients`}
+          >
+            <table className="tb">
+              <thead>
+                <tr>
+                  <th>Secteur</th>
+                  <th className="r">Clients</th>
+                  <th className="r">CA 12 mois</th>
+                  <th className="r">Part portefeuille</th>
+                  <th className="r">Croissance</th>
+                  <th>Lecture</th>
+                </tr>
+              </thead>
+              <tbody>
+                {secteursClasses.map((s) => {
+                  const l = lectureSecteur(s);
+                  return (
+                    <tr key={s.secteur}>
+                      <td>{s.secteur}</td>
+                      <td className="r mono">{formatNumber(s.nb_clients)}</td>
+                      <td className="r mono">{formatMFcfa(s.ca_xof)} M</td>
+                      <td className="r mono">{formatPct(s.part_ca_pct, 0)} %</td>
+                      <td className="r mono">
+                        {s.croissance_pct >= 0 ? "+" : ""}
+                        {formatPct(s.croissance_pct, 0)} %
+                      </td>
+                      <td>
+                        <span className={`tag tag--${l.ton}`}>{l.libelle}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <Note style={{ marginTop: 14 }}>{secteurs.avertissement}</Note>
+          </Tile>
+        )}
       </Bento>
     </>
   );

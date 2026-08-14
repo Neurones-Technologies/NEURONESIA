@@ -40,8 +40,10 @@ import {
 
 const PALETTE = ["#F79C31", "#1F8A6C", "#C9971F", "#A4372A"];
 /** Agrégat du reste : gris de mise en retrait, il ne consomme pas un créneau
- * catégoriel (la charte n'en a que quatre qui passent les contrôles). */
-const OTHER_FILL = "#D2CBBB";
+ * catégoriel (la charte n'en a que quatre qui passent les contrôles).
+ * Aligné sur `--line-2` des neutres froids : l'ancien gris (#D2CBBB) était
+ * chaud et tirait au beige sur les surfaces bleutées de la nouvelle direction. */
+const OTHER_FILL = "#C7D0DF";
 const OTHER_LABEL = "Autres";
 
 const SURFACE = "#FFFFFF"; // fond de la bulle `.ba` — la surface des anneaux/points

@@ -1,19 +1,56 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DIRECTION VISUELLE — « poste de pilotage », clair.
+
+   Le cockpit était peint sur un PAPIER crème (#F5F2EC) chaud : une matière de
+   bureau, qui lisait « document » là où l'application fait décider. Les neutres
+   basculent sur un BLANC OPTIQUE légèrement bleuté (#F4F6FA) — la teinte d'un
+   écran rétroéclairé. Rien ne s'assombrit : c'est le même niveau de clarté,
+   sur une température froide.
+
+   L'ORANGE DE MARQUE est conservé au hex près (--accent, --accent-strong,
+   --accent-2). Il ne bouge pas : c'est l'identité.
+
+   Le CYAN (--volt) est la seule couleur ajoutée. Il ne remplace rien et ne
+   double aucun rôle existant : il désigne ce qui est CALCULÉ par la machine
+   — projection, indice, narration IA — là où l'orange désigne la marque. Un
+   lecteur doit pouvoir dire d'un coup d'œil ce qui est mesuré et ce qui est
+   déduit ; c'est la distinction que les cockpits ratent le plus souvent.
+
+   Les couleurs SÉMANTIQUES (signal/alert/watch) gardent leurs teintes de
+   texte, re-assises sur les neutres froids pour leurs fonds et bordures.
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root{
-  --ink:#0A0B0C;
-  --ink-2:#131416;
-  --ink-3:#1D1F22;
-  --ink-4:#2A2D31;
-  --paper:#F5F2EC;
-  --paper-2:#FBF9F5;
-  --card:#FFFFFF;
-  --line:#E6E1D6;
-  --line-2:#D2CBBB;
-  --hair:#F0ECE3;
-  --t1:#0A0B0C;
-  --t2:#57534A;
-  --t3:#6F6A5D;
+  /* Encres tiédies de pair avec les neutres : un noir bleuté sur un fond ambré
+     se lit comme une tache froide (avatars, bouton primaire, panneau de
+     connexion). Toujours aussi sombres, mais dans la même famille. */
+  --ink:#171310;
+  --ink-2:#211C18;
+  --ink-3:#2D2721;
+  --ink-4:#3D362E;
+  /* NEUTRES TIÉDIS. Le blanc optique froid (#F4F6FA) tenait la promesse
+     « poste de pilotage » mais rendait l'écran clinique : sur de longues
+     plages de lecture, un fond bleuté sans aucune chaleur fatigue et éloigne
+     de l'orange de marque, qui s'y retrouvait isolé.
+
+     Les neutres gardent leur CLARTÉ (l'écran reste aussi lumineux) et
+     basculent d'un bleu franc vers un gris chaud très légèrement ambré : la
+     teinte du fond partage désormais une racine avec l'accent, ce qui raccorde
+     la marque au support au lieu de l'y poser.
+
+     La carte n'est plus blanc pur : sur un fond tiède, #FFFFFF ressortait en
+     tache froide et cassait l'unité. Elle garde deux crans de clarté au-dessus
+     du fond — assez pour se détacher, pas assez pour trancher. */
+  --paper:#F6F4F1;
+  --paper-2:#FBFAF8;
+  --card:#FEFDFC;
+  --line:#E4DFD8;
+  --line-2:#CFC8BE;
+  --hair:#EFEBE5;
+  --t1:#171310;
+  --t2:#5A5249;
+  --t3:#8A8177;
 
   /* accent = marque (orange) — --accent est la teinte lisible en texte
      (« deep »), --accent-strong la teinte vive pour bordures/anneaux/décor,
@@ -21,75 +58,136 @@
   --accent:#9C5309;
   --accent-strong:#F79C31;
   --accent-2:#FBBE71;
-  --accent-soft:#FDF1E1;
-  --accent-border:#F2D6AE;
+  --accent-soft:#FEF3E6;
+  --accent-border:#F6D9B4;
 
-  --signal:#1F6A55;
-  --signal-soft:#E4EFEA;
-  --signal-border:#C9DED6;
+  /* volt = ce que la machine calcule. Même partition que l'accent : --volt est
+     la teinte lisible en texte, --volt-strong la teinte vive pour les tracés
+     et les anneaux. */
+  --volt:#0E7C86;
+  --volt-strong:#16B8C4;
+  --volt-2:#7BD8E0;
+  --volt-soft:#E4F7F9;
+  --volt-border:#B8E6EA;
+
+  --signal:#12795A;
+  --signal-soft:#E3F3ED;
+  --signal-border:#BFE0D4;
   --alert:#A4372A;
-  --alert-soft:#F9E8E3;
-  --alert-border:#EFD3CB;
+  --alert-soft:#FBE9E5;
+  --alert-border:#F0D2CB;
   --watch:#7C6224;
-  --watch-soft:#F3ECDA;
-  --watch-border:#E5D8B8;
+  --watch-soft:#F5EEDB;
+  --watch-border:#E4D6B4;
 
   --mono:var(--font-mono),ui-monospace,monospace;
   --sans:var(--font-sans),system-ui,sans-serif;
   --disp:var(--font-disp),var(--font-sans),sans-serif;
 
-  --shadow-xs:0 1px 2px rgba(16,14,10,.05);
-  --shadow-sm:0 1px 2px rgba(16,14,10,.04),0 14px 32px -18px rgba(16,14,10,.22);
-  --shadow-md:0 4px 14px rgba(16,14,10,.10),0 18px 40px -18px rgba(16,14,10,.26);
-  --shadow-lg:0 24px 60px -22px rgba(16,14,10,.36);
+  /* Ombres portées dans la teinte de l'encre tiède : une ombre froide sur un
+     fond ambré grise la surface au lieu de la creuser. */
+  --shadow-xs:0 1px 2px rgba(23,19,16,.05);
+  --shadow-sm:0 1px 3px rgba(23,19,16,.05),0 12px 28px -16px rgba(23,19,16,.18);
+  --shadow-md:0 4px 14px rgba(23,19,16,.09),0 18px 40px -18px rgba(23,19,16,.22);
+  --shadow-lg:0 24px 60px -22px rgba(23,19,16,.32);
   --ring:0 0 0 4px rgba(247,156,49,.18);
-  --r-lg:18px;
-  --r-md:12px;
+  --ring-v:0 0 0 4px rgba(22,184,196,.16);
+  --r-lg:16px;
+  --r-md:11px;
 }
 
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+/* Le fond n'est pas un aplat : deux lavis très dilués (ambre en haut à droite,
+   côté brief ; sable en bas à gauche) donnent au papier une TEMPÉRATURE qui
+   varie sur la hauteur de page. À 4 et 3 % d'opacité, aucun des deux ne se
+   lit comme une couleur — ils empêchent seulement le fond de paraître mort,
+   ce qui était le reproche fait au blanc optique.
+   `background-attachment:fixed` : les lavis appartiennent à la fenêtre, pas au
+   document — ils ne défilent pas avec le contenu et ne créent donc pas de
+   bande visible en bas des pages longues. */
 body{
-  background:var(--paper);
+  background:
+    radial-gradient(ellipse 70% 50% at 88% 0%,rgba(247,156,49,.055),transparent 62%),
+    radial-gradient(ellipse 60% 45% at 4% 92%,rgba(156,83,9,.035),transparent 66%),
+    var(--paper);
+  background-attachment:fixed;
   color:var(--t1);
   font-family:var(--sans);font-size:15px;line-height:1.58;
   -webkit-font-smoothing:antialiased;
 }
-::selection{background:rgba(247,156,49,.26)}
+/* Trame de fond du poste de pilotage — une grille de 56 px, à peine visible.
+   Elle ne décore pas : elle donne au blanc une MATIÈRE et une ÉCHELLE, ce qui
+   distingue un cockpit d'un document. Elle s'estompe vers la gauche, où vit le
+   rail, pour ne pas courir sous une surface déjà peinte.
+
+   `position:fixed` et `z-index:0` : la trame ne défile pas et reste SOUS tout
+   le contenu (`.app` est en `position:relative;z-index:1`). `pointer-events:none`
+   pour qu'elle n'intercepte aucun clic. Les tuiles étant opaques, elle n'est
+   visible que dans les gouttières — ce qui est exactement le but. */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:56px 56px;opacity:.5;
+  -webkit-mask-image:linear-gradient(100deg,transparent 0%,#000 34%,#000 100%);
+  mask-image:linear-gradient(100deg,transparent 0%,#000 34%,#000 100%);
+}
+@media (max-width:900px){
+  /* Sur petit écran le rail passe en bandeau horizontal : le dégradé de gauche
+     n'a plus de sens, et une trame pleine sur une largeur réduite devient du
+     bruit. On la retire. */
+  body::before{display:none}
+}
+::selection{background:rgba(22,184,196,.22)}
 button{font:inherit}
 input{font:inherit}
 table{border-spacing:0}
-.app{min-height:100vh}
+/* `position:relative;z-index:1` : la coque se pose AU-DESSUS de la trame de
+   fond (`body::before`, z-index 0), qui reste visible dans les gouttières. */
+.app{min-height:100vh;position:relative;z-index:1}
 .app.live{display:grid;grid-template-columns:78px minmax(0,1fr)}
 
-/* ---------- rail (navigation principale) ---------- */
+/* ---------- rail (navigation principale) ----------
+   Le rail passe en CLAIR avec le reste de l'interface. Son état actif ne peut
+   plus être un aplat translucide sur fond sombre : il devient une pastille de
+   marque doublée d'un TRAIT LUMINEUX dans la marge gauche. Le trait déborde du
+   rail (`left:-1px`, sur sa bordure) — c'est lui qu'on voit en vision
+   périphérique, ce que la pastille seule ne donnait pas. */
 .rail{
-  background:var(--ink);position:sticky;top:0;height:100vh;z-index:10;
+  background:var(--card);border-right:1px solid var(--line);
+  position:sticky;top:0;height:100vh;z-index:10;
   display:flex;flex-direction:column;align-items:center;gap:5px;padding:16px 9px 14px
 }
 .rail-mk{width:38px;height:38px;margin-bottom:16px;flex:0 0 auto}
 .rl{
-  width:60px;height:58px;border-radius:14px;border:0;background:none;cursor:pointer;
+  width:60px;height:58px;border-radius:12px;border:0;background:none;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
-  color:rgba(255,255,255,.52);font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
   text-decoration:none;transition:color .16s ease,background-color .16s ease
 }
 .rl svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.rl:hover{color:#fff;background:rgba(255,255,255,.07)}
-.rl[aria-current="true"]{color:#fff;background:rgba(247,156,49,.16);box-shadow:inset 0 0 0 1px rgba(247,156,49,.42)}
+.rl:hover{color:var(--t1);background:var(--paper)}
+.rl[aria-current="true"]{color:var(--accent);background:var(--accent-soft)}
+.rl[aria-current="true"]::before{
+  content:"";position:absolute;left:-10px;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;
+  background:var(--accent-strong);box-shadow:0 0 12px rgba(247,156,49,.6)
+}
 .rl:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
 .rail-sp{flex:1}
 .rail-av{
-  width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.16);cursor:pointer;
-  background:rgba(255,255,255,.07);color:#fff;font-family:var(--mono);font-size:10.5px;font-weight:500
+  width:38px;height:38px;border-radius:11px;border:1px solid var(--line-2);cursor:pointer;
+  background:var(--paper);color:var(--t2);font-family:var(--mono);font-size:10.5px;font-weight:500;
+  transition:border-color .16s ease,color .16s ease
 }
-.rail-av:hover{border-color:var(--accent-strong);color:var(--accent-2)}
+.rail-av:hover{border-color:var(--accent-strong);color:var(--accent)}
 
 /* ---------- en-tête ---------- */
 .stage{min-width:0}
 .hdr{
   position:sticky;top:0;z-index:8;display:flex;align-items:center;gap:14px;padding:13px 30px;
-  background:rgba(245,242,236,.86);backdrop-filter:saturate(150%) blur(10px);border-bottom:1px solid var(--line)
+  background:rgba(246,244,241,.84);backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--line)
 }
 .hdr-t{min-width:0}
 /* Menu de sections logé dans l'en-tête, à la place du bloc titre. Les marges
@@ -514,7 +612,7 @@ table{border-spacing:0}
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
   overflow:hidden;box-shadow:var(--shadow-sm);margin-bottom:18px
 }
-.dec-h{padding:19px 22px 17px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.dec-h{padding:19px 22px 17px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFC,var(--paper-2))}
 .dec-h h3{font-family:var(--disp);font-weight:400;font-size:19px;letter-spacing:-.015em;margin:0 0 5px}
 .dec-h p{margin:0;font-size:13.5px;color:var(--t2);max-width:110ch;line-height:1.6}
 .dec-b{padding:20px 22px 22px}
@@ -541,7 +639,7 @@ table{border-spacing:0}
 /* conséquence d'une option, par profil : rôle abrégé, phrase, verdict */
 .cons{
   display:grid;grid-template-columns:minmax(64px,auto) 1fr auto;gap:10px;font-size:12px;padding:7px 0;
-  border-top:1px solid rgba(16,14,10,.07);align-items:baseline;line-height:1.5
+  border-top:1px solid rgba(23,19,16,.07);align-items:baseline;line-height:1.5
 }
 .cons i{font-family:var(--mono);font-style:normal;font-size:9.5px;color:var(--t3);letter-spacing:.02em}
 .cons span{color:var(--t2)}
@@ -594,28 +692,57 @@ table{border-spacing:0}
    l'URL (?periode=…) et non dans un état client, ce qui garde les onglets DC en
    composants serveur — aucun JS embarqué, et la période est partageable par lien.
    L'état actif se lit sur aria-current="page", posé par next/link. */
-.dc-seg{display:inline-flex;gap:3px;padding:3px;background:var(--paper-2);border:1px solid var(--line);border-radius:999px;margin-bottom:14px}
+/* Même traitement d'affordance que `.vue-nav` (cf. « onglets internes ») :
+   séparateurs entre choix, survol qui sort la pastille en carte, filet d'accent
+   sur le choix retenu. La cadence est un CONTRÔLE — elle doit se voir comme
+   tel, pas comme une légende. */
+.dc-seg{display:inline-flex;gap:2px;padding:3px;background:var(--paper-2);border:1px solid var(--line-2);border-radius:999px;margin-bottom:14px;box-shadow:inset 0 1px 2px rgba(23,19,16,.04)}
 .dc-seg a{
-  display:flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 16px;
+  position:relative;display:flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 17px;
   font-family:var(--sans);font-size:12.5px;color:var(--t2);text-decoration:none;white-space:nowrap;
   transition:background-color .16s ease,color .16s ease,box-shadow .16s ease
 }
-.dc-seg a:hover{color:var(--ink)}
-.dc-seg a[aria-current="page"]{background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-xs)}
+.dc-seg a+a::before{
+  content:"";position:absolute;left:-2px;top:50%;transform:translateY(-50%);
+  width:1px;height:14px;background:var(--line-2);transition:opacity .16s ease
+}
+.dc-seg a:hover::before,
+.dc-seg a[aria-current="page"]::before,
+.dc-seg a[aria-current="page"]+a::before{opacity:0}
+.dc-seg a:hover{color:var(--ink);background:var(--card);box-shadow:var(--shadow-xs)}
+.dc-seg a[aria-current="page"]{background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-sm)}
+.dc-seg a[aria-current="page"]::after{
+  content:"";position:absolute;left:17px;right:17px;bottom:4px;height:2px;border-radius:2px;
+  background:var(--accent-strong)
+}
 .dc-seg a:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
 .dc-seg-l{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);align-self:center;margin-right:10px}
 .dc-seg-w{display:flex;align-items:center;flex-wrap:wrap;gap:0 4px}
 
 /* bascule de périmètre / de filtre — un vrai segmenté, pas deux boutons */
-.arb-seg{display:flex;gap:3px;padding:3px;background:var(--paper-2);border:1px solid var(--line);border-radius:999px}
+.arb-seg{display:flex;gap:2px;padding:3px;background:var(--paper-2);border:1px solid var(--line-2);border-radius:999px;box-shadow:inset 0 1px 2px rgba(23,19,16,.04)}
 .arb-seg button{
-  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:transparent;
-  border-radius:999px;padding:7px 10px;cursor:pointer;font-family:var(--sans);font-size:12.5px;color:var(--t2);
+  position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:transparent;
+  border-radius:999px;padding:7px 12px;cursor:pointer;font-family:var(--sans);font-size:12.5px;color:var(--t2);
   transition:background-color .16s ease,color .16s ease,box-shadow .16s ease
 }
+/* Séparateurs entre bascules — cf. `.vue-nav` pour le raisonnement. Le
+   sélecteur d'effacement porte aussi sur `:disabled` : un filet collé à une
+   bascule éteinte se lit comme un trait de plus, pas comme une séparation. */
+.arb-seg button+button::before{
+  content:"";position:absolute;left:-2px;top:50%;transform:translateY(-50%);
+  width:1px;height:14px;background:var(--line-2);transition:opacity .16s ease
+}
+.arb-seg button:hover::before,
+.arb-seg button[aria-pressed="true"]::before,
+.arb-seg button[aria-pressed="true"]+button::before{opacity:0}
 .arb-seg button i{font-family:var(--mono);font-style:normal;font-size:10px;color:var(--t3)}
-.arb-seg button:hover:not(:disabled){color:var(--ink)}
-.arb-seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-xs)}
+.arb-seg button:hover:not(:disabled){color:var(--ink);background:var(--card);box-shadow:var(--shadow-xs)}
+.arb-seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-sm)}
+.arb-seg button[aria-pressed="true"]::after{
+  content:"";position:absolute;left:14px;right:14px;bottom:4px;height:2px;border-radius:2px;
+  background:var(--accent-strong)
+}
 .arb-seg button[aria-pressed="true"] i{color:var(--accent)}
 .arb-seg button:disabled{opacity:.5;cursor:default}
 .arb-seg button:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
@@ -732,7 +859,7 @@ table{border-spacing:0}
 .arb-hint--tight{margin:8px 0 0}
 .pay-tags{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
 /* .clk:hover décolorerait le bandeau de paiement, qui porte un dégradé */
-.pay.clk:hover{background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.pay.clk:hover{background:linear-gradient(180deg,#FFFEFC,var(--paper-2))}
 .arb-prior{margin-bottom:6px}
 
 /* ---------- options sélectionnables ---------- */
@@ -758,7 +885,7 @@ table{border-spacing:0}
    et le verdict tiennent leur propre ligne, la conséquence prend toute la
    largeur, et un filet coloré reprend la teinte du verdict — on voit d'un coup
    d'œil combien de profils une option arrange et combien elle dessert. */
-.ocons{display:block;padding:9px 0 10px 11px;border-top:1px solid rgba(16,14,10,.07);border-left:2px solid transparent}
+.ocons{display:block;padding:9px 0 10px 11px;border-top:1px solid rgba(23,19,16,.07);border-left:2px solid transparent}
 .ocons--s{border-left-color:var(--signal)}
 .ocons--r{border-left-color:var(--alert)}
 .ocons--w{border-left-color:var(--watch)}
@@ -774,7 +901,7 @@ table{border-spacing:0}
 .opt.is-sel{border-color:var(--accent-strong);box-shadow:var(--ring)}
 .opt.is-sel .opt-check{border-color:var(--accent-strong);color:var(--accent);background:var(--accent-soft)}
 .opt:has(input:focus-visible){outline:2px solid var(--accent-strong);outline-offset:2px}
-.opt-foot{margin-top:10px;padding-top:9px;border-top:1px solid rgba(16,14,10,.07)}
+.opt-foot{margin-top:10px;padding-top:9px;border-top:1px solid rgba(23,19,16,.07)}
 .arb-ecart{
   font-size:12px;line-height:1.6;color:var(--t2);background:var(--watch-soft);border:1px solid var(--watch-border);
   border-radius:var(--r-md);padding:10px 13px;margin:12px 0 0
@@ -858,7 +985,7 @@ table{border-spacing:0}
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:16px;
   overflow:hidden;box-shadow:var(--shadow-sm)
 }
-.pblk-h{padding:17px 21px 15px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.pblk-h{padding:17px 21px 15px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFC,var(--paper-2))}
 .pblk-h h3{font-family:var(--disp);font-weight:400;font-size:18px;letter-spacing:-.015em;margin:0 0 2px}
 .pblk-h p{margin:0;font-size:13px;color:var(--t2)}
 .pblk-b{padding:8px 21px 18px}
@@ -896,7 +1023,7 @@ table{border-spacing:0}
 .pay{
   display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:24px;align-items:start;
   padding:16px 18px;border:1px solid var(--line);border-radius:var(--r-md);
-  background:linear-gradient(180deg,#FFFEFB,var(--paper-2));margin-bottom:18px
+  background:linear-gradient(180deg,#FFFEFC,var(--paper-2));margin-bottom:18px
 }
 .pay--r{border-left:3px solid var(--alert)}
 .pay--w{border-left:3px solid var(--watch)}
@@ -940,7 +1067,7 @@ table{border-spacing:0}
 .dform-r{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:center}
 .dform-r>label{font-size:12px;color:var(--t2)}
 @media (max-width:720px){.dform-r{grid-template-columns:1fr;gap:5px}}
-.sw{width:38px;height:21px;border-radius:11px;background:var(--line-2);position:relative;border:0;cursor:pointer;flex:0 0 38px;box-shadow:inset 0 1px 2px rgba(16,14,10,.08)}
+.sw{width:38px;height:21px;border-radius:11px;background:var(--line-2);position:relative;border:0;cursor:pointer;flex:0 0 38px;box-shadow:inset 0 1px 2px rgba(23,19,16,.08)}
 .sw::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:left .18s ease;box-shadow:var(--shadow-xs)}
 .sw[aria-checked="true"]{background:var(--accent-strong)}
 .sw[aria-checked="true"]::after{left:19px}
@@ -966,7 +1093,7 @@ table{border-spacing:0}
 .view{padding:0;max-width:none}
 .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3);margin:0 0 9px}
 h1.vt{
-  font-family:var(--disp);font-weight:300;font-size:36px;letter-spacing:-.03em;
+  font-family:var(--disp);font-weight:400;font-size:34px;letter-spacing:-.035em;
   line-height:1.1;margin:0 0 9px;color:var(--ink)
 }
 .vsub{margin:0 0 28px;color:var(--t2);font-size:15px;max-width:62ch}
@@ -1011,7 +1138,7 @@ h1.vt{
   box-shadow:var(--shadow-sm);transition:border-color .18s ease
 }
 .mod:hover{border-color:var(--line-2)}
-.mod-h{display:flex;align-items:flex-start;gap:13px;padding:19px 21px 17px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.mod-h{display:flex;align-items:flex-start;gap:13px;padding:19px 21px 17px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFC,var(--paper-2))}
 .mod-n{
   font-family:var(--mono);font-size:11px;font-weight:500;color:var(--t3);
   flex:0 0 auto;padding-top:2px;letter-spacing:.02em
@@ -1060,14 +1187,15 @@ h1.vt{
 .tag--r{background:var(--alert-soft);color:var(--alert);border-color:var(--alert-border)}
 .tag--w{background:var(--watch-soft);color:var(--watch);border-color:var(--watch-border)}
 .tag--s{background:var(--signal-soft);color:var(--signal);border-color:var(--signal-border)}
-.tag--n{background:#F1EDE3;color:var(--t2);border-color:var(--line)}
+.tag--n{background:var(--hair);color:var(--t2);border-color:var(--line)}
 .tag--a{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-border)}
 
-.meter{height:8px;background:var(--hair);border-radius:999px;overflow:hidden;min-width:70px;box-shadow:inset 0 1px 2px rgba(16,14,10,.07)}
+.meter{height:8px;background:var(--hair);border-radius:999px;overflow:hidden;min-width:70px;box-shadow:inset 0 1px 2px rgba(23,19,16,.07)}
 .meter>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent-2),var(--accent-strong))}
-.meter>i.s{background:linear-gradient(90deg,#3E9179,var(--signal))}
-.meter>i.r{background:linear-gradient(90deg,#C25A4A,var(--alert))}
-.meter>i.w{background:linear-gradient(90deg,#A98C43,var(--watch))}
+.meter>i.s{background:linear-gradient(90deg,#5FBFA0,var(--signal))}
+.meter>i.r{background:linear-gradient(90deg,#D1564A,var(--alert))}
+.meter>i.w{background:linear-gradient(90deg,#D3BC7E,var(--watch))}
+.meter>i.v{background:linear-gradient(90deg,var(--volt-2),var(--volt-strong))}
 
 .note{
   font-family:var(--mono);font-size:11px;line-height:1.65;color:var(--t2);
@@ -1082,30 +1210,61 @@ h1.vt{
    Des pastilles et non des onglets soulignés : le soulignement est réservé à la
    navigation d'en-tête, et deux niveaux d'onglets de même dessin se
    disputeraient la lecture. */
+/* AFFORDANCE. Les onglets inactifs étaient en `--t3` sur un fond papier, sans
+   fond ni bordure propre : ils se lisaient comme du texte gris désactivé, pas
+   comme des commandes. Trois marques les rendent cliquables au premier regard,
+   sans transformer la barre en rangée de boutons :
+
+   1. l'ENCRE des inactifs remonte à `--t2` — le contraste d'un libellé actif
+      reste supérieur, mais un onglet inactif cesse de paraître éteint ;
+   2. un SÉPARATEUR entre pastilles (`::before` sur les frères) découpe la barre
+      en zones distinctes : c'est ce qui dit « plusieurs choix » plutôt qu'« une
+      phrase » ;
+   3. le SURVOL sort la pastille en carte avec son ombre, de sorte que le geste
+      confirme immédiatement ce que le dessin annonce.
+
+   L'ACTIF, lui, gagne un filet d'accent sous son libellé : la carte blanche
+   seule ne suffisait plus à le distinguer une fois les inactifs éclaircis. */
 .vue-nav{
-  display:flex;gap:4px;min-width:0;overflow-x:auto;margin-bottom:14px;
-  padding:4px;background:var(--paper-2);border:1px solid var(--line);
-  border-radius:999px;width:fit-content;max-width:100%
+  display:flex;gap:2px;min-width:0;overflow-x:auto;margin-bottom:14px;
+  padding:4px;background:var(--paper-2);border:1px solid var(--line-2);
+  border-radius:999px;width:fit-content;max-width:100%;box-shadow:inset 0 1px 2px rgba(23,19,16,.04)
 }
 /* Onglets suivis d'une cadence : les deux bandes se resserrent. Elles restent
    empilées (elles vivent dans deux arbres distincts — la page rend les onglets,
    l'écran rend sa cadence) mais cessent de repousser le premier chiffre. */
 .vue-nav+.dc-seg-w{margin-top:-2px}
 .vue-nav>a{
-  display:flex;align-items:center;border-radius:999px;padding:6px 15px;
-  font-family:var(--sans);font-size:12.5px;color:var(--t3);text-decoration:none;
-  white-space:nowrap;transition:background-color .16s ease,color .16s ease
+  position:relative;display:flex;align-items:center;border-radius:999px;padding:7px 17px;
+  font-family:var(--sans);font-size:12.5px;color:var(--t2);text-decoration:none;
+  white-space:nowrap;transition:background-color .16s ease,color .16s ease,box-shadow .16s ease
 }
-.vue-nav>a:hover{color:var(--ink);background:var(--card)}
+/* Séparateur : un filet entre deux pastilles voisines, effacé de part et
+   d'autre de la pastille active (elle porte déjà sa propre bordure de carte,
+   un filet collé à son bord ferait double trait). */
+.vue-nav>a+a::before{
+  content:"";position:absolute;left:-2px;top:50%;transform:translateY(-50%);
+  width:1px;height:15px;background:var(--line-2);transition:opacity .16s ease
+}
+.vue-nav>a:hover::before,
+.vue-nav>a[aria-current="page"]::before,
+.vue-nav>a[aria-current="page"]+a::before{opacity:0}
+.vue-nav>a:hover{color:var(--ink);background:var(--card);box-shadow:var(--shadow-xs)}
 .vue-nav>a[aria-current="page"]{
-  background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-xs)
+  background:var(--card);color:var(--ink);font-weight:500;box-shadow:var(--shadow-sm)
+}
+/* Filet d'accent de l'onglet ouvert — la marque qui survit au fond blanc. */
+.vue-nav>a[aria-current="page"]::after{
+  content:"";position:absolute;left:17px;right:17px;bottom:5px;height:2px;border-radius:2px;
+  background:var(--accent-strong)
 }
 .vue-nav>a:focus-visible{outline:2px solid var(--accent-strong);outline-offset:-2px}
 /* Sous 820 px la barre défile horizontalement plutôt que de rétrécir ses
    pastilles au point de tronquer les libellés du compte-rendu. */
 @media (max-width:820px){
   .vue-nav{width:100%;border-radius:var(--r-md)}
-  .vue-nav>a{font-size:12px;padding:6px 12px}
+  .vue-nav>a{font-size:12px;padding:7px 13px}
+  .vue-nav>a[aria-current="page"]::after{left:13px;right:13px}
 }
 
 /* ---------- accroche d'écran ----------
@@ -1165,15 +1324,17 @@ h1.vt{
   0%,100%{border-color:var(--alert-border);box-shadow:0 0 0 0 rgba(164,55,42,0)}
   50%{border-color:var(--alert);box-shadow:0 0 0 3px rgba(164,55,42,.13)}
 }
-/* Le Brief est un panneau SOMBRE et sa pastille chaude est ambre, pas rouge : le
-   halo carmin ci-dessus y virait au brun sale. Même respiration, teinte de
-   l'ambiance — d'où ce second jeu d'images plutôt qu'une couleur partagée. */
+/* La pastille chaude du Brief est AMBRE, pas rouge : le halo carmin ci-dessus y
+   virait au brun sale. Même respiration, teinte de l'ambiance — d'où ce second
+   jeu d'images plutôt qu'une couleur partagée.
+   (Le panneau est passé du sombre au clair : les opacités sont relevées, un
+   halo calibré pour l'encre disparaît sur une surface blanche.) */
 @media (prefers-reduced-motion:no-preference){
-  .bpill--hot{animation-name:alerte-respire-sombre}
+  .bpill--hot{animation-name:alerte-respire-ambre}
 }
-@keyframes alerte-respire-sombre{
-  0%,100%{border-color:rgba(247,156,49,.44);box-shadow:0 0 0 0 rgba(247,156,49,0)}
-  50%{border-color:rgba(247,156,49,.9);box-shadow:0 0 0 3px rgba(247,156,49,.17)}
+@keyframes alerte-respire-ambre{
+  0%,100%{border-color:var(--accent-border);box-shadow:0 0 0 0 rgba(247,156,49,0)}
+  50%{border-color:var(--accent-strong);box-shadow:0 0 0 3px rgba(247,156,49,.22)}
 }
 
 /* ---------- hypothèses d'écran, repliées en tête ----------
@@ -1241,7 +1402,7 @@ h1.vt{
   background:linear-gradient(180deg,var(--ink-3),var(--ink));border-color:var(--ink);color:#fff;
   box-shadow:var(--shadow-sm)
 }
-.btn--p:hover{background:linear-gradient(180deg,#33363B,var(--ink-2));border-color:var(--ink-2);box-shadow:var(--shadow-sm)}
+.btn--p:hover{background:linear-gradient(180deg,var(--ink-4),var(--ink-2));border-color:var(--ink-2);box-shadow:var(--shadow-sm)}
 .btn:active{transform:translateY(0)}
 .btn:focus-visible{outline:2px solid var(--accent-strong);outline-offset:1px}
 .btn:disabled{opacity:.55;cursor:default;transform:none;box-shadow:var(--shadow-xs)}
@@ -1280,6 +1441,59 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .cht-lg i{width:10px;height:10px;border-radius:3px;flex:0 0 10px}
 .cht-nt{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--t3);margin:10px 0 0}
 @media (max-width:820px){.cht-svg{height:184px}}
+
+/* ---------- orbite : parts d'un total, en anneaux concentriques ----------
+   Alternative au camembert pour une répartition ORDONNÉE (les premiers secteurs
+   d'un portefeuille, les axes dominants d'un pipe).
+
+   Un camembert oblige à comparer des ANGLES, ce que l'œil fait mal dès qu'il y
+   a plus de trois parts. Ici chaque part occupe sa propre piste circulaire : le
+   rayon code le rang, l'arc code la part, et l'empilement des arcs montre la
+   concentration d'un coup — c'est la question qu'on pose à un portefeuille.
+
+   Trois anneaux au maximum : au-delà, les pistes intérieures deviennent trop
+   courtes pour qu'un arc y reste comparable. La légende, elle, porte TOUTES les
+   lignes — l'anneau n'en montre que la tête, la répartition reste lisible en
+   entier. */
+.orbit{display:flex;flex-wrap:wrap;align-items:center;gap:24px}
+.orbit-g{flex:0 0 auto;width:200px;height:200px}
+.orbit-g svg{width:100%;height:100%;display:block;transform:rotate(-90deg)}
+.orbit-g .orbit-t{fill:none;stroke:var(--hair);stroke-width:11}
+.orbit-g .orbit-a{fill:none;stroke-width:11;stroke-linecap:round}
+.orbit-lg{list-style:none;margin:0;padding:0;flex:1 1 250px;min-width:0;display:grid;gap:2px}
+.orbit-lg li{
+  display:grid;grid-template-columns:11px minmax(0,1fr) auto auto;gap:11px;align-items:baseline;
+  padding:6px 8px;margin:0 -8px;border-radius:8px;font-size:13px;transition:background-color .15s ease
+}
+.orbit-lg li:hover{background:var(--paper-2)}
+.orbit-lg li>i{display:block;width:11px;height:11px;border-radius:3px;transform:translateY(1px)}
+.orbit-n{color:var(--t1);overflow-wrap:anywhere}
+.orbit-lg b{font-family:var(--mono);font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.orbit-p{font-family:var(--mono);font-size:11px;color:var(--t3);font-variant-numeric:tabular-nums;min-width:42px;text-align:right}
+@media (max-width:820px){.orbit{gap:18px}.orbit-g{width:168px;height:168px}}
+
+/* ---------- sillage : ce qui est MESURÉ, ce qui est PROJETÉ ----------
+   Le reproche le plus courant fait aux courbes de cockpit : le constaté et le
+   calculé y sont tracés du même trait, et le lecteur prend une extrapolation
+   pour un relevé. Ici la distinction est portée par TROIS marques à la fois —
+   couleur (orange de marque → cyan de calcul), style de trait (plein →
+   pointillé) et un CÔNE d'incertitude qui s'ouvre avec l'horizon.
+
+   Trois marques et non une seule : la couleur seule ne suffit pas (daltonisme,
+   impression en niveaux de gris), et le pointillé seul se confond avec le
+   trait de seuil déjà utilisé par `reference` dans `ui/chart.tsx`. Le cône,
+   lui, dit ce qu'aucun trait ne dit : que l'écart possible grandit avec la
+   distance. */
+.cht-prj{fill:none;stroke:var(--volt-strong);stroke-width:2.5;stroke-dasharray:5 5;stroke-linecap:round}
+.cht-cone{fill:rgba(22,184,196,.13)}
+.cht-dot-p{fill:var(--card);stroke:var(--volt-strong);stroke-width:2.5}
+/* Pastille de légende du projeté : un tiret pointillé, pas un carré plein —
+   la légende doit porter la même marque que le tracé qu'elle nomme. */
+.cht-lg i.prj{
+  height:3px;border-radius:2px;width:16px;flex:0 0 16px;
+  background:repeating-linear-gradient(90deg,var(--volt-strong) 0 5px,transparent 5px 10px)
+}
+.cht-lg i.cone{background:rgba(22,184,196,.3);height:11px;border-radius:3px}
 
 /* ---------- calendrier d'atterrissage (cockpit DAF) ----------
    Le DAF a demandé l'atterrissage mensuel « sur une vue calendaire » : une
@@ -1366,10 +1580,10 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .mtx th:first-child{text-align:left}
 .mtx td{padding:3px 4px;text-align:center}
 .mtx td:first-child{text-align:left;font-size:12.5px;white-space:nowrap;padding-right:10px}
-.cell{display:block;height:22px;border-radius:5px;font-family:var(--mono);font-size:9.5px;line-height:22px;color:var(--t3);background:#F1EDE3}
+.cell{display:block;height:22px;border-radius:5px;font-family:var(--mono);font-size:9.5px;line-height:22px;color:var(--t3);background:var(--hair)}
 .cell.has{background:linear-gradient(180deg,var(--ink-3),var(--ink));color:#fff;box-shadow:var(--shadow-xs)}
 .cell.gap{background:var(--accent-soft);color:var(--accent);border:1px dashed var(--accent-strong)}
-.cell.na{background:transparent;color:#C9C7BE}
+.cell.na{background:transparent;color:var(--line-2)}
 
 .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:13px;font-family:var(--mono);font-size:10px;color:var(--t2)}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
@@ -1406,14 +1620,35 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 /* `.skel--dark` et `.rl-skel` retirés avec ShellSkeleton/SkeletonBrief : plus
    aucun appelant depuis la suppression des loading.tsx (cf. ui/skeleton.tsx). */
 
-/* ---------- panneau brief (encre) ---------- */
+/* ---------- panneau brief (lumière) ----------
+   Le brief était un panneau d'ENCRE : sur un fond crème, il se distinguait en
+   étant sombre. Sur le blanc optique il ne le peut plus sans rouvrir le noir
+   que la direction abandonne — il se distingue donc par la LUMIÈRE.
+
+   La surface reste carte. Ce qui la signe, c'est une aurore orange/cyan en
+   haut à droite (`::before`), sous la trame d'arcs d'origine (`::after`), qui
+   est conservée et repasse en trait ambre. Les deux couleurs de l'interface
+   s'y croisent : la marque et le calcul, ce que le briefing est exactement. */
 .brief{
-  position:relative;overflow:hidden;border-radius:24px;padding:32px 36px 30px;margin-bottom:20px;
-  background:linear-gradient(150deg,#22252A 0%,var(--ink) 66%);color:#fff;box-shadow:var(--shadow-sm)
+  position:relative;overflow:hidden;border-radius:22px;padding:32px 36px 28px;margin-bottom:20px;
+  background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-sm)
+}
+/* L'aurore du brief : l'ambre domine, le cyan n'en est plus que l'ourlet froid.
+   Sur les neutres bleutés d'origine, les deux lavis pouvaient s'équilibrer ;
+   sur un papier tiède, un cyan à parts égales devenait la seule zone froide de
+   l'écran et se lisait comme une tache. Il recule donc (opacité divisée par
+   deux, poussé vers la gauche du halo) sans disparaître : il reste la trace du
+   calcul, que la marque enveloppe. */
+.brief::before{
+  content:"";position:absolute;right:-120px;top:-190px;width:620px;height:480px;pointer-events:none;
+  background:
+    radial-gradient(ellipse 42% 56% at 22% 62%,rgba(22,184,196,.10),transparent 66%),
+    radial-gradient(ellipse 58% 62% at 62% 46%,rgba(247,156,49,.30),transparent 72%);
+  filter:blur(6px)
 }
 .brief::after{
-  content:"";position:absolute;right:-130px;top:-130px;width:460px;height:460px;pointer-events:none;
-  background:repeating-radial-gradient(circle at 100% 100%,transparent 0 56px,rgba(247,156,49,.30) 56px 57.5px);
+  content:"";position:absolute;right:-130px;top:-130px;width:470px;height:470px;pointer-events:none;
+  background:repeating-radial-gradient(circle at 100% 100%,transparent 0 56px,rgba(156,83,9,.20) 56px 57.5px);
   -webkit-mask-image:radial-gradient(circle at 100% 100%,#000 0 52%,transparent 78%);
   mask-image:radial-gradient(circle at 100% 100%,#000 0 52%,transparent 78%)
 }
@@ -1425,11 +1660,14 @@ table.tb tbody tr:hover{background:var(--paper-2)}
    z-index) sans le remplacer — d'où le halo sombre en fond, qui détache
    l'étincelle des cercles quand les deux se croisent.
    Le titre a `max-width:34ch` et ne monte donc jamais jusqu'à cette zone. */
+/* Le panneau est passé en clair : le halo qui détachait l'étincelle était
+   sombre, il devient blanc, et la teinte de remplissage prend l'orange vif
+   (l'ambre pâle d'origine était calibré pour un fond d'encre). */
 .brief-ia{
   position:absolute;top:26px;right:30px;width:30px;height:30px;z-index:2;
   padding:6px;border-radius:50%;box-sizing:content-box;
-  fill:var(--accent-2);opacity:.9;
-  background:radial-gradient(circle,rgba(24,26,30,.85) 40%,transparent 72%);
+  fill:var(--accent-strong);opacity:.92;
+  background:radial-gradient(circle,rgba(255,255,255,.9) 40%,transparent 72%);
   transform-origin:60% 42%
 }
 /* Scintillement : un éclat bref toutes les 3 s, pas un clignotement régulier.
@@ -1454,24 +1692,24 @@ table.tb tbody tr:hover{background:var(--paper-2)}
   94%{opacity:1;transform:scale(1.07)}
 }
 @media (max-width:820px){.brief-ia{top:19px;right:17px;width:24px;height:24px}}
-.brief-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:10px;margin:0 0 14px}
-.brief h2{font-family:var(--disp);font-size:29px;font-weight:300;color:#fff;line-height:1.16;max-width:34ch;margin:0 0 12px;letter-spacing:-.02em}
-.brief p{color:rgba(255,255,255,.7);font-size:15.5px;line-height:1.68;max-width:104ch;margin:0 0 12px}
+.brief-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;gap:10px;margin:0 0 14px}
+.brief h2{font-family:var(--disp);font-size:31px;font-weight:300;color:var(--t1);line-height:1.16;max-width:34ch;margin:0 0 14px;letter-spacing:-.025em;text-wrap:balance}
+.brief p{color:var(--t2);font-size:15.5px;line-height:1.68;max-width:104ch;margin:0 0 12px}
 .brief p:last-of-type{margin-bottom:18px}
-.brief em{font-style:normal;color:var(--accent-2)}
+.brief em{font-style:normal;color:var(--accent)}
 /* résumé en 5 lignes : une idée par ligne, interligne serré */
 .brief-l{display:grid;gap:8px;margin:0 0 18px;padding:0;list-style:none;max-width:104ch}
-.brief-l li{position:relative;padding-left:19px;color:rgba(255,255,255,.78);font-size:14.5px;line-height:1.5}
+.brief-l li{position:relative;padding-left:19px;color:var(--t2);font-size:14.5px;line-height:1.5}
 .brief-l li::before{
   content:"";position:absolute;left:0;top:.6em;width:5px;height:5px;border-radius:50%;
-  background:var(--accent-strong);opacity:.8
+  background:var(--accent-strong)
 }
 .brief-r{display:flex;flex-wrap:wrap;gap:9px}
 .bpill{
   font-family:var(--mono);font-size:10px;letter-spacing:.06em;padding:6px 12px;border-radius:999px;
-  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.82)
+  background:var(--paper);border:1px solid var(--line);color:var(--t2)
 }
-.bpill--hot{background:rgba(247,156,49,.16);border-color:rgba(247,156,49,.44);color:var(--accent-2)}
+.bpill--hot{background:var(--accent-soft);border-color:var(--accent-border);color:var(--accent)}
 
 /* ---------- grille bento ----------
    `align-items:start` : deux tuiles côte à côte de contenus très inégaux (sur la
@@ -1505,7 +1743,7 @@ table.tb tbody tr:hover{background:var(--paper-2)}
   box-shadow:var(--shadow-sm);transition:border-color .18s ease;min-width:0
 }
 .tile:hover{border-color:var(--line-2)}
-.tile--q{background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.tile--q{background:linear-gradient(180deg,#FFFEFC,var(--paper-2))}
 .tile-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:15px}
 .tile-h h3{font-family:var(--disp);font-size:17px;font-weight:400;letter-spacing:-.01em;margin:0}
 .tile-k{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);white-space:nowrap}
@@ -1528,7 +1766,11 @@ table.tb tbody tr:hover{background:var(--paper-2)}
    fiabilité, qui restent affichés mais cessent de concurrencer la mesure.
    Ces règles surchargent volontairement `.kpi-row` (cf. plus haut), qui compacte
    toutes ses tuiles de façon uniforme. */
-.stat--p{background:linear-gradient(180deg,#FFFEFB,var(--paper-2));border-color:var(--accent-border)}
+/* La bordure reste NEUTRE : le filet d'accent (`::before`, ci-dessous) désigne
+   déjà le rang principal. Cerclée d'orange EN PLUS du filet, la tuile portait
+   deux fois la même marque — et sur un bandeau de trois indicateurs, la
+   distinction se perdait au lieu de se renforcer. Une marque, un sens. */
+.stat--p{background:linear-gradient(180deg,#FFFEFC,var(--paper-2))}
 /* Le filet d'accent épouse l'arrondi de la tuile au lieu de le trancher.
    La bande ne peut pas porter l'arrondi elle-même : un `border-radius` de 18 px
    sur une boîte large de 3 px est ramené par le navigateur à un demi-cercle de
@@ -1552,20 +1794,96 @@ table.tb tbody tr:hover{background:var(--paper-2)}
    garderait sinon un trou), mais elle recule d'un plan. */
 .stat--c{background:var(--paper-2);box-shadow:none;border-color:var(--hair)}
 .stat--c .stat-d{font-size:10px;margin-top:6px}
+/* ---------- cadran de mesure (arc gradué d'une tuile d'indicateur) ----------
+   Un indicateur de cockpit n'est pas un nombre dans une boîte : c'est une
+   mesure lue sur un INSTRUMENT. L'arc porte la valeur en proportion de sa
+   course, douze crans donnent l'échelle, et le chiffre reste à côté en pleine
+   taille — l'arc ajoute une lecture, il n'en remplace aucune.
+
+   POSÉ, PAS IMPOSÉ. Le cadran n'apparaît que si la tuile reçoit une valeur de
+   cadran (cf. `StatTile`, prop `cadran`) : une tuile sans cadran garde
+   exactement sa mise en page d'avant. C'est ce qui permet de ne l'allumer que
+   là où une proportion a du sens — un pourcentage, une part, une couverture —
+   et jamais sur un montant absolu, dont la course n'aurait pas de borne.
+
+   Le SVG est écrit dans le flux du composant serveur : aucune dépendance,
+   aucun JS, comme les graphes de `ui/chart.tsx`. */
+/* `align-items:start` et non `center` : la tuile d'indicateur porte un en-tête
+   (`.tile-h`) dont la marge basse est absorbée par un alignement centré — le
+   cadran remontait alors sur le libellé. Aligné en tête, il se cale sur la
+   première ligne et le bloc chiffré garde ses espacements d'origine.
+   `padding-top` compense l'écart de hauteur entre le libellé et le cadran pour
+   que l'arc soit optiquement centré sur le chiffre, qui est le sujet. */
+.stat-w{display:grid;grid-template-columns:auto minmax(0,1fr);gap:17px;align-items:start}
+.stat-w>.dialg{margin-top:26px}
+.kpi-row .stat-w>.dialg{margin-top:22px}
+.dialg{width:88px;height:88px;flex:0 0 88px;position:relative}
+.dialg svg{width:100%;height:100%;display:block;transform:rotate(-90deg)}
+.dialg .dialg-t{fill:none;stroke:var(--hair);stroke-width:8}
+/* L'arc prend la teinte VIVE de la marque et non sa teinte de texte : sur un
+   trait de 8 px, l'orange « deep » vire au brun et perd son identité. */
+.dialg .dialg-v{fill:none;stroke:var(--accent-strong);stroke-width:8;stroke-linecap:round}
+.dialg .dialg-c{stroke:var(--line-2);stroke-width:2}
+/* Variantes sémantiques — teintes RELEVÉES par rapport aux jetons de texte,
+   pour la même raison que ci-dessus (un trait épais assombrit la teinte). */
+.dialg--s .dialg-v{stroke:#2F9E7A}
+.dialg--r .dialg-v{stroke:#D1564A}
+.dialg--w .dialg-v{stroke:#D9A63C}
+/* `volt` : ce que la machine calcule (indice, projection, score). */
+.dialg--v .dialg-v{stroke:var(--volt-strong)}
+/* Dans un bandeau compacté, le cadran suit la réduction des tuiles. */
+.kpi-row .dialg{width:70px;height:70px;flex:0 0 70px}
+.kpi-row .stat-w{gap:14px}
+@media (max-width:820px){.dialg{width:72px;height:72px;flex:0 0 72px}}
+
 .spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:16px}
 .spark i{flex:1;background:var(--hair);border-radius:2px}
 .spark i.on{background:linear-gradient(180deg,var(--accent-2),var(--accent-strong))}
 
 /* ---------- barres classées ---------- */
-.bars{display:grid;gap:13px}
-.bar-r{display:grid;grid-template-columns:1fr 78px;gap:14px;align-items:center}
+/* LARGEUR DE LECTURE BORNÉE. Sur une tuile pleine largeur, `1fr` étirait la
+   piste à ~1 300 px : la barre traversait la carte de part en part et le
+   montant se retrouvait à l'autre bout de l'écran, séparé du nom qu'il
+   qualifie. L'œil devait faire l'aller-retour pour associer les deux.
+
+   Le bloc se cale donc sur une largeur de lecture (comme la légende de
+   `.orbit`, qui reste compacte quelle que soit sa tuile) : une piste de 1 300px
+   n'apporte aucune précision de mesure supplémentaire — les rapports de
+   longueur sont les mêmes à 760 px — mais elle coûte la proximité du libellé et
+   de sa valeur.
+
+   `max-width` et non une colonne fixe : dans une tuile étroite (span 5 ou 7),
+   la borne ne s'applique pas et le bloc occupe toute la place, comme avant. */
+.bars{display:grid;gap:13px;max-width:900px}
+.bar-r{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:14px;align-items:center}
 .bar-n{font-size:13.5px;min-width:0}
 .bar-n span{display:block;font-family:var(--mono);font-size:11px;color:var(--t3);margin-top:3px}
-.bar-t{height:8px;border-radius:999px;background:#EFEAE0;overflow:hidden;box-shadow:inset 0 1px 2px rgba(16,14,10,.07);margin-top:7px}
-.bar-t i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent-2),var(--accent-strong))}
-.bar-t i.s{background:linear-gradient(90deg,#3E9179,var(--signal))}
-.bar-t i.r{background:linear-gradient(90deg,#C25A4A,var(--alert))}
-.bar-t i.w{background:linear-gradient(90deg,#A98C43,var(--watch))}
+/* La piste devient un FAISCEAU : la barre garde sa longueur (une mesure reste
+   comparable à la règle, c'est non négociable), et gagne une lueur portée par
+   un pseudo-élément — donc hors flux, sans effet sur la mise en page. La lueur
+   ajoute une lecture périphérique : la dominante se voit avant d'être lue.
+   `overflow:visible` (au lieu de `hidden`) est ce qui laisse la lueur déborder
+   de la piste ; le remplissage garde son propre `border-radius`, il n'a donc
+   plus besoin d'être rogné par le conteneur. */
+.bar-t{position:relative;height:8px;border-radius:999px;background:var(--hair);overflow:visible;box-shadow:inset 0 1px 2px rgba(23,19,16,.07);margin-top:7px}
+.bar-t i{position:relative;display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent-2),var(--accent-strong))}
+/* PORTÉE DE LA LUEUR — elle n'est PAS portée par toutes les barres.
+   Une lueur ne distingue que ce qui est rare : sur l'écran « Comptes par
+   ventes », vingt barres consécutives la portaient toutes, et l'écran entier
+   se mettait à vibrer sans que rien n'en ressorte. C'est le même raisonnement
+   que celui qui exclut `.tag--r` de la respiration d'alerte (cf. plus haut).
+
+   Elle est donc réservée aux TROIS PREMIÈRES lignes d'une liste de barres, où
+   le classement fait qu'elles sont effectivement les dominantes. Au-delà, la
+   longueur suffit — c'est elle qui porte la mesure de toute façon. */
+.bars>.bar-r:nth-child(-n+3) .bar-t i::after{
+  content:"";position:absolute;inset:-3px -2px;border-radius:999px;
+  background:inherit;filter:blur(7px);opacity:.5;z-index:-1
+}
+.bar-t i.s{background:linear-gradient(90deg,#5FBFA0,var(--signal))}
+.bar-t i.r{background:linear-gradient(90deg,#D1564A,var(--alert))}
+.bar-t i.w{background:linear-gradient(90deg,#D3BC7E,var(--watch))}
+.bar-t i.v{background:linear-gradient(90deg,var(--volt-2),var(--volt-strong))}
 .bar-v{font-family:var(--mono);font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums}
 
 /* ---------- listes denses ---------- */
@@ -1643,7 +1961,7 @@ table.tb tr.clk{cursor:pointer}
   transition:transform .26s cubic-bezier(.22,.7,.28,1);display:flex;flex-direction:column
 }
 .drw.on{transform:none}
-.drw-h{padding:22px 24px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFB,var(--paper-2))}
+.drw-h{padding:22px 24px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#FFFEFC,var(--paper-2))}
 .drw-k{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
 .drw-x{border:1px solid var(--line-2);background:var(--card);border-radius:999px;width:28px;height:28px;cursor:pointer;color:var(--t2);font-size:15px;line-height:1}
 .drw-x:hover{border-color:var(--accent-strong);color:var(--accent)}
@@ -1658,6 +1976,11 @@ table.tb tr.clk{cursor:pointer}
 
 @media (max-width:1180px){
   .t3,.t4,.t5{grid-column:span 6}.t7,.t8{grid-column:span 12}
+  /* `!important` : `Tile` pose sa colonne de départ en style INLINE (prop
+     `col`), qui l'emporte sur une règle de `@media`. Sans cette annulation, une
+     tuile calée en colonne 8 y resterait alors que la grille n'a plus de
+     colonne 8 à lui donner — elle sortait du cadre. */
+  .tile--col{grid-column:span 12!important}
   /* La grille n'a plus deux colonnes de tuiles à cette largeur : une tuile qui
      tiendrait encore deux rangées créerait un trou sous elle. Elle reprend la
      pleine largeur et sa hauteur de contenu, comme les autres.
@@ -1674,7 +1997,11 @@ table.tb tr.clk{cursor:pointer}
 }
 
 /* ---------- authentification ---------- */
-.auth{display:grid;grid-template-columns:1.02fr .98fr;min-height:100vh}
+/* `position:relative;z-index:1` : la page d'authentification porte sa propre
+   composition (panneau de marque à gauche, formulaire à droite) et se pose
+   au-dessus de la trame de fond, qui n'a rien à y faire — elle appartient à la
+   coque applicative. */
+.auth{display:grid;grid-template-columns:1.02fr .98fr;min-height:100vh;position:relative;z-index:1;background:var(--paper-2)}
 .auth-l{
   position:relative;overflow:hidden;background:linear-gradient(155deg,var(--ink-3) 0%,var(--ink) 62%);
   color:#fff;padding:52px 56px;display:flex;flex-direction:column;justify-content:space-between
@@ -1688,7 +2015,7 @@ table.tb tr.clk{cursor:pointer}
 .auth-l>*{position:relative;z-index:1}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--accent-strong);display:inline-block}
 .auth-kick{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:11px}
-.auth-l h1{font-size:44px;font-weight:200;line-height:1.08;color:#fff;max-width:15ch;margin:0 0 18px;font-family:var(--disp)}
+.auth-l h1{font-size:44px;font-weight:300;line-height:1.06;color:#fff;max-width:15ch;margin:0 0 18px;font-family:var(--disp)}
 .auth-l h1 em{font-style:normal;color:var(--accent-2);font-weight:300}
 .auth-l p{color:rgba(255,255,255,.66);font-size:16px;max-width:44ch;margin:0}
 .auth-meta{display:flex;gap:34px;flex-wrap:wrap}
@@ -1721,7 +2048,12 @@ table.tb tr.clk{cursor:pointer}
 .frow a:hover{color:var(--accent);border-color:var(--accent-strong)}
 .chk{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--t2)}
 .chk input{width:16px;height:16px;accent-color:var(--accent-strong)}
+/* `position:relative` : la page d'authentification pose la trame de fond
+   (`body::before`) sur toute sa surface. Sans contexte d'empilement propre, le
+   bouton — qui est le seul aplat sombre de la colonne — laissait voir les
+   lignes de la grille au travers. */
 .bmain{
+  position:relative;
   width:100%;padding:14px 18px;border:0;border-radius:var(--r-md);cursor:pointer;
   background:linear-gradient(180deg,var(--ink-3),var(--ink));color:#fff;font-size:14.5px;font-weight:500;
   box-shadow:var(--shadow-sm);transition:box-shadow .14s ease

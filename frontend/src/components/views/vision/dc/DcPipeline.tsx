@@ -96,6 +96,12 @@ export async function DcPipeline() {
           value={`${formatPct(performance?.win_rate.taux_valeur_pct ?? null, 0)}`}
           unit="% en valeur"
           reading="historique complet du miroir"
+          // Taux de victoire : une proportion bornée, donc un arc. Pas de ton
+          // sémantique — aucun seuil de « bon taux » n'est défini côté métier,
+          // et en inventer un ferait dire à la couleur ce que personne n'a tranché.
+          cadran={
+            performance ? { pct: performance.win_rate.taux_valeur_pct ?? 0 } : undefined
+          }
           detail={{
             kicker: "Indicateur · transformation",
             title: "Taux de victoire en valeur",

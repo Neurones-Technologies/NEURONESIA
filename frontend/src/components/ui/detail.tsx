@@ -127,7 +127,10 @@ export function Clickable({
 }: {
   detail: DetailCard;
   className?: string;
-  as?: "div" | "tr";
+  /** `li` sert aux listes qui doivent rester des `<ul>` valides (cf. `Orbit`) :
+   *  un `<div>` entre `<ul>` et `<li>` casse la sémantique de liste et le
+   *  décompte annoncé par les lecteurs d'écran. */
+  as?: "div" | "tr" | "li";
   children: ReactNode;
   /** Attributs `data-*` bruts (ex. `{ "data-relevant": "false" }`) — permet à
    * un parent client de filtrer des lignes par CSS sans re-render ni state
@@ -149,5 +152,7 @@ export function Clickable({
     },
     ...dataAttrs,
   };
-  return as === "tr" ? <tr {...props}>{children}</tr> : <div {...props}>{children}</div>;
+  if (as === "tr") return <tr {...props}>{children}</tr>;
+  if (as === "li") return <li {...props}>{children}</li>;
+  return <div {...props}>{children}</div>;
 }

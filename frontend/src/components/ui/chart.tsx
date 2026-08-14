@@ -99,14 +99,43 @@ function graduations(min: number, max: number, n = 4): number[] {
   return out;
 }
 
+/** Prolongement calculé d'une série mesurée.
+ *
+ * `points` sont les abscisses PROJETÉES, dans le prolongement de la série. Le
+ * tracé part du dernier point mesuré : la projection est raccordée, jamais
+ * flottante.
+ *
+ * `bas`/`haut`, si fournis, dessinent le CÔNE d'incertitude — l'enveloppe des
+ * valeurs possibles, qui s'ouvre avec l'horizon. Les trois tableaux doivent
+ * avoir la même longueur. */
+export interface Projection {
+  points: number[];
+  bas?: number[];
+  haut?: number[];
+  /** Libellés d'abscisse des points projetés, pour l'axe horizontal. */
+  abscisses?: string[];
+  /** Nom du tracé en légende. */
+  libelle?: string;
+}
+
 /** Graphe de lignes — tendance dans le temps.
  *
  * `reference` trace un seuil (cible de DSO, budget) : discontinu, en gris, sans
- * marqueur — il ne doit jamais se confondre avec une mesure. */
+ * marqueur — il ne doit jamais se confondre avec une mesure.
+ *
+ * `projection` prolonge la PREMIÈRE série au-delà du mesuré. Le calculé s'y
+ * distingue par TROIS marques simultanées — teinte cyan (`--volt-strong`, la
+ * couleur de ce que la machine déduit), trait pointillé, et un cône
+ * d'incertitude qui s'ouvre. Trois et non une seule : la couleur seule tombe
+ * sous daltonisme et en niveaux de gris, et le pointillé seul se confondrait
+ * avec le trait de `reference`. Confondre mesuré et projeté est le défaut le
+ * plus coûteux d'un graphe de cockpit — il fait prendre une extrapolation pour
+ * un relevé. */
 export function LineChart({
   series,
   formatY,
   reference,
+  projection,
   zeroBase = true,
   hauteur,
   legende = true,
@@ -114,16 +143,34 @@ export function LineChart({
   series: SerieLigne[];
   formatY: (v: number) => string;
   reference?: { valeur: number; libelle: string };
+  projection?: Projection;
   zeroBase?: boolean;
   hauteur?: number;
   legende?: boolean;
 }) {
   const h = hauteur ?? CHART.h;
-  const { min, max } = echelle(
-    reference ? [...series, { cle: "_ref", libelle: "", couleur: "", points: [{ x: "", y: reference.valeur }] }] : series,
-    zeroBase,
-  );
-  const n = Math.max(...series.map((s) => s.points.length), 1);
+  // L'échelle doit englober le seuil ET la projection (cône compris) : sinon la
+  // courbe projetée sort du cadre, ou le cône est rogné par le haut.
+  const bornes: SerieLigne[] = [...series];
+  if (reference) {
+    bornes.push({ cle: "_ref", libelle: "", couleur: "", points: [{ x: "", y: reference.valeur }] });
+  }
+  if (projection) {
+    const extremes = [...projection.points, ...(projection.bas ?? []), ...(projection.haut ?? [])];
+    bornes.push({
+      cle: "_prj",
+      libelle: "",
+      couleur: "",
+      points: extremes.map((y) => ({ x: "", y })),
+    });
+  }
+  const { min, max } = echelle(bornes, zeroBase);
+  // Les abscisses projetées prolongent l'axe : la largeur du tracé se partage
+  // entre le mesuré et le projeté, ce qui garde un pas régulier entre tous les
+  // points. `nMes` reste l'index du dernier point mesuré — le raccord.
+  const nMes = Math.max(...series.map((s) => s.points.length), 1);
+  const nPrj = projection?.points.length ?? 0;
+  const n = nMes + nPrj;
   const plotW = CHART.w - CHART.padL - CHART.padR;
   const plotH = h - CHART.padT - CHART.padB;
   const px = (i: number) => CHART.padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
@@ -179,6 +226,46 @@ export function LineChart({
             </text>
           </>
         )}
+
+        {/* Cône d'incertitude — dessiné AVANT les séries pour rester en fond :
+            c'est une enveloppe, elle ne doit jamais couvrir un tracé. Le cône
+            part du dernier point mesuré (largeur nulle) et s'ouvre avec
+            l'horizon. */}
+        {projection?.bas && projection.haut && (() => {
+          const ancre = series[0]?.points ?? [];
+          const dernierMesure = [...ancre].reverse().find((p) => p.y !== null);
+          if (!dernierMesure || dernierMesure.y === null) return null;
+          const x0 = px(nMes - 1);
+          const y0 = py(dernierMesure.y);
+          const haut = projection.haut.map((v, i) => `L ${px(nMes + i)} ${py(v)}`).join(" ");
+          const bas = projection.bas
+            .map((v, i) => ({ v, i }))
+            .reverse()
+            .map(({ v, i }) => `L ${px(nMes + i)} ${py(v)}`)
+            .join(" ");
+          return <path className="cht-cone" d={`M ${x0} ${y0} ${haut} ${bas} Z`} />;
+        })()}
+
+        {/* Tracé projeté : cyan, pointillé, raccordé au dernier point mesuré. */}
+        {projection && (() => {
+          const ancre = series[0]?.points ?? [];
+          const dernierMesure = [...ancre].reverse().find((p) => p.y !== null);
+          if (!dernierMesure || dernierMesure.y === null) return null;
+          const d = [
+            `M ${px(nMes - 1)} ${py(dernierMesure.y)}`,
+            ...projection.points.map((v, i) => `L ${px(nMes + i)} ${py(v)}`),
+          ].join(" ");
+          return (
+            <g>
+              <path className="cht-prj" d={d} />
+              {projection.points.map((v, i) => (
+                <circle key={i} className="cht-dot-p" cx={px(nMes + i)} cy={py(v)} r={3.5}>
+                  <title>{`${projection.abscisses?.[i] ?? `+${i + 1}`} · ${formatY(v)} (projeté)`}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })()}
 
         {series.map((s) => {
           const pts = s.points.map((p, i) => ({ ...p, cx: px(i), cy: p.y === null ? null : py(p.y) }));
@@ -258,14 +345,25 @@ export function LineChart({
         })}
 
         {abscisses.map((p, i) =>
-          i % pasX === 0 || (i === n - 1 && montreDernier) ? (
+          i % pasX === 0 || (i === nMes - 1 && montreDernier) ? (
             <text key={p.x + i} x={px(i)} y={h - 10} textAnchor="middle" className="cht-tick">
               {p.x}
             </text>
           ) : null,
         )}
+        {/* Abscisses projetées : le dernier libellé est toujours écrit — c'est
+            l'horizon de la projection, l'information que le lecteur cherche. */}
+        {projection?.abscisses?.map((x, i) =>
+          (nMes + i) % pasX === 0 || i === nPrj - 1 ? (
+            <text key={`p${x}${i}`} x={px(nMes + i)} y={h - 10} textAnchor="middle" className="cht-tick">
+              {x}
+            </text>
+          ) : null,
+        )}
       </svg>
-      {legende && series.length > 1 && <ChartLegend series={series} />}
+      {(projection || (legende && series.length > 1)) && (
+        <ChartLegend series={series} projection={projection} legende={legende} />
+      )}
     </div>
   );
 }
@@ -559,11 +657,21 @@ export function ColumnChart({
 export function ChartLegend({
   series,
   inverse,
+  projection,
+  legende = true,
 }: {
   series: { cle: string; libelle: string; couleur: string }[];
   inverse?: boolean;
+  /** Ajoute les entrées « projeté » et « marge d'incertitude ». La pastille y
+   *  reprend la MARQUE du tracé (tiret pointillé, aplat translucide) et non un
+   *  carré plein : une légende doit porter le même signe que ce qu'elle nomme. */
+  projection?: Projection;
+  /** Passé à `false`, masque les séries mesurées et ne garde que la projection —
+   *  cas d'une série unique, où nommer « la » courbe n'apprend rien. */
+  legende?: boolean;
 }) {
-  const items = inverse ? [...series].reverse() : series;
+  const base = inverse ? [...series].reverse() : series;
+  const items = legende && series.length > 1 ? base : [];
   return (
     <ul className="cht-lg">
       {items.map((s) => (
@@ -572,6 +680,18 @@ export function ChartLegend({
           {s.libelle}
         </li>
       ))}
+      {projection && (
+        <li>
+          <i className="prj" aria-hidden="true" />
+          {projection.libelle ?? "Projeté"}
+        </li>
+      )}
+      {projection?.bas && projection.haut && (
+        <li>
+          <i className="cone" aria-hidden="true" />
+          Marge d&apos;incertitude
+        </li>
+      )}
     </ul>
   );
 }

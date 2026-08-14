@@ -80,6 +80,8 @@ export async function DcVisites() {
           unit="% des comptes actifs"
           reading={`${formatNumber(c.nb_comptes_sans_visite)} comptes actifs sans visite enregistrée`}
           readingVariant="neg"
+          // Taux de couverture terrain : une part des comptes actifs, donc un arc.
+          cadran={{ pct: c.taux_couverture_pct, ton: "r" }}
           detail={{
             kicker: "Indicateur · couverture terrain",
             title: "Comptes actifs couverts par une visite",

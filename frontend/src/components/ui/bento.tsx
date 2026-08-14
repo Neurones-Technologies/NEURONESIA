@@ -11,6 +11,7 @@ export function Bento({ children }: { children: ReactNode }) {
 
 export function Tile({
   span = 12,
+  col,
   title,
   kick,
   quiet,
@@ -19,6 +20,15 @@ export function Tile({
   children,
 }: {
   span?: Span;
+  /** Colonne de départ (1 à 12), quand la tuile doit se placer sous une voisine
+   *  précise plutôt que combler le premier trou de la grille.
+   *
+   *  La grille remplit de gauche à droite : une tuile de 5 colonnes placée après
+   *  une tuile de 7 remonte automatiquement dans la gouttière de gauche laissée
+   *  libre, ce qui la met sous la MAUVAISE voisine. `col={8}` la cale sous une
+   *  tuile de droite (7 + 1). À n'utiliser que là où la colonne porte du sens ;
+   *  sans cette prop, le comportement de remplissage est inchangé. */
+  col?: number;
   title?: string;
   kick?: string;
   quiet?: boolean;
@@ -32,7 +42,17 @@ export function Tile({
 }) {
   return (
     <div
-      className={`tile t${span}${quiet ? " tile--q" : ""}${rows === 2 ? " tile--tall" : ""}${fill ? " tile--fill" : ""}`}
+      className={`tile t${span}${quiet ? " tile--q" : ""}${rows === 2 ? " tile--tall" : ""}${fill ? " tile--fill" : ""}${col ? " tile--col" : ""}`}
+      // `gridColumn` en style inline plutôt qu'une classe : la colonne de départ
+      // est une décision de MISE EN PAGE d'un écran précis, pas un jeton du
+      // système — douze classes `.c1`…`.c12` pour deux appels seraient du poids
+      // mort dans la feuille de styles.
+      //
+      // La classe `tile--col` l'accompagne pour que les points de rupture
+      // puissent ANNULER ce calage (cf. globals.css) : un style inline l'emporte
+      // sur les règles de `@media`, et la tuile resterait sinon coincée en
+      // colonne 8 sur un écran qui n'a plus qu'une colonne.
+      style={col ? { gridColumn: `${col} / span ${span}` } : undefined}
     >
       {(title || kick) && (
         <div className="tile-h">
@@ -117,6 +137,62 @@ export function Brief({
  * écran qui n'a pas encore été hiérarchisé ne change pas d'apparence. */
 export type RangStat = "principal" | "secondaire" | "contexte";
 
+/** Cadran de mesure d'une tuile d'indicateur.
+ *
+ * `pct` est la course de l'arc, de 0 à 100. Le cadran ne doit être posé que
+ * lorsqu'une PROPORTION a du sens — une part, un taux, une couverture : un
+ * montant absolu n'a pas de borne, et son arc ne voudrait rien dire.
+ *
+ * `ton` colore l'arc. Sans valeur, c'est l'orange de marque ; `volt` désigne
+ * une valeur CALCULÉE (indice, score, projection), les autres reprennent les
+ * verdicts habituels de l'interface. */
+export interface CadranStat {
+  pct: number;
+  ton?: "s" | "r" | "w" | "v";
+}
+
+/** Arc gradué d'une tuile d'indicateur — SVG serveur, sans dépendance.
+ *
+ * Le cercle de valeur est tracé par `stroke-dasharray` sur une circonférence
+ * connue : pas de calcul de chemin, pas de JS. La rotation de -90° (portée par
+ * le CSS) fait partir l'arc du haut du cadran plutôt que de sa droite. */
+function Cadran({ pct, ton }: CadranStat) {
+  const R = 40;
+  const C = 2 * Math.PI * R; // ≈ 251,3
+  const borne = Math.max(0, Math.min(100, pct));
+  const course = (borne / 100) * C;
+  // À ZÉRO, l'arc ne doit rien peindre. Le trait est en `stroke-linecap:round`
+  // (une valeur faible reste visible plutôt que de disparaître) : à 0, ce même
+  // arrondi laissait un point orange en haut du cadran, qui se lit comme une
+  // valeur minuscule alors que la mesure est nulle. Constaté sur l'écran DC
+  // « Marché » : « 0 signal sur 0 collecté » affichait une amorce d'arc.
+  const vide = borne === 0;
+  // Douze crans, un par heure de cadran : posés sur le cercle par rotation,
+  // ce qui évite d'écrire douze paires de coordonnées à la main.
+  const crans = Array.from({ length: 12 }, (_, i) => i * 30);
+  return (
+    <div className={`dialg${ton ? ` dialg--${ton}` : ""}`} aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle className="dialg-t" cx="50" cy="50" r={R} />
+        {!vide && (
+          <circle
+            className="dialg-v"
+            cx="50"
+            cy="50"
+            r={R}
+            strokeDasharray={`${course.toFixed(1)} ${(C - course).toFixed(1)}`}
+          />
+        )}
+        <g className="dialg-c">
+          {crans.map((a) => (
+            <line key={a} x1="50" y1="4" x2="50" y2="9" transform={`rotate(${a} 50 50)`} />
+          ))}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 /** Tuile d'indicateur : grand chiffre + lecture + histogramme de tendance. */
 export function StatTile({
   span = 4,
@@ -130,6 +206,7 @@ export function StatTile({
   detail,
   rang = "secondaire",
   signeNeutre,
+  cadran,
 }: {
   span?: Span;
   label: string;
@@ -145,12 +222,18 @@ export function StatTile({
    *  négatif est le régime normal de l'indicateur (une variation de trésorerie
    *  n'est pas une alerte), sans quoi l'écran crie en permanence. */
   signeNeutre?: boolean;
+  /** Arc gradué à gauche du chiffre. Omis : la tuile garde sa mise en page
+   *  d'origine — le cadran ne s'allume que là où une proportion a du sens. */
+  cadran?: CadranStat;
 }) {
   // Un montant négatif se lit d'abord au signe, pas à la ligne de lecture
   // dessous : « -1712 M FCFA » en encre neutre se lisait comme un montant
   // ordinaire. La règle ne vaut que pour le vrai signe moins d'un nombre.
   const negatif = !signeNeutre && /^-\s*\d/.test(value.trim());
-  const body = (
+  // Le cadran se pose À GAUCHE du bloc chiffré, jamais autour de lui : le
+  // libellé, le chiffre et la lecture gardent leur ordre et leur taille, et
+  // une tuile sans cadran rend exactement l'arbre d'avant (pas de `.stat-w`).
+  const chiffre = (
     <>
       <div className="tile-h">
         <h3>{label}</h3>
@@ -160,6 +243,18 @@ export function StatTile({
         {unit && <span className="stat-u">{unit}</span>}
       </div>
       {reading && <div className={`stat-d${readingVariant ? " " + readingVariant : ""}`}>{reading}</div>}
+    </>
+  );
+  const body = (
+    <>
+      {cadran ? (
+        <div className="stat-w">
+          <Cadran pct={cadran.pct} ton={cadran.ton} />
+          <div>{chiffre}</div>
+        </div>
+      ) : (
+        chiffre
+      )}
       {spark && spark.length > 0 && (
         <div className="spark" aria-hidden="true">
           {spark.map((h, i) => (
@@ -303,6 +398,91 @@ export function Lst({
       ) : (
         lignes
       )}
+    </div>
+  );
+}
+
+export interface OrbitPart {
+  /** Nom de la part, tel qu'il s'affiche en légende. */
+  name: string;
+  /** Valeur formatée (montant, effectif) — la légende l'affiche telle quelle. */
+  value: string;
+  /** Course de l'arc, de 0 à 100. Sert AUSSI de chiffre en légende, sauf si
+   *  `pctLabel` est fourni. */
+  pct: number;
+  /** Chiffre à écrire en légende, quand il diffère de la course de l'arc.
+   *
+   *  Sert aux répartitions PEU CONCENTRÉES : sur 650 comptes, les premiers
+   *  pèsent 11 %, 5 %, 5 % — des arcs tracés sur une course de 100 % y sont
+   *  illisibles. On rapporte alors les arcs au premier rang (`pct`) pour que la
+   *  comparaison se voie, tout en écrivant la part réelle du total
+   *  (`pctLabel`). L'arc donne le rapport, le chiffre donne la mesure. */
+  pctLabel?: number;
+  /** Teinte de la pastille et de l'arc. Doit venir de `chart-palette.ts`. */
+  couleur: string;
+  detail?: DetailCard;
+}
+
+/** Répartition d'un total en anneaux concentriques.
+ *
+ * Les TROIS PREMIÈRES parts sont tracées, une par anneau : le rayon code le
+ * rang, l'arc code la part. La légende, elle, porte toutes les parts — rien
+ * n'est retiré de la lecture, seul le dessin est borné (cf. `.orbit` dans
+ * globals.css pour le pourquoi de cette limite).
+ *
+ * Attend une liste DÉJÀ TRIÉE, du plus grand au plus petit : l'anneau extérieur
+ * doit être la part dominante, sans quoi le rang cesse de vouloir dire quelque
+ * chose. */
+export function Orbit({ parts }: { parts: OrbitPart[] }) {
+  // Trois rayons décroissants, épaisseur de trait 11 : l'écart de 13 laisse
+  // 2 px de respiration entre deux anneaux voisins.
+  const RAYONS = [44, 31, 18];
+  const traces = parts.slice(0, RAYONS.length);
+  return (
+    <div className="orbit">
+      <div className="orbit-g" aria-hidden="true">
+        <svg viewBox="0 0 100 100">
+          {traces.map((p, i) => {
+            const r = RAYONS[i];
+            const c = 2 * Math.PI * r;
+            const course = (Math.max(0, Math.min(100, p.pct)) / 100) * c;
+            return (
+              <g key={p.name}>
+                <circle className="orbit-t" cx="50" cy="50" r={r} />
+                {course > 0 && (
+                  <circle
+                    className="orbit-a"
+                    cx="50"
+                    cy="50"
+                    r={r}
+                    stroke={p.couleur}
+                    strokeDasharray={`${course.toFixed(1)} ${(c - course).toFixed(1)}`}
+                  />
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <ul className="orbit-lg">
+        {parts.map((p) => {
+          const ligne = (
+            <>
+              <i style={{ background: p.couleur }} aria-hidden="true" />
+              <span className="orbit-n">{p.name}</span>
+              <b>{p.value}</b>
+              <span className="orbit-p">{(p.pctLabel ?? p.pct).toFixed(0)} %</span>
+            </>
+          );
+          return p.detail ? (
+            <Clickable key={p.name} as="li" className="clk" detail={p.detail}>
+              {ligne}
+            </Clickable>
+          ) : (
+            <li key={p.name}>{ligne}</li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
