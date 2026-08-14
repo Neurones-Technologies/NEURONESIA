@@ -2,6 +2,7 @@ import { getQualitePipe } from "@/lib/api/commercial";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
+import { ScreenNotes } from "@/components/ui/screen-notes";
 
 /** Onglet « À closer et à compléter » — §4 du compte-rendu DC.
  *
@@ -37,9 +38,17 @@ export async function DcPipeQualite() {
 
   return (
     <>
+      {/* Titre conservé : sur cet écran la note n'énonce pas des hypothèses de
+          mesure mais la règle de tri des trois piles — c'est elle qui explique
+          pourquoi une opportunité tombe dans « à closer » plutôt qu'ailleurs. */}
+      {/* <ScreenNotes titre="Règle appliquée" notes={[qualite.note]} /> */}
+
       <div className="kpi-row">
+        {/* « À closer » est la seule des trois piles qui porte une action datée :
+            les deux autres sont de la mise en ordre du pipe. */}
         <StatTile
           span={4}
+          rang="principal"
           label="À closer"
           value={formatNumber(t.nb_a_closer)}
           unit="opportunités"
@@ -260,9 +269,6 @@ export async function DcPipeQualite() {
           )}
         </Tile>
 
-        <Tile span={12} title="Règle appliquée" quiet>
-          <Note style={{ marginTop: 0 }}>{qualite.note}</Note>
-        </Tile>
       </Bento>
     </>
   );

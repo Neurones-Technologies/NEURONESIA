@@ -67,6 +67,12 @@ _VEILLE_ENTRY_NEW_COLUMNS = {
     "justification": "VARCHAR(1000) NOT NULL DEFAULT ''",
     "origin": "VARCHAR(20) NOT NULL DEFAULT 'source'",
     "debrief": "TEXT NOT NULL DEFAULT ''",
+    # Lecture marché du signal, lue par uc_commercial.fetch_veille : sentinelle ""
+    # et non NULL, le taux de remplissage d'`axe` étant servi comme taux de
+    # couverture de la veille.
+    "axe": "VARCHAR(100) NOT NULL DEFAULT ''",
+    "so_what": "VARCHAR(1000) NOT NULL DEFAULT ''",
+    "action_suggeree": "VARCHAR(1000) NOT NULL DEFAULT ''",
 }
 
 
@@ -108,9 +114,15 @@ def _migrate_sale_orders(sync_conn):
 # `offer_family` : famille d'offre déduite du libellé (cf. uc_offermix.taxonomy),
 # NULL tant qu'un libellé ne permet pas de trancher — nullable assumé, c'est ce
 # NULL qui alimente le taux de couverture affiché au Directeur Commercial.
+# `date_closed`/`write_date` : datation du cycle de vente, lues par
+# uc_commercial.fetch_opportunites. Nullable sans défaut — une date inventée
+# fausserait la durée de cycle ; elles restent vides jusqu'à la prochaine sync
+# Odoo, qui les renseigne depuis crm.lead.
 _OPPORTUNITY_NEW_COLUMNS = {
     "order_ids": "JSON NOT NULL DEFAULT '[]'",
     "offer_family": "VARCHAR(30)",
+    "date_closed": "DATETIME",
+    "write_date": "DATETIME",
 }
 
 

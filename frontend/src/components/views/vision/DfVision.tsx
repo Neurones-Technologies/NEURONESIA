@@ -66,8 +66,12 @@ export async function DfVision() {
       />
 
       <Bento>
+        {/* Ces trois tuiles vivent dans le Bento (chiffre à pleine taille) et non
+            dans une `.kpi-row` : le rang n'y change que le fond et le filet.
+            L'encours est l'exposition, c'est-à-dire l'objet de l'écran. */}
         <StatTile
           span={4}
+          rang="principal"
           label="Encours client"
           value={formatMFcfa(exposition)}
           unit="M FCFA"
@@ -166,11 +170,10 @@ export async function DfVision() {
           }}
         />
 
-        <Tile span={12} title="Dérive du délai de paiement" kick="narration">
-          <AnalysisSlot load={getUnpaidAnalysis} />
-        </Tile>
-
-        <Tile span={7} title="Où se loge le retard" kick="par débiteur">
+        {/* Appariées sur une ligne : les deux faces d'un même encours — par
+            débiteur à gauche, par facture à droite. Le tableau de droite garde son
+            `overflowX` et scrolle dans sa tuile plutôt que d'élargir la ligne. */}
+        <Tile span={6} title="Où se loge le retard" kick="par débiteur">
           {topDebtors.length > 0 ? (
             <>
               <HintLine>Cliquez un compte pour son exposition détaillée</HintLine>
@@ -211,34 +214,7 @@ export async function DfVision() {
           )}
         </Tile>
 
-        {unpaid && (
-          <Tile span={5} title="Structure de l'exposition" kick="par statut de facture">
-            <Bars
-              rows={Object.entries(unpaid.exposure.par_statut).map(([statut, v]) => ({
-                name: statut,
-                sub: `${formatNumber(v.nb)} facture(s)`,
-                value: `${formatMFcfa(v.montant)} M`,
-                pct: exposition ? (v.montant / exposition) * 100 : 0,
-                variant: "w" as const,
-              }))}
-            />
-            {/* <FootNote>
-              {formatMFcfa(retard90)} M FCFA sur {formatNumber(unpaid.exposure.retard_90j_nb_factures)} facture(s) sont
-              échus depuis plus de 90 jours, soit {formatPct(part90, 0)} % de l&apos;exposition totale.
-            </FootNote> */}
-          </Tile>
-        )}
-
-        <Tile span={12} title="Érosion de marge" kick="narration · proxy">
-          <AnalysisSlot load={getMarginsAnalysis} />
-          {/* <FootNote>
-            Proxy assumé · le détail des lignes de commandes fournisseurs par référence n&apos;est pas accessible depuis
-            ce profil. La comparaison marge provisoire / définitive est le signal d&apos;érosion le plus proche
-            disponible ici.
-          </FootNote> */}
-        </Tile>
-
-        <Tile span={12} title="Factures à investiguer" kick={`${formatNumber(topInvoices.length)} plus gros encours`}>
+        <Tile span={6} title="Factures à investiguer" kick={`${formatNumber(topInvoices.length)} plus gros encours`}>
           {topInvoices.length > 0 ? (
             <>
               <HintLine>Cliquez une facture pour son contexte</HintLine>
@@ -295,6 +271,24 @@ export async function DfVision() {
           ) : (
             <Note style={{ marginTop: 0 }}>Aucune facture impayée à afficher.</Note>
           )}
+        </Tile>
+
+        {/* Les deux narrations de l'écran, appariées sur une seule ligne et
+            placées en clôture.
+            Elles répondent à la même question sous deux angles (ce qui n'est pas
+            encaissé, ce qui n'est pas gagné) et se lisent l'une contre l'autre —
+            d'où la ligne partagée plutôt que deux pleines largeurs éloignées.
+            En fin d'écran parce qu'elles commentent les chiffres qui précèdent :
+            le DAF lit d'abord ses indicateurs, ses débiteurs et ses factures,
+            puis l'analyse qui les relie. Pliées, elles annoncent leur sujet sans
+            imposer leurs trois paragraphes : le lecteur ouvre celle qui le
+            concerne. */}
+        <Tile span={6} title="Dérive du délai de paiement" kick="narration">
+          <AnalysisSlot load={getUnpaidAnalysis} pliable titrePli="Lire l'analyse du délai de paiement" />
+        </Tile>
+
+        <Tile span={6} title="Érosion de marge" kick="narration · proxy">
+          <AnalysisSlot load={getMarginsAnalysis} pliable titrePli="Lire l'analyse de la marge" />
         </Tile>
       </Bento>
     </>

@@ -3,7 +3,12 @@
 import Link, { useLinkStatus } from "next/link";
 import type { ComponentProps } from "react";
 
-type NavLinkProps = Omit<ComponentProps<typeof Link>, "prefetch">;
+type NavLinkProps = Omit<ComponentProps<typeof Link>, "prefetch"> & {
+  /** `false` : pas de préchargement au montage, seulement au survol (défaut de
+   * `next/link`). À utiliser quand le menu est long ET ses pages coûteuses — voir
+   * la note sur le coût serveur dans le commentaire de `NavLink`. */
+  eager?: boolean;
+};
 
 /** Barre d'attente du lien cliqué. `useLinkStatus` n'est lisible que dans un
  * descendant du `<Link>` — d'où ce composant plutôt qu'un état porté par
@@ -42,10 +47,19 @@ function NavPending() {
  * Le prefetch ne couvre pas tout : premier clic sur une page fraîche, préchargement
  * encore en vol, cache routeur expiré, réseau du VPS. Dans ces cas le clic reste
  * sans réponse le temps du rendu serveur — et il n'y a plus de `loading.tsx` pour
- * l'occuper. `NavPending` marque alors l'onglet cliqué. */
-export function NavLink({ children, ...props }: NavLinkProps) {
+ * l'occuper. `NavPending` marque alors l'onglet cliqué.
+ *
+ * Le cas prévu par la note ci-dessus est arrivé avec le cockpit DC : quatorze
+ * sections réparties en six chapitres, dont les plus lourdes (classement des
+ * comptes, marché) coûtent 0,6 à 1,6 s de rendu serveur chacune. Précharger les
+ * onze liens visibles à chaque navigation aurait multiplié par onze la charge du
+ * backend — deux workers uvicorn — pour des pages que le DC n'ouvre pas toutes.
+ * D'où `eager={false}`, passé par l'en-tête aux profils à menu long : le
+ * préchargement redevient déclenché par le survol, et `NavPending` occupe
+ * l'attente du clic non survolé. */
+export function NavLink({ children, eager = true, ...props }: NavLinkProps) {
   return (
-    <Link {...props} prefetch>
+    <Link {...props} prefetch={eager}>
       {children}
       <NavPending />
     </Link>

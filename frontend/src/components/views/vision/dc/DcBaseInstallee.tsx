@@ -1,7 +1,7 @@
 import { getCrossSellAnalysis, getCrossSellSignals } from "@/lib/api/crosssell";
 import { getAccountActivity } from "@/lib/api/dashboard";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, Reste, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
 import { DORMANCE_TAG, DORMANCE_VARIANT } from "./shared";
@@ -143,11 +143,16 @@ export async function DcBaseInstallee() {
               },
             }))}
           />
+          <Reste
+            affiches={Math.min(6, dormance.decrochages.length)}
+            total={dormance.decrochages.length}
+            nom="comptes décrochés"
+          />
         </Tile>
       )}
 
       <Tile span={12} title="Ciblage cross-sell et renouvellement" kick="M1 · narration">
-        <AnalysisSlot load={getCrossSellAnalysis} />
+        <AnalysisSlot load={getCrossSellAnalysis} pliable titrePli="Lire l'analyse du ciblage" />
         {crosssell && (
           <div style={{ marginTop: 18 }}>
             <HintLine>Cliquez un compte pour le signal détaillé</HintLine>

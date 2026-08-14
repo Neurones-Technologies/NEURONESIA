@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Variant } from "@/lib/types";
 import { Clickable, DetailCard } from "./detail";
+import { LstRepli } from "./lst-repli";
 
 type Span = 3 | 4 | 5 | 6 | 7 | 8 | 12;
 
@@ -13,16 +14,26 @@ export function Tile({
   title,
   kick,
   quiet,
+  rows,
+  fill,
   children,
 }: {
   span?: Span;
   title?: string;
   kick?: string;
   quiet?: boolean;
+  /** `2` : la tuile tient la hauteur de deux rangées, pour faire face à une
+   *  colonne de deux tuiles empilées. Sans valeur, comportement d'avant. */
+  rows?: 2;
+  /** Étire la tuile à la hauteur de sa rangée, pour qu'elle ait le même cadre que
+   *  sa voisine malgré un contenu plus court. */
+  fill?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={`tile t${span}${quiet ? " tile--q" : ""}`}>
+    <div
+      className={`tile t${span}${quiet ? " tile--q" : ""}${rows === 2 ? " tile--tall" : ""}${fill ? " tile--fill" : ""}`}
+    >
       {(title || kick) && (
         <div className="tile-h">
           {title && <h3>{title}</h3>}
@@ -55,6 +66,17 @@ export function Brief({
 }) {
   return (
     <div className="brief">
+      {/* Marque « texte généré par l'IA », en haut à droite du panneau.
+          Le tracé est celui de l'icône Copilote du rail (cf. shell/Rail.tsx) :
+          l'étincelle désigne déjà l'IA ailleurs dans l'interface, un second
+          dessin pour la même idée ferait deux vocabulaires.
+          `title` plutôt que `aria-hidden` : l'origine du texte est une
+          information, pas une décoration — elle doit être lisible au lecteur
+          d'écran comme au survol. */}
+      <svg className="brief-ia" viewBox="0 0 24 24" role="img" aria-label="Généré par l'IA">
+        <title>Généré par l&apos;IA</title>
+        <path d="M12 3l1.9 4.9L19 9.8l-5.1 1.9L12 17l-1.9-5.3L5 9.8l5.1-1.9zM18 15.5l.9 2.3 2.1.8-2.1.8-.9 2.1-.9-2.1-2.1-.8 2.1-.8z" />
+      </svg>
       <p className="brief-k">
         <span className="dot" />
         {kicker}
@@ -83,6 +105,18 @@ export function Brief({
   );
 }
 
+/** Rang de lecture d'un indicateur dans un bandeau.
+ *
+ * Quatre indicateurs de taille rigoureusement identique ne désignent aucun
+ * premier : le lecteur doit lire les quatre libellés pour trouver celui qui
+ * compte. Le rang porte cette hiérarchie sans rien retirer de l'écran — un
+ * indicateur de couverture ou de fiabilité passe en `contexte`, il n'est pas
+ * supprimé.
+ *
+ * `secondaire` est le défaut et reproduit exactement le rendu antérieur : un
+ * écran qui n'a pas encore été hiérarchisé ne change pas d'apparence. */
+export type RangStat = "principal" | "secondaire" | "contexte";
+
 /** Tuile d'indicateur : grand chiffre + lecture + histogramme de tendance. */
 export function StatTile({
   span = 4,
@@ -94,6 +128,8 @@ export function StatTile({
   spark,
   sparkAxis,
   detail,
+  rang = "secondaire",
+  signeNeutre,
 }: {
   span?: Span;
   label: string;
@@ -104,14 +140,23 @@ export function StatTile({
   spark?: number[];
   sparkAxis?: string[];
   detail?: DetailCard;
+  rang?: RangStat;
+  /** Coupe la coloration automatique du négatif. À poser quand un montant
+   *  négatif est le régime normal de l'indicateur (une variation de trésorerie
+   *  n'est pas une alerte), sans quoi l'écran crie en permanence. */
+  signeNeutre?: boolean;
 }) {
+  // Un montant négatif se lit d'abord au signe, pas à la ligne de lecture
+  // dessous : « -1712 M FCFA » en encre neutre se lisait comme un montant
+  // ordinaire. La règle ne vaut que pour le vrai signe moins d'un nombre.
+  const negatif = !signeNeutre && /^-\s*\d/.test(value.trim());
   const body = (
     <>
       <div className="tile-h">
         <h3>{label}</h3>
       </div>
-      <div>
-        <span className="stat-v num">{value}</span>
+      <div className="stat-l">
+        <span className={`stat-v num${negatif ? " neg" : ""}`}>{value}</span>
         {unit && <span className="stat-u">{unit}</span>}
       </div>
       {reading && <div className={`stat-d${readingVariant ? " " + readingVariant : ""}`}>{reading}</div>}
@@ -133,9 +178,10 @@ export function StatTile({
       )}
     </>
   );
-  if (!detail) return <div className={`tile t${span}`}>{body}</div>;
+  const cls = `tile t${span}${rang !== "secondaire" ? ` stat--${rang === "principal" ? "p" : "c"}` : ""}`;
+  if (!detail) return <div className={cls}>{body}</div>;
   return (
-    <Clickable className={`tile t${span}`} detail={detail}>
+    <Clickable className={cls} detail={detail}>
       {body}
     </Clickable>
   );
@@ -150,32 +196,53 @@ export interface BarRow {
   detail?: DetailCard;
 }
 
-export function Bars({ rows }: { rows: BarRow[] }) {
+/** Barres classées d'un écran.
+ *
+ * `replierApres` replie la queue derrière une bascule « Voir les N autres », même
+ * mécanique que `Lst` (cf. ui/lst-repli.tsx). Option et non défaut : les autres
+ * appels affichent des listes déjà coupées à la source. */
+export function Bars({
+  rows,
+  replierApres,
+  nom,
+}: {
+  rows: BarRow[];
+  /** Nombre de barres visibles avant repli. Omis : toutes, comme avant. */
+  replierApres?: number;
+  /** Nom des lignes au pluriel, pour le libellé de la bascule. */
+  nom?: string;
+}) {
+  const lignes = rows.map((r, i) => {
+    const inner = (
+      <>
+        <div className="bar-n">
+          {r.name}
+          {r.sub && <span>{r.sub}</span>}
+          <div className="bar-t">
+            <i className={r.variant} style={{ width: `${Math.max(2, Math.min(100, r.pct))}%` }} />
+          </div>
+        </div>
+        <div className="bar-v">{r.value}</div>
+      </>
+    );
+    return r.detail ? (
+      <Clickable key={i} className="bar-r" detail={r.detail}>
+        {inner}
+      </Clickable>
+    ) : (
+      <div key={i} className="bar-r">
+        {inner}
+      </div>
+    );
+  });
+
   return (
     <div className="bars">
-      {rows.map((r, i) => {
-        const inner = (
-          <>
-            <div className="bar-n">
-              {r.name}
-              {r.sub && <span>{r.sub}</span>}
-              <div className="bar-t">
-                <i className={r.variant} style={{ width: `${Math.max(2, Math.min(100, r.pct))}%` }} />
-              </div>
-            </div>
-            <div className="bar-v">{r.value}</div>
-          </>
-        );
-        return r.detail ? (
-          <Clickable key={i} className="bar-r" detail={r.detail}>
-            {inner}
-          </Clickable>
-        ) : (
-          <div key={i} className="bar-r">
-            {inner}
-          </div>
-        );
-      })}
+      {replierApres !== undefined ? (
+        <LstRepli lignes={lignes} visibles={replierApres} nom={nom} />
+      ) : (
+        lignes
+      )}
     </div>
   );
 }
@@ -188,36 +255,93 @@ export interface LstItem {
   detail?: DetailCard;
 }
 
-export function Lst({ items }: { items: LstItem[] }) {
+/** Liste numérotée d'un écran.
+ *
+ * `replierApres` replie la queue derrière une bascule « Voir les N autres »
+ * (cf. ui/lst-repli.tsx). Option et non comportement par défaut : la trentaine
+ * d'appels existants affichent des listes déjà coupées à la source par un
+ * `.slice()`, et les replier d'office cacherait des lignes que l'écran annonce
+ * comme affichées. Sans cette prop, le rendu est celui d'avant — entièrement
+ * serveur, sans JavaScript. */
+export function Lst({
+  items,
+  replierApres,
+  nom,
+}: {
+  items: LstItem[];
+  /** Nombre de lignes visibles avant repli. Omis : liste entière, comme avant. */
+  replierApres?: number;
+  /** Nom des lignes au pluriel, pour le libellé de la bascule. */
+  nom?: string;
+}) {
+  const lignes = items.map((it, i) => {
+    const inner = (
+      <>
+        <b>{String(i + 1).padStart(2, "0")}</b>
+        <span className="lst-t">
+          <b>{it.title}</b>
+          {it.sub && <span>{it.sub}</span>}
+        </span>
+        <span className={`tag tag--${it.tagVariant}`}>{it.tag}</span>
+      </>
+    );
+    return it.detail ? (
+      <Clickable key={i} className="lst-i" detail={it.detail}>
+        {inner}
+      </Clickable>
+    ) : (
+      <div key={i} className="lst-i">
+        {inner}
+      </div>
+    );
+  });
+
   return (
     <div className="lst">
-      {items.map((it, i) => {
-        const inner = (
-          <>
-            <b>{String(i + 1).padStart(2, "0")}</b>
-            <span className="lst-t">
-              <b>{it.title}</b>
-              {it.sub && <span>{it.sub}</span>}
-            </span>
-            <span className={`tag tag--${it.tagVariant}`}>{it.tag}</span>
-          </>
-        );
-        return it.detail ? (
-          <Clickable key={i} className="lst-i" detail={it.detail}>
-            {inner}
-          </Clickable>
-        ) : (
-          <div key={i} className="lst-i">
-            {inner}
-          </div>
-        );
-      })}
+      {replierApres !== undefined ? (
+        <LstRepli lignes={lignes} visibles={replierApres} nom={nom} />
+      ) : (
+        lignes
+      )}
     </div>
   );
 }
 
 export function FootNote({ children }: { children: ReactNode }) {
   return <p className="foot-n">{children}</p>;
+}
+
+/** Pied de liste tronquée : dit combien de lignes ne sont pas affichées.
+ *
+ * Les listes des écrans sont coupées à 5, 6, 8 ou 10 lignes par un `.slice()`.
+ * Sans mention, l'écran se lit comme exhaustif : sur les comptes du portefeuille,
+ * « 650 comptes classés » côtoyait une liste de 8 lignes sans que rien ne dise où
+ * étaient passés les 642 autres. Le total est déjà connu du composant appelant —
+ * il ne coûte qu'une ligne de le publier.
+ *
+ * Ne rend rien quand la liste est complète : pas de « et 0 autres ». */
+export function Reste({
+  affiches,
+  total,
+  nom = "lignes",
+  /** Où retrouver le reste, quand une autre vue le porte. */
+  ou,
+}: {
+  affiches: number;
+  total: number;
+  nom?: string;
+  ou?: string;
+}) {
+  const reste = total - affiches;
+  if (reste <= 0) return null;
+  // Formulation sans accord : `nom` est fourni par l'appelant et peut être des
+  // deux genres (« comptes », « créances »).
+  return (
+    <p className="reste">
+      {affiches} {nom} sur {total} · reste {reste}
+      {ou ? ` · ${ou}` : ""}
+    </p>
+  );
 }
 
 export function HintLine({ children }: { children: ReactNode }) {

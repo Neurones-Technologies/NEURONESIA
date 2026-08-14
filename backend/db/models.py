@@ -273,6 +273,13 @@ class VeilleEntryModel(Base):
     organisation: Mapped[str] = mapped_column(String(255), default="")
     justification: Mapped[str] = mapped_column(String(1000), default="")
     origin: Mapped[str] = mapped_column(String(20), default="source")  # "source" | "web"
+    # Lecture marché du signal (lue par uc_commercial.fetch_veille) : `axe` est
+    # l'axe de marché rattaché au signal — son taux de remplissage EST le taux de
+    # couverture servi au DC, d'où la sentinelle "" plutôt que NULL. `so_what` et
+    # `action_suggeree` portent l'interprétation et la suite à donner.
+    axe: Mapped[str] = mapped_column(String(100), default="")
+    so_what: Mapped[str] = mapped_column(String(1000), default="")
+    action_suggeree: Mapped[str] = mapped_column(String(1000), default="")
     # Débriefing pré-généré au scan (Claude lit la page réelle) : affiché tel quel
     # au clic, sans nouvelle génération ni lecture web. Vide = pas encore généré.
     debrief: Mapped[str] = mapped_column(Text, default="")
@@ -306,6 +313,12 @@ class OpportunityModel(Base):
     salesperson_name: Mapped[str] = mapped_column(String(255), default="")
     deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Datation du CYCLE de vente (crm.lead.date_closed / write_date) : `date_closed`
+    # n'est renseignée que sur les opportunités effectivement closes — NULL sur tout
+    # ce qui est encore au pipe, d'où le nullable. C'est le couple created_at →
+    # date_closed qui donne la durée de cycle mesurée (cf. uc_commercial/statique.py).
+    date_closed: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    write_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     order_ids: Mapped[list] = mapped_column(JSON, default=list)  # IDs Odoo des sale.order générés par cette opportunité
     # Famille d'offre DÉDUITE du libellé (modules.uc_offermix.taxonomy) : logiciel /
     # reseau / equipement / services, NULL si le libellé ne permet pas de trancher.

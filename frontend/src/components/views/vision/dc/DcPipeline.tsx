@@ -1,4 +1,3 @@
-import { getBriefing } from "@/lib/api/briefing";
 import {
   getAccountActivity,
   getForecastAnalysis,
@@ -6,27 +5,28 @@ import {
   getPerformanceSummary,
 } from "@/lib/api/dashboard";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, Brief, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
 
-/** Onglet d'ouverture du cockpit DC : le briefing du jour, le bandeau des trois
+/** « Pipeline et forecast » — chapitre 4 du compte-rendu DC : le bandeau des trois
  * indicateurs de cadrage, puis le forecast lui-même.
  *
  * Le bandeau croise trois sources (dormance, performance, forecast) : c'est un
- * choix assumé de garder les trois chiffres côte à côte en tête de cockpit,
- * au prix de deux appels dont cet onglet n'utilise qu'une valeur chacun. */
+ * choix assumé de garder les trois chiffres côte à côte, au prix de deux appels
+ * dont cet onglet n'utilise qu'une valeur chacun.
+ *
+ * PAS DE PANNEAU D'OUVERTURE ici, contrairement à l'écran d'entrée du cockpit. Le
+ * briefing du jour se lit sur « Tendances et marché », premier onglet du premier
+ * chapitre ; un second panneau sombre sur cet écran redisait en prose ce que les
+ * trois indicateurs et la tuile « Répartition du forecast par étape » montrent
+ * déjà chiffré. L'écran commence donc directement par ses indicateurs. */
 export async function DcPipeline() {
-  const [forecast, performance, briefing, dormance] = await Promise.all([
+  const [forecast, performance, dormance] = await Promise.all([
     getForecastPipelineWeighted(),
     getPerformanceSummary(),
-    getBriefing(),
     getAccountActivity(),
   ]);
-
-  const briefLines = briefing?.section?.resume?.length
-    ? briefing.section.resume
-    : (briefing?.section?.bullets ?? []).slice(0, 5);
 
   const opportunitesAtRisk = forecast.opportunities.filter((o) => o.at_risk);
   const nbAtRisk = opportunitesAtRisk.length;
@@ -49,36 +49,18 @@ export async function DcPipeline() {
 
   return (
     <>
-      <Brief
-        kicker="Pipeline · pondéré sur la probabilité déclarée"
-        headline={`${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA de pipeline pondéré, sur ${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M annoncés.`}
-        lines={briefLines}
-        paragraphs={
-          briefLines.length
-            ? undefined
-            : [
-                `Le pipeline ouvert compte ${formatNumber(forecast.scenarios.nb_opportunites)} opportunités pour ${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA pondérés. Le briefing du jour n'est pas encore généré pour ce profil.`,
-              ]
-        }
-        pills={[
-          { label: `${formatNumber(forecast.scenarios.nb_opportunites)} opportunités ouvertes` },
-          { label: `${formatNumber(nbAtRisk)} à échéance dépassée`, hot: nbAtRisk > 0 },
-          { label: `Probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %` },
-          { label: `Taux de victoire ${formatPct(performance?.win_rate.taux_valeur_pct ?? null, 0)} %` },
-        ]}
-      />
-
       {/* Bandeau d'indicateurs hors section : les trois chiffres de cadrage du
           cockpit, repris du motif de l'écran Arbitrages (.kpi-row force
           span:auto sur ses tuiles).
 
-          Tête de rangée : l'état de la base installée, pas le forecast. Le
-          pipeline pondéré reste lisible dans le Brief au-dessus et dans la tuile
-          « Répartition du forecast par étape » — décision DC du 05/08/2026. */}
+          Tête de rangée : l'état de la base installée, pas le forecast — décision
+          DC du 05/08/2026. Le pipeline pondéré reste lisible dans la tuile
+          « Répartition du forecast par étape », qui le donne étape par étape. */}
       <div className="kpi-row">
         {dormanceSegments.length > 0 && (
           <StatTile
             span={4}
+            rang="principal"
             label="Portefeuille en sommeil"
             value={formatMFcfa(dormance.sommeil.ca_historique_xof)}
             unit="M FCFA historiques"

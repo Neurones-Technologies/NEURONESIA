@@ -12,9 +12,10 @@ import { DF_SECTIONS } from "./df";
  * route se fait en deux endroits — son menu et ce registre — et le test e2e
  * parcourt les deux pour interdire le menu qui pointe dans le vide.
  *
- * Les paramètres d'URL sont mutualisés : les onglets DC portent une cadence de
- * lecture (`?periode=`) et un exercice (`?annee=`), les onglets DAF seulement un
- * exercice. Un onglet ignore simplement ce qui ne le concerne pas. */
+ * Les paramètres d'URL sont mutualisés : les pages DC portent une cadence de
+ * lecture (`?periode=`), un exercice (`?annee=`) et une vue interne (`?vue=`), les
+ * onglets DAF seulement un exercice. Une page ignore simplement ce qui ne la
+ * concerne pas. */
 export type SectionParams = DcSectionParams;
 
 export type SectionRegistry = Record<string, (params: SectionParams) => ReactNode>;

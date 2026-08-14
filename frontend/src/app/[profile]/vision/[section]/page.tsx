@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { View } from "@/components/shell/AppShell";
 import { PROFILE_KEYS, ProfileKey } from "@/lib/types";
-import { isVisionSection, visionNavMode } from "@/lib/data/sections";
+import { ANCIENNES_SECTIONS_DC, isVisionRoute, visionNavMode } from "@/lib/data/sections";
 import { SECTION_REGISTRIES } from "@/components/views/vision/registry";
 
 /** Une page par section, pour les profils en mode "route" (cf.
@@ -29,14 +29,39 @@ export default async function VisionSectionPage({
   const key = profile as ProfileKey;
 
   if (visionNavMode(key) !== "route") notFound();
-  if (!isVisionSection(key, section)) notFound();
-
-  const render = SECTION_REGISTRIES[key]?.[section];
-  if (!render) notFound();
 
   const query = await searchParams;
   const premier = (valeur: string | string[] | undefined) =>
     Array.isArray(valeur) ? valeur[0] : valeur;
 
-  return <View>{render({ periode: premier(query.periode), annee: premier(query.annee) })}</View>;
+  // Les quatorze sections DC d'origine avaient chacune leur URL, et ces liens ont
+  // circulé. Celles qui sont devenues des vues internes sont redirigées vers la
+  // page qui les porte, avec leur `?vue=` — l'écran affiché est le même. Les
+  // autres paramètres (cadence, exercice) sont reconduits.
+  if (key === "dc" && !isVisionRoute(key, section)) {
+    const page = ANCIENNES_SECTIONS_DC[section];
+    if (page) {
+      const q = new URLSearchParams({ vue: section });
+      const periode = premier(query.periode);
+      const annee = premier(query.annee);
+      if (periode) q.set("periode", periode);
+      if (annee) q.set("annee", annee);
+      redirect(`/dc/vision/${page}?${q}`);
+    }
+  }
+
+  if (!isVisionRoute(key, section)) notFound();
+
+  const render = SECTION_REGISTRIES[key]?.[section];
+  if (!render) notFound();
+
+  return (
+    <View>
+      {render({
+        periode: premier(query.periode),
+        annee: premier(query.annee),
+        vue: premier(query.vue),
+      })}
+    </View>
+  );
 }

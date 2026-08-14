@@ -399,12 +399,15 @@ export interface Colonne {
   info?: string;
 }
 
-/** Colonnes — magnitude sur peu de catégories, plus une ligne de cumul facultative.
+/** Colonnes — magnitude sur peu de catégories, plus une ligne facultative.
  *
- * La ligne de cumul (courbe de Pareto) est exprimée dans la MÊME unité que les
- * colonnes — des pourcentages du total dans les deux cas. C'est ce qui permet de
- * la tracer sans second axe : deux échelles superposées sur un même graphe
- * inventent une corrélation qui n'est pas dans les données. */
+ * `cumul` trace une seconde série en ligne, obligatoirement dans la MÊME unité que
+ * les colonnes. C'est ce qui permet de la tracer sans second axe : deux échelles
+ * superposées sur un même graphe inventent une corrélation qui n'est pas dans les
+ * données. Deux usages en place — la part cumulée d'un Pareto (top des charges,
+ * budget DAF) et l'objectif posé face au réalisé (écart vendu/objectif, DC).
+ * `libelleCumul` nomme la série dans la légende ET dans l'infobulle des points :
+ * une ligne d'objectif étiquetée « cumul » se lirait comme un total. */
 export function ColumnChart({
   colonnes,
   formatY,
@@ -475,18 +478,25 @@ export function ColumnChart({
         )}
 
         {colonnes.map((c, i) => {
-          const haut = py(c.y);
-          const hauteurBarre = Math.max(2, y0 - haut);
+          // Plancher de 2 px sur une valeur non nulle : à l'échelle du graphe, une
+          // petite valeur (13 M face à 4 650 M) tombait sous le pixel et sa colonne
+          // disparaissait — l'écran se lisait « aucune donnée » là où la donnée
+          // existe. Une valeur RÉELLEMENT nulle garde une colonne nulle.
+          const haut = c.y === 0 ? y0 : Math.min(py(c.y), y0 - 2);
+          const hauteurBarre = y0 - haut;
+          // Le rayon du sommet ne peut pas dépasser la demi-hauteur, sinon les deux
+          // courbes de Bézier se croisent et le chemin se replie.
+          const r = Math.min(4, hauteurBarre / 2, largeur / 2);
           return (
             <g key={c.x + i}>
               {/* Sommet arrondi, base carrée : le rayon n'est appliqué qu'en haut
                   via un chemin, un rect arrondi arrondirait aussi la base. */}
               <path
                 d={`M ${cx(i) - largeur / 2} ${y0}
-                    L ${cx(i) - largeur / 2} ${haut + 4}
-                    Q ${cx(i) - largeur / 2} ${haut} ${cx(i) - largeur / 2 + 4} ${haut}
-                    L ${cx(i) + largeur / 2 - 4} ${haut}
-                    Q ${cx(i) + largeur / 2} ${haut} ${cx(i) + largeur / 2} ${haut + 4}
+                    L ${cx(i) - largeur / 2} ${haut + r}
+                    Q ${cx(i) - largeur / 2} ${haut} ${cx(i) - largeur / 2 + r} ${haut}
+                    L ${cx(i) + largeur / 2 - r} ${haut}
+                    Q ${cx(i) + largeur / 2} ${haut} ${cx(i) + largeur / 2} ${haut + r}
                     L ${cx(i) + largeur / 2} ${y0} Z`}
                 fill={couleur}
                 opacity={c.attenue ? 0.28 : 1}
@@ -514,7 +524,10 @@ export function ColumnChart({
             />
             {cumul.map((v, i) => (
               <circle key={i} cx={cx(i)} cy={py(v)} r={3} fill={couleurCumul ?? ENCRE_2} stroke={FOND} strokeWidth={2}>
-                <title>{`${colonnes[i]?.x} · cumul ${formatY(v)}`}</title>
+                {/* Le libellé suit celui de la légende : la ligne ne porte pas
+                    toujours un cumul de Pareto (elle sert aussi d'objectif posé,
+                    dans la même unité), et « cumul » serait alors faux. */}
+                <title>{`${colonnes[i]?.x} · ${libelleCumul ?? "cumul"} ${formatY(v)}`}</title>
               </circle>
             ))}
           </>

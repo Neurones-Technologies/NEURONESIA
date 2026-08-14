@@ -70,8 +70,11 @@ export async function DcCycleVie() {
             ],
           }}
         />
+        {/* Les affaires enlisées sont ce sur quoi on agit ; le stock au-dessus du
+            seuil et la durée de cycle donnent l'échelle et la norme. */}
         <StatTile
           span={4}
+          rang="principal"
           label="Affaires enlisées"
           value={formatNumber(stock.nb_enlisees)}
           unit={`ouvertes depuis ${stock.seuil_enlisement_jours} jours+`}
@@ -165,7 +168,13 @@ export async function DcCycleVie() {
 
         <Tile span={5} title="Affaires suivies, par montant" kick={`${formatNumber(cycle.affaires.length)} affichées`}>
           <HintLine>Cliquez une affaire pour son âge et son état</HintLine>
+          {/* Repli à 7 : la liste porte jusqu'à quinze affaires et occupait à elle
+              seule plus d'un écran, reléguant les blocs suivants sous la ligne de
+              flottaison. Les sept premières suffisent à la lecture courante (les
+              plus gros montants), le reste est à un clic. */}
           <Lst
+            replierApres={7}
+            nom="affaires"
             items={cycle.affaires.map((a) => ({
               title: a.name,
               sub: [
@@ -313,9 +322,6 @@ export async function DcCycleVie() {
           </Tile>
         )}
 
-        <Tile span={12} title="Ce que cet écran mesure et ce qu'il suppose" quiet>
-          <Note style={{ marginTop: 0 }}>{cycle.note}</Note>
-        </Tile>
       </Bento>
     </>
   );

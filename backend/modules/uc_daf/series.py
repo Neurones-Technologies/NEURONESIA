@@ -37,7 +37,7 @@ from __future__ import annotations
 from datetime import date
 
 from modules.uc_daf import statique
-from modules.uc_daf.commun import fin_de_mois, jour, libelle_mois, mois_suivant, pct
+from modules.uc_daf.commun import fin_de_mois, jour, libelle_mois, pct
 from modules.uc_daf.relation_commerciale import SEUIL_CONTENTIEUX_JOURS
 
 # Profondeur des séries reconstruites, en mois. 30 mois couvrent deux exercices

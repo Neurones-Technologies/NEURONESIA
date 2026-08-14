@@ -742,7 +742,11 @@ async def run_odoo_sync(force_full: bool = False):
         try:
             _opp_domain = [["type", "=", "opportunity"]]
             _opp_fields = ["id", "name", "partner_id", "expected_revenue", "probability",
-                           "stage_id", "date_deadline", "user_id", "create_date", "order_ids"]
+                           "stage_id", "date_deadline", "user_id", "create_date", "order_ids",
+                           # Datation du cycle : `date_closed` est vide tant que
+                           # l'opportunité n'est pas close, `write_date` date la
+                           # dernière activité (proxy d'affaire dormante).
+                           "date_closed", "write_date"]
             total_opps = await odoo._call("crm.lead", "search_count", [_opp_domain], {})
             opportunities: list[dict] = []
             for offset in range(0, total_opps, 500):
@@ -760,6 +764,8 @@ async def run_odoo_sync(force_full: bool = False):
                     salesperson = _get_odoo_name(opp.get("user_id"))
                     deadline = _parse_date(opp.get("date_deadline"))
                     created_at = _parse_date(opp.get("create_date"))
+                    date_closed = _parse_date(opp.get("date_closed"))
+                    write_date = _parse_date(opp.get("write_date"))
                     order_ids = opp.get("order_ids") or []
                     # Famille d'offre déduite du libellé : reclassée à chaque sync
                     # pour qu'un enrichissement du dictionnaire se propage sans
@@ -777,6 +783,8 @@ async def run_odoo_sync(force_full: bool = False):
                         existing.probability = float(opp.get("probability", 0))
                         existing.salesperson_name = salesperson
                         existing.deadline = deadline
+                        existing.date_closed = date_closed
+                        existing.write_date = write_date
                         existing.order_ids = order_ids
                         existing.offer_family = offer_family
                         existing.synced_at = sync_start
@@ -793,6 +801,8 @@ async def run_odoo_sync(force_full: bool = False):
                             salesperson_name=salesperson,
                             deadline=deadline,
                             created_at=created_at,
+                            date_closed=date_closed,
+                            write_date=write_date,
                             order_ids=order_ids,
                             offer_family=offer_family,
                         ))

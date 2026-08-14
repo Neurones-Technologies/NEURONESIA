@@ -16,7 +16,7 @@ import { test, expect, type Cookie } from "@playwright/test";
 // Python : ce test est aussi le garde-fou contre une régression qui ferait tomber
 // l'un de ces calculs sur les données réelles.
 
-const SECTIONS = ["encours", "budget", "relation-commerciale", "tresorerie", "formation"] as const;
+const SECTIONS = ["encours", "budget", "relation-commerciale", "tresorerie"] as const;
 
 test.describe("Cockpit DAF — les onglets rendent tous", () => {
   // Exécution SÉRIELLE, et c'est la seule raison : `beforeAll` est rejoué par
@@ -89,10 +89,28 @@ test.describe("Cockpit DAF — les onglets rendent tous", () => {
 
   // L'exercice vit dans l'URL : il doit survivre à un rechargement et rester
   // partageable par lien (c'est sa raison d'être face à un état client).
+  //
+  // Le sélecteur n'est rendu QUE si le miroir porte au moins deux exercices
+  // (cf. df/exercice-nav.tsx : `proposes.length <= 1` ne rend rien). Sur une base
+  // vide — le cas du CI, qui ne seed que les comptes démo — il est donc absent, et
+  // ce cas échouait sur un « element(s) not found » qui ne disait rien de la
+  // fonctionnalité. On lit les exercices réellement proposés plutôt que d'en coder
+  // un en dur, et on ne teste la sélection que s'il y a un sélecteur à tester.
   test("l'exercice est porté par l'URL", async ({ page }) => {
     const exercice = page.getByRole("navigation", { name: "Exercice" });
-    await page.goto("/df/vision/budget?annee=2025");
-    await expect(exercice.locator('a[aria-current="page"]')).toHaveText("2025");
+
+    await page.goto("/df/vision/budget");
+    await expect(page.locator(".tile, .brief").first()).toBeVisible();
+    const annees = await exercice.locator("a").allInnerTexts();
+    test.skip(annees.length === 0, "aucun exercice proposé : miroir sans données");
+
+    // Un exercice AUTRE que celui par défaut, pour que la sélection prouve quelque
+    // chose : viser le défaut passerait même si `?annee=` était ignoré.
+    const defaut = await exercice.locator('a[aria-current="page"]').innerText();
+    const cible = annees.find((a) => a !== defaut) ?? defaut;
+    await page.goto(`/df/vision/budget?annee=${cible}`);
+    await expect(exercice.locator('a[aria-current="page"]')).toHaveText(cible);
+
     // Une année absurde retombe sur le défaut serveur (exercice courant) plutôt
     // que de vider l'écran sans explication.
     await page.goto("/df/vision/budget?annee=1899");
@@ -104,6 +122,17 @@ test.describe("Cockpit DAF — les onglets rendent tous", () => {
   test("une section inconnue répond 404", async ({ page }) => {
     const reponse = await page.goto("/df/vision/section-inexistante");
     expect(reponse?.status()).toBe(404);
+  });
+
+  // « Formation et qualité » a été retiré du cockpit. Le retirer du seul menu
+  // l'aurait masqué à l'œil en laissant l'URL servir la page : ce cas vérifie les
+  // deux faces du retrait — plus d'onglet, et plus de route.
+  test("le volet formation n'est ni affiché ni atteignable", async ({ page }) => {
+    await page.goto("/df/vision/encours");
+    await expect(page.getByRole("link", { name: /formation/i })).toHaveCount(0);
+
+    const reponse = await page.goto("/df/vision/formation");
+    expect(reponse?.status(), "statut HTTP de /df/vision/formation").toBe(404);
   });
 
   // `/df/vision` n'est plus une page : elle redirige vers la première section.

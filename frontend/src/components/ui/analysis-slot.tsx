@@ -24,13 +24,30 @@ function AnalysisPending({ lines = 3 }: { lines?: number }) {
 async function AnalysisBody({
   load,
   empty,
+  pliable,
+  titrePli,
 }: {
   load: () => Promise<AnalysisLike | null>;
   empty: string;
+  pliable?: boolean;
+  titrePli?: string;
 }) {
   const result = await load();
   if (!result?.analysis) return <Note style={{ marginTop: 0 }}>{empty}</Note>;
-  return <AnalysisNarr text={result.analysis} />;
+  const narration = <AnalysisNarr text={result.analysis} />;
+  if (!pliable) return narration;
+  // `<details>` natif, comme `ScreenNotes` : le repli tient sans JavaScript, donc
+  // l'écran reste un Server Component et le panneau fonctionne avant hydratation.
+  // Replié par défaut — la narration fait ici trois longs paragraphes, qui
+  // repoussaient les blocs chiffrés sous la ligne de flottaison.
+  return (
+    <details className="scr-n scr-n--narr">
+      <summary>
+        <span className="scr-n-t">{titrePli ?? "Lire l'analyse"}</span>
+      </summary>
+      <div className="scr-n-b">{narration}</div>
+    </details>
+  );
 }
 
 /**
@@ -63,14 +80,22 @@ export function AnalysisSlot({
   load,
   empty = "Analyse non disponible pour ce profil.",
   lines,
+  pliable,
+  titrePli,
 }: {
   load: () => Promise<AnalysisLike | null>;
   empty?: string;
   lines?: number;
+  /** Replie la narration derrière un titre cliquable. Option et non défaut : les
+   *  sept autres appels affichent la leur en clair, et la replier d'office
+   *  cacherait une analyse que l'écran présente comme son contenu principal. */
+  pliable?: boolean;
+  /** Libellé du titre replié. */
+  titrePli?: string;
 }) {
   return (
     <Suspense fallback={<AnalysisPending lines={lines} />}>
-      <AnalysisBody load={load} empty={empty} />
+      <AnalysisBody load={load} empty={empty} pliable={pliable} titrePli={titrePli} />
     </Suspense>
   );
 }
