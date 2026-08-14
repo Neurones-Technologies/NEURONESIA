@@ -2,7 +2,7 @@ import { apiFetch } from "./client";
 import { SourceDonnees } from "./commercial";
 
 /** Client des trois tableaux de bord du DAF (note « Point DAF financier » du
- * 04/08/2026) et du volet formation.
+ * 04/08/2026).
  *
  * `SourceDonnees` est réutilisé depuis `commercial.ts` : c'est le même contrat de
  * provenance (`reel` / `statique` / `mixte`) et la même règle d'affichage — un
@@ -638,57 +638,4 @@ export async function getTresoreriePrevisionnelle(
   return apiFetch<TresoreriePrevisionnelle | null>(`/v1/daf/tresorerie-previsionnelle${suffixe}`, {
     allowForbidden: true,
   });
-}
-
-// ── Volet transverse — Formation ────────────────────────────────────────────
-
-export interface ControleQualite {
-  code: string;
-  libelle: string;
-  objet: string;
-  nb_defaut: number;
-  nb_total: number;
-  part_defaut_pct: number;
-  part_conforme_pct: number;
-  gravite: "critique" | "attention" | "info";
-  /** Vrai quand le défaut relève du raccordement de données, pas de la saisie :
-   * aucune formation ne le corrigera seule. */
-  structurel: boolean;
-  indicateur_casse: string;
-  correction: string;
-}
-
-export interface ModuleFormation {
-  rang: number;
-  code: string;
-  titre: string;
-  public: string;
-  duree_min: number;
-  objectif: string;
-  points: string[];
-  risque_si_absent: string;
-  controle: ControleQualite | null;
-}
-
-export interface Formation {
-  source: SourceDonnees;
-  as_of: string;
-  modules: ModuleFormation[];
-  controles: ControleQualite[];
-  qualite: {
-    score_global_pct: number | null;
-    nb_controles: number;
-    nb_critiques: number;
-    nb_attention: number;
-    nb_structurels: number;
-    methode: string;
-    seuils: { critique_pct: number; attention_pct: number };
-  };
-  regles_or: string[];
-  duree_totale_min: number;
-  note: string;
-}
-
-export async function getFormation(): Promise<Formation | null> {
-  return apiFetch<Formation | null>("/v1/daf/formation", { allowForbidden: true });
 }

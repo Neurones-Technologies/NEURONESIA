@@ -222,7 +222,7 @@ export async function DcVisites() {
           <Note style={{ marginTop: 14 }}>{c.lecture}</Note>
         </Tile>
 
-        <Tile span={12} title="Décisions à prendre avant de construire ce module" quiet>
+        {/* <Tile span={12} title="Décisions à prendre avant de construire ce module" quiet>
           <Lst
             items={fichier.questions_ouvertes.map((q, i) => ({
               title: `Question ${i + 1}`,
@@ -234,7 +234,7 @@ export async function DcVisites() {
           <Note accent style={{ marginTop: 14 }}>
             {fichier.raison}
           </Note>
-        </Tile>
+        </Tile> */}
       </Bento>
     </>
   );

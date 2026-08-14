@@ -16,7 +16,7 @@ import { test, expect, type Cookie } from "@playwright/test";
 // Python : ce test est aussi le garde-fou contre une régression qui ferait tomber
 // l'un de ces calculs sur les données réelles.
 
-const SECTIONS = ["encours", "budget", "relation-commerciale", "tresorerie", "formation"] as const;
+const SECTIONS = ["encours", "budget", "relation-commerciale", "tresorerie"] as const;
 
 test.describe("Cockpit DAF — les onglets rendent tous", () => {
   // Exécution SÉRIELLE, et c'est la seule raison : `beforeAll` est rejoué par

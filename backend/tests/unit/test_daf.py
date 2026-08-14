@@ -24,7 +24,6 @@ from modules.uc_daf.budget import (
     classer_ligne_budgetaire,
 )
 from modules.uc_daf.commun import part_ecoulee_exercice_pct, taux_atteinte_pct
-from modules.uc_daf.formation import build_formation
 from modules.uc_daf.relation_commerciale import (
     MIN_FACTURES_COMPORTEMENT,
     build_balance_agee,
@@ -522,47 +521,6 @@ def test_calendrier_ne_melange_pas_constate_et_projete():
 
     # Le cumul est une VARIATION : aucun solde bancaire n'existe dans le système.
     assert any("VARIATION" in h for h in att["hypotheses"])
-
-
-# ── Formation et qualité de saisie ──────────────────────────────────────────
-
-def test_formation_priorisee_par_les_defauts_reellement_mesures():
-    """Une formation qui commence par le sujet le mieux tenu perd la salle.
-
-    L'ordre des modules suit les compteurs mesurés, pas l'ordre de la note du DAF.
-    """
-    controles = {
-        "echeance_incoherente": {"nb_defaut": 0, "nb_total": 100},
-        "reglement_non_rattache": {"nb_defaut": 0, "nb_total": 100},
-        "facture_fournisseur_absente": {"nb_defaut": 100, "nb_total": 100, "nb_factures_fournisseurs": 0},
-        "achat_sans_dossier": {"nb_defaut": 99, "nb_total": 100},
-        "dossier_sans_depense": {"nb_defaut": 59, "nb_total": 100},
-        "client_sans_secteur": {"nb_defaut": 99, "nb_total": 100},
-        "document_en_devise": {"nb_defaut": 25, "nb_total": 100},
-        "facture_sans_client": {"nb_defaut": 3, "nb_total": 100},
-    }
-    formation = build_formation(controles, TODAY)
-    assert formation["modules"][0]["controle"]["gravite"] == "critique"
-    assert formation["modules"][-1]["controle"]["part_defaut_pct"] <= formation["modules"][0]["controle"]["part_defaut_pct"]
-    # Chaque module reste relié à l'indicateur que son défaut casse.
-    assert all(m["controle"]["indicateur_casse"] for m in formation["modules"])
-
-
-def test_defaut_structurel_reste_critique_meme_a_faible_taux():
-    """L'absence de facture fournisseur n'est pas une négligence : c'est un trou de données.
-
-    Elle est critique quel que soit son taux, parce qu'aucune saisie plus soignée
-    ne la corrigera — il faut raccorder la synchronisation.
-    """
-    controles = {
-        "document_en_devise": {"nb_defaut": 1, "nb_total": 1000},
-        "facture_fournisseur_absente": {"nb_defaut": 1, "nb_total": 1000, "nb_factures_fournisseurs": 0},
-    }
-    formation = build_formation(controles, TODAY)
-    structurels = [c for c in formation["controles"] if c["structurel"]]
-    assert structurels
-    assert all(c["gravite"] == "critique" for c in structurels)
-    assert formation["source"] == statique.SOURCE_MIXTE
 
 
 # ── Séries temporelles ──────────────────────────────────────────────────────

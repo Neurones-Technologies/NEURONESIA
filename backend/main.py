@@ -115,7 +115,7 @@ app.include_router(arbitrage_router, prefix="/v1", dependencies=[Depends(require
 app.include_router(commercial_router, prefix="/v1", dependencies=_auth)
 # Pilotage financier (cockpit DAF) : même raison qu'au-dessus, le gating est porté
 # endpoint par endpoint — `couts`/`dashboard` pour le budget, `tresorerie` pour les
-# créances et la trésorerie prévisionnelle, `dashboard` pour le volet formation.
+# créances et la trésorerie prévisionnelle.
 app.include_router(daf_router, prefix="/v1", dependencies=_auth)
 # Analyses IA quotidiennes du cockpit : statut/relance (le contenu lui-même est
 # servi par les endpoints de section, cf. modules/uc_daily_analysis/router.py)

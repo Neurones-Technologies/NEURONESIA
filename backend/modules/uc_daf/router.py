@@ -1,8 +1,8 @@
 """Endpoints du pilotage financier — un endpoint par ÉCRAN, pas par calcul.
 
-Le découpage suit les trois tableaux de bord de la note DAF plus le volet
-formation : un onglet qui affiche cinq blocs paie un appel, pas cinq. Même
-arbitrage que `uc_commercial/router.py` et que `/dashboard/account-activity`.
+Le découpage suit les trois tableaux de bord de la note DAF : un onglet qui
+affiche cinq blocs paie un appel, pas cinq. Même arbitrage que
+`uc_commercial/router.py` et que `/dashboard/account-activity`.
 
 Les agrégations sont déportées par `_hors_boucle` : ce sont des boucles Python
 pures sur 2 957 factures, 2 133 achats et 2 408 dossiers, qui gèleraient le worker
@@ -25,7 +25,6 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from api.v1.dependencies import require_views
 from modules.uc_daf import budget as mod_budget
-from modules.uc_daf import formation as mod_formation
 from modules.uc_daf import queries as q
 from modules.uc_daf import relation_commerciale as mod_relation
 from modules.uc_daf import series as mod_series
@@ -241,13 +240,3 @@ async def tableau_tresorerie_previsionnelle(
             ),
         },
     }
-
-
-# ── Volet transverse — Formation et qualité de saisie ────────────────────────
-
-@router.get("/formation", dependencies=[Depends(require_views("dashboard"))])
-async def volet_formation(request: Request):
-    """Modules de formation priorisés par les défauts de saisie réellement mesurés."""
-    aujourdhui = _aujourdhui()
-    controles = await q.fetch_controles_qualite()
-    return await _hors_boucle(mod_formation.build_formation, controles, aujourdhui)

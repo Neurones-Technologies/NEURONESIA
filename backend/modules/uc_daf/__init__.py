@@ -1,16 +1,14 @@
 """UC DAF — pilotage du Directeur Administratif et Financier.
 
 Répond à la note « Point DAF financier » du 04/08/2026, qui demande trois tableaux
-de bord et un volet transverse :
+de bord :
 
 1. BUDGET — performance globale, résultat net, marge brute réalisée à date,
    top 10 des plus grosses charges (indicateur voté par le DAF), lignes
    budgétaires les plus consommées ;
 2. RELATION COMMERCIALE — DSO (créances), DPO (dettes), suivi des mauvais payeurs ;
 3. TRÉSORERIE PRÉVISIONNELLE — vigilance sur les créances proches de leur échéance,
-   atterrissage mensuel encaissement / décaissement sur une vue calendaire ;
-4. FORMATION — bons usages de l'outil, pour éviter qu'une saisie fausse corrompe
-   les données sur lesquelles tout ce qui précède est calculé.
+   atterrissage mensuel encaissement / décaissement sur une vue calendaire.
 
 Découpage par NATURE de ce qui est servi, comme `uc_commercial` :
 
@@ -18,7 +16,6 @@ Découpage par NATURE de ce qui est servi, comme `uc_commercial` :
 - `budget.py`              tableau de bord n°1 ;
 - `relation_commerciale.py` tableau de bord n°2 ;
 - `tresorerie_prev.py`     tableau de bord n°3 ;
-- `formation.py`           volet transverse + contrôles de qualité de saisie ;
 - `statique.py`            TOUT ce qui est posé faute de donnée réelle.
 
 Ce que le miroir permet, et ce qu'il ne permet pas — la ligne de partage de ce

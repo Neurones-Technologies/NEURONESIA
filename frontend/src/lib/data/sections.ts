@@ -57,16 +57,15 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     { id: "risques", label: "Dépendances et risques" },
   ],
   // Note « Point DAF financier » du 04/08/2026 : trois tableaux de bord (budget,
-  // relation commerciale, trésorerie prévisionnelle) et un volet transverse
-  // (formation). L'onglet « Encours et marge » est l'écran financier historique,
-  // conservé en tête : il porte le briefing du jour et les narrations IA, que les
-  // trois tableaux de bord de la note ne remplacent pas.
+  // relation commerciale, trésorerie prévisionnelle). L'onglet « Encours et marge »
+  // est l'écran financier historique, conservé en tête : il porte le briefing du
+  // jour et les narrations IA, que les trois tableaux de bord de la note ne
+  // remplacent pas.
   df: [
     { id: "encours", label: "Encours et marge" },
     { id: "budget", label: "Budget" },
     { id: "relation-commerciale", label: "Relation commerciale" },
     { id: "tresorerie", label: "Trésorerie prévisionnelle" },
-    { id: "formation", label: "Formation et qualité" },
   ],
   // Cockpit DC : les sections suivent les six chapitres du compte-rendu du
   // 04/08/2026 (cf. `VISION_GROUPS`), et leurs libellés reprennent la formulation

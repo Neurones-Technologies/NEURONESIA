@@ -3,7 +3,6 @@ import { DfVision } from "../DfVision";
 import { DfBudget } from "./DfBudget";
 import { DfRelationCommerciale } from "./DfRelationCommerciale";
 import { DfTresorerie } from "./DfTresorerie";
-import { DfFormation } from "./DfFormation";
 
 /** Paramètres d'URL des onglets DAF.
  *
@@ -31,11 +30,10 @@ function anneeDe(params: DfSectionParams): number | undefined {
  * L'ordre suit celui du menu et celui de la note du DAF : l'écran financier
  * historique (encours et marge, avec le briefing et les narrations IA), puis les
  * trois tableaux de bord demandés — budget, relation commerciale, trésorerie
- * prévisionnelle — et enfin le volet transverse de formation. */
+ * prévisionnelle. */
 export const DF_SECTIONS: Record<string, (params: DfSectionParams) => ReactNode> = {
   encours: () => <DfVision />,
   budget: (p) => <DfBudget annee={anneeDe(p)} />,
   "relation-commerciale": (p) => <DfRelationCommerciale annee={anneeDe(p)} />,
   tresorerie: (p) => <DfTresorerie annee={anneeDe(p)} />,
-  formation: () => <DfFormation />,
 };
