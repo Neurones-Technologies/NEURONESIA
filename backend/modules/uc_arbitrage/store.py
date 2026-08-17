@@ -1,16 +1,22 @@
-"""Persistance du registre de décisions (module Arbitrages) — table `decisions`
-(cf. db/models.py::DecisionModel). CRUD direct par session async, comme le
-reste du projet pour les tables applicatives (pas de couche repository
-supplémentaire ici, la table est simple et le module est seul à l'utiliser).
+"""Persistance du module Arbitrages — registre de décisions (`decisions`),
+contexte terrain (`arbitrage_contextes`) et réglages (`arbitrage_params`).
+CRUD direct par session async, comme le reste du projet pour les tables
+applicatives (pas de couche repository supplémentaire ici, les tables sont
+simples et le module est seul à les utiliser).
 """
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
 
 from db.database import AsyncSessionLocal
-from db.models import ArbitrageContexteModel, DecisionModel
+from db.models import ArbitrageContexteModel, ArbitrageParamModel, DecisionModel
+from modules.uc_arbitrage import conditions
+
+logger = logging.getLogger(__name__)
 
 # Délai de relecture par défaut d'une décision d'arbitrage. Sans date de revue
 # posée à la création, `revues_en_retard` restait à 0 pour toujours et le score de
@@ -255,6 +261,84 @@ async def list_contextes(subject_ref: str) -> list[dict]:
             .order_by(ArbitrageContexteModel.created_at.desc())
         )
         return [_contexte_to_dict(c) for c in result.scalars()]
+
+
+# ─── Conditions d'entrée en arbitrage (activation par profil) ─────────────────
+
+# Clé unique de la table `arbitrage_params`. Le contenu est
+# `{"<profil>": ["<code de condition>", ...]}` — jamais les conditions
+# elles-mêmes, qui vivent dans `conditions.py` (cf. sa docstring).
+CLE_CONDITIONS = "conditions_par_profil"
+
+
+async def get_conditions_par_profil() -> dict[str, list[str]]:
+    """Réglage de tous les profils, filtré des codes que le backend n'implémente
+    pas.
+
+    L'absence de ligne, un JSON illisible ou un profil absent valent tous
+    « aucune condition active » : le réglage ne peut pas casser la file, au pire
+    il ne s'applique pas. Sur un module dont la promesse est de dire pourquoi un
+    dossier est là, une file vide par accident de configuration serait le pire
+    mode de panne possible.
+    """
+    async with AsyncSessionLocal() as session:
+        row = await session.get(ArbitrageParamModel, CLE_CONDITIONS)
+        brut = row.value_json if row else "{}"
+
+    try:
+        charge = json.loads(brut or "{}")
+    except (TypeError, ValueError):
+        logger.warning("Réglage « %s » illisible en base — ignoré.", CLE_CONDITIONS)
+        charge = {}
+    if not isinstance(charge, dict):
+        return {}
+
+    return {
+        profil: conditions.normaliser(codes)
+        for profil, codes in charge.items()
+        if profil in conditions.PROFILS_PARAMETRABLES
+    }
+
+
+async def get_conditions_profil(profil: str | None) -> list[str]:
+    """Conditions actives d'un profil. Un profil absent, inconnu ou vide (job de
+    nuit, briefing, admin) n'active rien : la file reste celle du socle."""
+    if not profil:
+        return []
+    return (await get_conditions_par_profil()).get(profil, [])
+
+
+async def set_conditions_profil(profil: str, codes, updated_by: str) -> dict[str, list[str]]:
+    """Enregistre le réglage d'un profil et renvoie l'état complet après écriture.
+
+    Les codes inconnus sont écartés à l'écriture, pas seulement à la lecture :
+    la base ne conserve que ce que le backend sait appliquer, ce qui évite qu'un
+    réglage périmé donne l'illusion d'un filtre encore actif.
+    """
+    retenus = conditions.normaliser(codes)
+    async with AsyncSessionLocal() as session:
+        row = await session.get(ArbitrageParamModel, CLE_CONDITIONS)
+        try:
+            charge = json.loads(row.value_json or "{}") if row else {}
+        except (TypeError, ValueError):
+            charge = {}
+        if not isinstance(charge, dict):
+            charge = {}
+
+        charge[profil] = retenus
+        charge = {
+            p: c for p, c in charge.items() if p in conditions.PROFILS_PARAMETRABLES
+        }
+
+        if row is None:
+            row = ArbitrageParamModel(key=CLE_CONDITIONS)
+            session.add(row)
+        row.value_json = json.dumps(charge, ensure_ascii=False)
+        row.updated_by = updated_by
+        row.updated_at = datetime.utcnow()
+        await session.commit()
+
+    return {p: conditions.normaliser(c) for p, c in charge.items()}
 
 
 def _parse_dt(value) -> datetime | None:

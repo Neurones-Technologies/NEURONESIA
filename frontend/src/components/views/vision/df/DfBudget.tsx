@@ -1,6 +1,7 @@
 import { getBudgetDaf } from "@/lib/api/daf";
+import { getMargins } from "@/lib/api/dashboard";
 import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Note, Tag } from "@/components/ui/primitives";
 import { ChartNote, ColumnChart, LineChart } from "@/components/ui/chart";
@@ -27,8 +28,27 @@ import { ScreenLede } from "@/components/ui/screen-lede";
  * - une consommation budgétaire ne se lit jamais contre 100 % mais contre la part
  *   d'exercice écoulée, sans quoi tout début d'exercice paraît vertueux.
  */
+/** Dossier tel que servi par `/v1/dashboard/margins` — le tableau de bord DAF ne
+ * descend pas au dossier unitaire, cette lecture vient donc de la vue `dashboard`. */
+interface DossierMarge {
+  ref: string;
+  client: string;
+  projet: string;
+  ca_provisoire: number;
+  ca_definitif: number;
+  perc_marge_prov: number;
+  perc_marge_def: number;
+}
+
+/** En deçà de ce taux, la marge n'est plus une perte d'exploitation mais un
+ * artefact de solde : le miroir porte des dossiers à -2 640 % de marge, où une
+ * dépense a été imputée sur un dossier dont le CA a été facturé ailleurs. Les
+ * afficher chasserait les vraies pertes du classement. Le nombre de dossiers
+ * écartés est publié à l'écran plutôt que masqué. */
+const MARGE_PLANCHER_PCT = -100;
+
 export async function DfBudget({ annee }: { annee?: number }) {
-  const data = await getBudgetDaf(annee);
+  const [data, margins] = await Promise.all([getBudgetDaf(annee), getMargins(annee, 60)]);
 
   if (!data) {
     return (
@@ -48,6 +68,20 @@ export async function DfBudget({ annee }: { annee?: number }) {
   const indice = performance.indice_pct;
   const indiceFaible = indice !== null && indice < 85;
   const maxLigne = Math.max(...lignes.lignes.map((l) => l.consommation_pct), 100);
+
+  // Dossiers dont la marge constatée est la plus basse. Le budget se lit par
+  // ligne de charge ; ce classement dit sur QUELS CHANTIERS la marge s'est
+  // effectivement perdue — l'information que ni le budget ni les charges ne
+  // portent.
+  const dossiersFactures = ((margins?.top_dossiers ?? []) as unknown as DossierMarge[]).filter(
+    (d) => d.ca_definitif > 0
+  );
+  const dossiersMesurables = dossiersFactures.filter((d) => d.perc_marge_def > MARGE_PLANCHER_PCT);
+  const nbArtefacts = dossiersFactures.length - dossiersMesurables.length;
+  const margesFaibles = dossiersMesurables
+    .slice()
+    .sort((a, b) => a.perc_marge_def - b.perc_marge_def)
+    .slice(0, 5);
   const burn = data.burn_down;
   const margeAn = data.marge_annuelle;
 
@@ -620,6 +654,69 @@ export async function DfBudget({ annee }: { annee?: number }) {
             />
           )}
         </Tile>
+
+        {margesFaibles.length > 0 && (
+          <Tile
+            span={12}
+            title="Dossiers où la marge s'est perdue"
+            kick={`${formatNumber(dossiersMesurables.length)} dossiers facturés · les 5 plus bas taux`}
+            aide="Les chantiers dont la marge constatée est la plus faible, une fois les dépenses imputées. Le budget dit combien on dépense par nature de charge ; ce classement dit sur quels dossiers l'argent a été perdu."
+          >
+            <HintLine>Cliquez un dossier pour l&apos;écart entre marge prévue et constatée</HintLine>
+            <Bars
+              rows={margesFaibles.map((d) => {
+                const perte = d.perc_marge_def < 0;
+                const ecart = d.perc_marge_def - d.perc_marge_prov;
+                return {
+                  name: `${d.ref} · ${d.client}`,
+                  sub: [
+                    d.projet || "projet non renseigné",
+                    `${formatMFcfa(d.ca_definitif)} M facturés`,
+                    `prévue ${formatPct(d.perc_marge_prov, 0)} %`,
+                  ].join(" · "),
+                  value: `${formatPct(d.perc_marge_def, 1)} %`,
+                  // Barre proportionnelle à la GRAVITÉ (l'écart au seuil bas), et
+                  // non au taux lui-même : un taux négatif tracerait une barre
+                  // négative, donc invisible.
+                  pct: Math.min(100, ((MARGE_PLANCHER_PCT - d.perc_marge_def) / MARGE_PLANCHER_PCT) * 100),
+                  variant: perte ? ("r" as const) : ("w" as const),
+                  detail: {
+                    kicker: "Dossier · marge constatée",
+                    title: `${d.ref} · ${d.client}`,
+                    tag: perte ? "marge négative" : "marge faible",
+                    tagVariant: perte ? ("r" as const) : ("w" as const),
+                    body: [
+                      `Le dossier « ${d.projet || d.ref} » affiche une marge constatée de ${formatPct(d.perc_marge_def, 1)} % pour ${formatMFcfa(d.ca_definitif)} M FCFA facturés, contre ${formatPct(d.perc_marge_prov, 0)} % prévus au chiffrage — un écart de ${formatPct(ecart, 0)} points.`,
+                      perte
+                        ? "La marge est négative : le dossier a coûté plus qu'il n'a rapporté. À instruire avec la direction commerciale et les opérations — l'écart vient soit du chiffrage initial, soit de dépenses non refacturées."
+                        : "La marge reste positive mais nettement sous le niveau attendu de l'activité. Un dossier de ce taux consomme de la capacité sans reconstituer de résultat.",
+                      "La marge n'est calculable que sur les dossiers dont les dépenses sont imputées : un dossier mal imputé peut afficher une marge flatteuse et ne pas figurer ici.",
+                    ],
+                    kv: [
+                      ["Marge constatée", `${formatPct(d.perc_marge_def, 1)} %`],
+                      ["Marge prévue", `${formatPct(d.perc_marge_prov, 1)} %`],
+                      ["Écart", `${formatPct(ecart, 1)} points`],
+                      ["CA définitif", `${formatMFcfa(d.ca_definitif)} M FCFA`],
+                      ["CA provisoire", `${formatMFcfa(d.ca_provisoire)} M FCFA`],
+                      ["Client", d.client],
+                    ],
+                  },
+                };
+              })}
+            />
+            <Reste
+              affiches={margesFaibles.length}
+              total={dossiersMesurables.length}
+              nom="dossiers facturés"
+            />
+            <Note style={{ marginTop: 14 }}>
+              Classement sur les dossiers facturés de l&apos;échantillon servi par le tableau de bord des
+              marges.
+              {nbArtefacts > 0 &&
+                ` ${formatNumber(nbArtefacts)} dossier(s) affichant une marge sous ${formatPct(MARGE_PLANCHER_PCT, 0)} % sont écartés : à ce niveau, le taux traduit une dépense imputée sur un dossier dont le chiffre d'affaires a été facturé ailleurs, pas une perte d'exploitation.`}
+            </Note>
+          </Tile>
+        )}
 
       </Bento>
     </>

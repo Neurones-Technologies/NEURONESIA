@@ -151,6 +151,49 @@ export async function markReviewedAction(
   return ok("Revue enregistrée. Elle entre dans le taux de confirmation des recommandations.");
 }
 
+/** Enregistre les conditions d'entrée en arbitrage activées par un profil.
+ *
+ * L'écran ne rédige aucune condition : il coche celles du catalogue figé dans le
+ * backend (`uc_arbitrage/conditions.py`). Le réglage est attaché au PROFIL, pas
+ * à la personne — il vaut donc pour tous les utilisateurs qui portent ce rôle,
+ * et le formulaire le dit. Le contrôle reste serveur (`update_conditions`) :
+ * chacun règle son profil, l'admin règle n'importe lequel. */
+export async function saveConditionsAction(
+  _prev: ArbitrageActionState,
+  formData: FormData
+): Promise<ArbitrageActionState> {
+  const profile = String(formData.get("profile") ?? "");
+  const profil = String(formData.get("profil") ?? "").trim();
+  if (!profil) return ko("Profil introuvable — rechargez la page avant de réessayer.");
+
+  // Cases décochées = absentes du FormData : une sélection vide est donc un
+  // enregistrement légitime (retour au socle), pas une erreur de saisie.
+  const codes = formData.getAll("codes").map(String).filter(Boolean);
+
+  let retenus = codes.length;
+  let total = 0;
+  try {
+    const reponse = await apiFetch<{ mesure?: { nb_retenus: number; nb_total: number } }>(
+      `/v1/arbitrage/conditions/${encodeURIComponent(profil)}`,
+      { method: "PUT", body: JSON.stringify({ codes }) }
+    );
+    retenus = reponse?.mesure?.nb_retenus ?? 0;
+    total = reponse?.mesure?.nb_total ?? 0;
+  } catch (error) {
+    return fromError(error, "Le réglage n'a pas pu être enregistré. Rien n'a changé.");
+  }
+
+  if (profile) {
+    revalidatePath(`/${profile}/params`);
+    revalidatePath(`/${profile}/arbitrage`);
+  }
+  return ok(
+    codes.length === 0
+      ? `Réglage enregistré : aucune condition active, la file du profil compte à nouveau ses ${total} dossier(s).`
+      : `Réglage enregistré : ${retenus} dossier(s) sur ${total} restent dans la file de ce profil.`
+  );
+}
+
 /** Dépose la contribution terrain du commercial du compte sur un dossier.
  *
  * Le dossier réclame explicitement le motif du retard en désignant le compte

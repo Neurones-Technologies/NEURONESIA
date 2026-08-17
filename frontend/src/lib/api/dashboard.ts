@@ -432,6 +432,28 @@ export async function getTopClients(year?: number, limit = 10): Promise<TopClien
   });
 }
 
+/** Bon de commande du miroir, classé par montant. */
+export interface TopOrder {
+  ref: string;
+  client: string;
+  montant_xof: number;
+  /** Date de commande en ISO court (`AAAA-MM-JJ`), `null` si absente du miroir. */
+  date: string | null;
+  pays: string;
+}
+
+/** Les plus grosses commandes signées, par MONTANT — à distinguer des commandes
+ * récentes, qui répondent à « qu'est-ce qui vient d'être signé ». Le filtre
+ * `year` porte sur la date de commande, pas sur l'exercice de la référence. */
+export async function getTopOrders(year?: number, limit = 10): Promise<TopOrder[] | null> {
+  const params = new URLSearchParams();
+  if (year) params.set("year", String(year));
+  params.set("limit", String(limit));
+  return apiFetch<TopOrder[] | null>(`/v1/dashboard/top-orders?${params.toString()}`, {
+    allowForbidden: true,
+  });
+}
+
 export interface RevenueBySalesperson {
   commercial: string;
   [key: string]: unknown;

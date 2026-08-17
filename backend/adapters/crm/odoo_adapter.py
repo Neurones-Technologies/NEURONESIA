@@ -658,6 +658,9 @@ class OdooAdapter(CRMRepository):
     async def get_top_clients(self, limit: int = 5, year: int | None = None) -> list[dict]:
         return []
 
+    async def get_top_orders(self, limit: int = 5, year: int | None = None) -> list[dict]:
+        return []
+
     async def get_clients_by_month(self, year: int, limit: int = 10) -> dict[int, list[dict]]:
         return {}
 

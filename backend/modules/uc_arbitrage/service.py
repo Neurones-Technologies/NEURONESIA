@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 
 from core.services.ttl_cache import cached
-from modules.uc_arbitrage import aggregation, store
+from modules.uc_arbitrage import aggregation, conditions, store
 from modules.uc_crosssell.signals import get_signals as crosssell_signals
 
 logger = logging.getLogger(__name__)
@@ -112,18 +112,32 @@ def _m(xof: float) -> int:
     return round(xof / 1_000_000)
 
 
-async def compute_file(crm, exclude_internal: bool = False) -> dict:
+async def compute_file(crm, exclude_internal: bool = False, role: str | None = None) -> dict:
     """Payload complet de /v1/arbitrage/file : kpi + candidats + décisions
     ouvertes. Corps repris tel quel du router (les deux consommateurs, écran
-    et briefing, doivent voir exactement le même calcul)."""
+    et briefing, doivent voir exactement le même calcul).
+
+    `role` : profil du demandeur. Ses conditions d'entrée actives (cf.
+    `conditions.py`) restreignent la liste `candidats` — et elle seule. Les KPI
+    restent calculés sur la file ENTIÈRE, délibérément : un réglage d'affichage
+    ne doit pas faire baisser l'enjeu cumulé ni le coût du report, sinon deux
+    utilisateurs ne parlent plus des mêmes chiffres et le briefing de nuit — qui
+    n'a aucun profil, donc aucune condition — dit autre chose que l'écran.
+    Ce que le filtre retire est annoncé dans `filtre.nb_ecartes`, jamais masqué
+    en silence.
+    """
     # Le registre de décisions ne passe PAS par le cache de la file : il change
     # au moment où un mandataire tranche, et l'écran doit voir sa décision
     # apparaître tout de suite. Les deux lectures sont indépendantes, donc
-    # simultanées.
-    candidates, open_decisions = await asyncio.gather(
+    # simultanées. Le réglage du profil est lu à chaque appel (SELECT par clé
+    # primaire) : mis en cache, une case cochée resterait sans effet visible.
+    candidates, open_decisions, actives = await asyncio.gather(
         compute_candidates(crm, exclude_internal=exclude_internal),
         store.list_decisions(status="en_cours"),
+        store.get_conditions_profil(role),
     )
+
+    retenus = conditions.appliquer(candidates, actives)
 
     now = datetime.utcnow()
     dossiers_ouverts = len(candidates) + len(open_decisions)
@@ -159,6 +173,16 @@ async def compute_file(crm, exclude_internal: bool = False) -> dict:
             # qu'à la direction dont vient le signal, au lieu de le laisser deviner.
             "seuil_mandat_dg_m_fcfa": _m(aggregation.ENJEU_MANDAT_DG_XOF),
         },
-        "candidats": candidates,
+        "candidats": retenus,
         "decisions_ouvertes": open_decisions,
+        # État du filtre, toujours présent même sans condition active : l'écran
+        # doit pouvoir dire « rien n'est filtré » aussi explicitement que
+        # « 5 dossiers écartés ».
+        "filtre": {
+            "profil": role or "",
+            "conditions_actives": actives,
+            "nb_total": len(candidates),
+            "nb_retenus": len(retenus),
+            "nb_ecartes": len(candidates) - len(retenus),
+        },
     }

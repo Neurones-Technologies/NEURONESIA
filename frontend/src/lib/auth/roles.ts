@@ -26,6 +26,19 @@ export function roleToProfile(role: string): ProfileKey | null {
   return ROLE_TO_PROFILE[role] ?? null;
 }
 
+/** Rôle backend correspondant à un profil cockpit — dérivé de ROLE_TO_PROFILE
+ * plutôt que recopié : deux tables saisies à la main divergeraient au premier
+ * rôle ajouté. Utilisé par les écrans qu'un admin peut ouvrir sur un profil qui
+ * n'est pas le sien (Réglages) et qui doivent alors cibler le rôle de CE
+ * profil, pas celui du compte connecté. */
+const PROFILE_TO_ROLE = Object.fromEntries(
+  Object.entries(ROLE_TO_PROFILE).map(([role, profile]) => [profile, role])
+) as Record<ProfileKey, string>;
+
+export function profileToRole(profile: ProfileKey): string {
+  return PROFILE_TO_ROLE[profile];
+}
+
 export function isAdminRole(role: string): boolean {
   return role === "admin";
 }

@@ -1,8 +1,9 @@
 import { getBriefing } from "@/lib/api/briefing";
+import { getClientPortfolio } from "@/lib/api/clients";
 import { getKpis, getMargins, getMarginsAnalysis } from "@/lib/api/dashboard";
 import { getPartnersAnalysis, getSupplierIntelligence } from "@/lib/api/partners";
 import { formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
-import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
 
@@ -19,10 +20,11 @@ interface TopDossier {
 export async function DoVision() {
   // Narrations LLM exclues du Promise.all — voir components/ui/analysis-slot.tsx :
   // figées à la journée, mais 10-20 s si le calcul de secours se déclenche.
-  const [margins, kpis, suppliers, briefing] = await Promise.all([
+  const [margins, kpis, suppliers, portfolio, briefing] = await Promise.all([
     getMargins(undefined, 30),
     getKpis(),
     getSupplierIntelligence(15),
+    getClientPortfolio(50),
     getBriefing(),
   ]);
 
@@ -51,6 +53,18 @@ export async function DoVision() {
 
   const topSupplierAmount = suppliers?.[0]?.montant_total_xof ?? 0;
   const monoSource = (suppliers ?? []).filter((s) => s.dossiers_a_risque_fournisseur_unique > 0);
+
+  // La charge de livraison vue PAR CLIENT, et non par dossier : le reste de
+  // l'écran raisonne en dossiers, mais un retard se négocie avec un client, pas
+  // avec une référence. Les comptes portant plusieurs chantiers ouverts ne sont
+  // visibles nulle part ailleurs.
+  const avecBacklog = (portfolio ?? []).filter((c) => c.backlog_xof > 0);
+  const parBacklog = avecBacklog
+    .slice()
+    .sort((a, b) => b.backlog_xof - a.backlog_xof)
+    .slice(0, 5);
+  const maxBacklogClient = parBacklog[0]?.backlog_xof ?? 0;
+  const backlogTotalClients = avecBacklog.reduce((s, c) => s + c.backlog_xof, 0);
 
   return (
     <>
@@ -264,6 +278,67 @@ export async function DoVision() {
             <Note style={{ marginTop: 0 }}>Aucun dossier ne présente une dérive marquée sur cet échantillon.</Note>
           )}
         </Tile>
+
+        {parBacklog.length > 0 && (
+          <Tile
+            span={12}
+            title="Clients qui portent le plus de backlog"
+            kick={`${formatMFcfa(backlogTotalClients)} M à livrer · ${formatNumber(avecBacklog.length)} comptes concernés`}
+            aide="Le travail déjà vendu qui reste à livrer, regroupé par client. Le reste de l'écran raisonne par dossier ; ici on voit à qui l'on doit le plus, ce qui est l'interlocuteur réel quand un délai glisse."
+          >
+            <HintLine>Cliquez un compte pour sa charge de livraison</HintLine>
+            <Bars
+              rows={parBacklog.map((c) => {
+                const part = backlogTotalClients ? (c.backlog_xof / backlogTotalClients) * 100 : 0;
+                return {
+                  name: c.client,
+                  sub: [
+                    `${formatNumber(c.nb_dossiers)} dossier(s)`,
+                    `${formatPct(part, 0)} % du backlog`,
+                    c.secteur ?? "secteur non renseigné",
+                  ].join(" · "),
+                  value: `${formatMFcfa(c.backlog_xof)} M`,
+                  pct: maxBacklogClient ? (c.backlog_xof / maxBacklogClient) * 100 : 0,
+                  variant: part > 20 ? ("r" as const) : part > 10 ? ("w" as const) : undefined,
+                  detail: {
+                    kicker: "Compte · charge de livraison",
+                    title: c.client,
+                    tag:
+                      part > 20 ? "concentration forte" : part > 10 ? "à surveiller" : "charge répartie",
+                    tagVariant: part > 20 ? ("r" as const) : part > 10 ? ("w" as const) : ("n" as const),
+                    body: [
+                      `${c.client} porte ${formatMFcfa(c.backlog_xof)} M FCFA de travail vendu non encore livré, réparti sur ${formatNumber(c.nb_dossiers)} dossier(s), soit ${formatPct(part, 0)} % du backlog total.`,
+                      part > 20
+                        ? "Un cinquième du carnet dépend de ce seul compte : un décalage de planning chez lui déplace directement la charge de l'ensemble des équipes."
+                        : "La charge de ce compte reste absorbable au regard du carnet global.",
+                      c.reste_a_encaisser_xof > 0
+                        ? `Ce compte laisse par ailleurs ${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA facturés non réglés — livrer davantage augmente l'exposition tant que ce reste n'est pas encaissé.`
+                        : "Ce compte n'a aucun reste à encaisser : livrer ne crée pas d'exposition financière supplémentaire.",
+                    ],
+                    kv: [
+                      ["Backlog à livrer", `${formatMFcfa(c.backlog_xof)} M FCFA`],
+                      ["Part du backlog", `${formatPct(part, 0)} %`],
+                      ["Dossiers", formatNumber(c.nb_dossiers)],
+                      ["CA total", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
+                      ["Reste à encaisser", `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA`],
+                      ["Secteur", c.secteur ?? "non renseigné"],
+                    ],
+                  },
+                };
+              })}
+            />
+            <Reste
+              affiches={parBacklog.length}
+              total={avecBacklog.length}
+              nom="comptes avec backlog"
+              ou={`${formatMFcfa(backlogTotalClients)} M FCFA au total`}
+            />
+            <Note style={{ marginTop: 14 }}>
+              Backlog issu des dossiers (CA provisoire moins ce qui est déjà facturé), agrégé par client sur
+              les 50 comptes les plus importants du portefeuille.
+            </Note>
+          </Tile>
+        )}
 
         <Tile
           span={12}

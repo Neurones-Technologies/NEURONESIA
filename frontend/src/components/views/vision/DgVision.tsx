@@ -6,9 +6,10 @@ import {
   getKpis,
   getMonthlyClients,
   getTopClients,
+  getTopOrders,
 } from "@/lib/api/dashboard";
 import { formatDate, formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
-import { Bars, Bento, Brief, /* FootNote, */ HintLine, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Narr, Section } from "@/components/ui/primitives";
 import { ScenPanel } from "@/components/ui/scen-panel";
@@ -27,11 +28,12 @@ function toSpark(values: number[]): number[] {
 
 export async function DgVision() {
   const year = new Date().getFullYear();
-  const [briefing, kpis, forecast, topClients, variance, monthlyClients] = await Promise.all([
+  const [briefing, kpis, forecast, topClients, topOrders, variance, monthlyClients] = await Promise.all([
     getBriefing(),
     getKpis(year),
     getForecastPipelineWeighted(),
     getTopClients(year, 10),
+    getTopOrders(year, 5),
     getBudgetVariance(year),
     getMonthlyClients(year, 10),
   ]);
@@ -563,6 +565,58 @@ export async function DgVision() {
               Direction des opérations.
             </FootNote> */}
           </Tile>
+
+          {/* Les deux tuiles ci-dessus classent des COMPTES ; celle-ci descend à la
+              commande. Un compte modéré peut porter une affaire unique dont la
+              perte se verrait à elle seule dans l'exercice — le classement par
+              client ne la montre pas. */}
+          {topOrders && topOrders.length > 0 && (
+            <Tile
+              span={12}
+              title="Les plus grosses commandes de l'exercice"
+              kick={`${year} · par montant signé`}
+              aide="Les affaires les plus importantes prises une par une, et non regroupées par client. Une seule commande peut peser autant qu'un compte entier."
+            >
+              <HintLine>Cliquez une commande pour son poids dans l&apos;exercice</HintLine>
+              <Lst
+                items={topOrders.map((o) => {
+                  const part = totalRevenue ? (o.montant_xof / totalRevenue) * 100 : 0;
+                  return {
+                    title: `${o.ref} · ${o.client}`,
+                    sub: [
+                      o.date ? `signée le ${formatDate(o.date)}` : "date non renseignée",
+                      o.pays,
+                      `${formatPct(part, 1)} % du CA de l'exercice`,
+                    ].join(" · "),
+                    tag: `${formatMFcfa(o.montant_xof)} M`,
+                    tagVariant: part > 10 ? ("r" as const) : part > 5 ? ("w" as const) : ("n" as const),
+                    detail: {
+                      kicker: "Commande signée",
+                      title: `${o.ref} · ${o.client}`,
+                      tag:
+                        part > 10 ? "affaire structurante" : part > 5 ? "affaire majeure" : "affaire notable",
+                      tagVariant: part > 10 ? ("r" as const) : part > 5 ? ("w" as const) : ("n" as const),
+                      body: [
+                        `Cette commande de ${formatMFcfa(o.montant_xof)} M FCFA représente à elle seule ${formatPct(part, 1)} % du chiffre d'affaires commandé de l'exercice${o.date ? `, signée le ${formatDate(o.date)}` : ""}.`,
+                        part > 10
+                          ? "Une affaire unique de ce poids fait bouger l'atterrissage à elle seule : son exécution et son encaissement sont à suivre au niveau de la direction, pas seulement du compte."
+                          : "Le poids de cette affaire reste absorbable, mais elle entre dans la concentration mesurée sur les comptes ci-dessus.",
+                        "Le classement porte sur les commandes signées, sur la date de commande. Une commande peut donc apparaître dans cet exercice tout en portant une référence de l'exercice précédent.",
+                      ],
+                      kv: [
+                        ["Montant", `${formatMFcfa(o.montant_xof)} M FCFA`],
+                        ["Part du CA", `${formatPct(part, 1)} %`],
+                        ["Client", o.client],
+                        ["Référence", o.ref],
+                        ["Date de commande", o.date ? formatDate(o.date) : "non renseignée"],
+                        ["Pays", o.pays],
+                      ],
+                    },
+                  };
+                })}
+              />
+            </Tile>
+          )}
         </Bento>
       </Section>
 

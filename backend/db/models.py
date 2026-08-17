@@ -869,6 +869,33 @@ class ArbitrageNarrationModel(Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
+class ArbitrageParamModel(Base):
+    """Réglages du module Arbitrages, en JSON sous clé — même forme que
+    `commercial_params`.
+
+    Une seule clé aujourd'hui : `conditions_par_profil`, qui porte les
+    conditions d'entrée en arbitrage activées par chaque profil
+    (`{"dg": ["impaye_superieur_enjeu", ...], ...}`).
+
+    Ce ne sont PAS les conditions elles-mêmes : celles-ci vivent dans le code
+    (`uc_arbitrage/conditions.py`), écrites, seuillées et testées une fois pour
+    toutes. Cette table ne porte que l'ACTIVATION — quel profil a coché quoi.
+    La distinction est délibérée : une condition d'entrée en arbitrage décide de
+    ce qui est soumis à décision, elle doit rester relisible dans le code et
+    couverte par des tests, pas rédigée à l'écran par un utilisateur.
+
+    L'absence de ligne (ou un profil absent du JSON) vaut « aucune condition
+    active » : la file reste alors celle du socle, c'est-à-dire le comportement
+    d'avant ce réglage. Aucun écran ne change tant que personne n'a coché.
+    """
+    __tablename__ = "arbitrage_params"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value_json: Mapped[str] = mapped_column(Text, default="{}")
+    updated_by: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pilotage commercial (UC Commercial — cockpit DC)
 #
@@ -971,6 +998,37 @@ class CommercialParamModel(Base):
 
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value_json: Mapped[str] = mapped_column(Text, default="{}")
+    updated_by: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BriefingPreferenceModel(Base):
+    """Composition du débrief quotidien, décidée PAR RÔLE (pas par utilisateur).
+
+    Portée assumée : le briefing est déjà généré par rôle (un `sections[role]`
+    unique dans le store) et lu par tous les porteurs de ce rôle. Une préférence
+    par utilisateur imposerait d'en générer autant que de comptes, pour un coût
+    LLM qu'aucun usage ne réclame — S2I compte un titulaire par direction.
+
+    Pourquoi une table et pas le store JSON : data/briefing_store/latest.json est
+    un CACHE JETABLE, supprimé par scripts/purge_partenaires_exclus.py et réécrit
+    intégralement à chaque `service.generate`. Une préférence qui y vivrait
+    disparaîtrait à la première purge, sans trace ni message.
+
+    Table vide = comportement d'origine (le catalogue par défaut s'applique),
+    même doctrine que ModulePermissionModel où l'absence de ligne signifie
+    « défauts du code » : rien à migrer, rien à initialiser.
+
+    `value_json` est un blob et non des colonnes typées parce que le projet n'a
+    pas d'Alembic (db/database.py::init_db fait create_all + des _migrate_*
+    manuels) : y ajouter un champ ne doit pas coûter une migration.
+    """
+    __tablename__ = "briefing_preferences"
+
+    role: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value_json: Mapped[str] = mapped_column(Text, default="{}")
+    # Le réglage est PARTAGÉ : un DG qui trouve son débrief changé doit pouvoir
+    # savoir qui l'a changé. C'est la contrepartie obligatoire de la portée par rôle.
     updated_by: Mapped[str] = mapped_column(String(255), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

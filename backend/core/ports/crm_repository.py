@@ -69,6 +69,12 @@ class CRMRepository(ABC):
         """Retourne les N clients avec le plus grand CA, optionnellement filtré par année."""
 
     @abstractmethod
+    async def get_top_orders(self, limit: int = 5, year: int | None = None) -> list[dict]:
+        """Retourne les N bons de commande les plus importants EN MONTANT.
+
+        À distinguer de `get_recent_orders`, qui trie les mêmes commandes par date."""
+
+    @abstractmethod
     async def get_unpaid_invoices(self, limit: int = 10) -> list[dict]:
         """Retourne les factures non payées les plus anciennes (par échéance)."""
 

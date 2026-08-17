@@ -5,7 +5,7 @@ import {
   getPerformanceSummary,
 } from "@/lib/api/dashboard";
 import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
-import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
+import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
 
@@ -46,6 +46,20 @@ export async function DcPipeline() {
   }, {});
 
   const dormanceSegments = dormance.segments.filter((s) => s.nb_comptes > 0);
+
+  // Les affaires sur lesquelles pousser maintenant : échéance encore devant soi
+  // (`at_risk` exclut celles dont la date est déjà passée — elles relèvent de la
+  // requalification, tuile voisine) et probabilité déclarée d'au moins 50 %.
+  //
+  // Le classement se fait sur le montant PONDÉRÉ et non sur la valeur brute :
+  // une affaire à 100 M à 50 % pèse autant qu'une affaire à 50 M à 100 %, et
+  // c'est bien ce qu'il faut arbitrer quand on choisit où passer sa semaine.
+  const conclurables = forecast.opportunities.filter((o) => !o.at_risk && o.probability_pct >= 50);
+  const aConclure = conclurables
+    .slice()
+    .sort((a, b) => b.weighted_xof - a.weighted_xof)
+    .slice(0, 5);
+  const aConclureTotal = conclurables.reduce((s, o) => s + o.weighted_xof, 0);
 
   return (
     <>
@@ -232,6 +246,68 @@ export async function DcPipeline() {
           ) : (
             <Note style={{ marginTop: 0 }}>
               Aucune opportunité ouverte n&apos;a d&apos;échéance dépassée actuellement.
+            </Note>
+          )}
+        </Tile>
+
+        {/* Face à « Opportunités à requalifier » : là ce qu'il faut nettoyer, ici ce
+            sur quoi il faut pousser. Les deux listes sont disjointes par
+            construction — `at_risk` est exclu de celle-ci. */}
+        <Tile
+          span={12}
+          title="Affaires à conclure en priorité"
+          kick={`${formatNumber(conclurables.length)} affaires à 50 % et plus · ${formatMFcfa(aConclureTotal)} M pondérés`}
+          aide="Les affaires en cours les plus proches d'être signées, classées par ce qu'elles rapportent réellement une fois la probabilité prise en compte. C'est là que l'effort de la semaine a le plus d'effet."
+        >
+          {aConclure.length > 0 ? (
+            <>
+              <HintLine>Cliquez une affaire pour son échéance et son commercial</HintLine>
+              <Lst
+                items={aConclure.map((o) => ({
+                  title: String(o.name),
+                  sub: [
+                    o.client,
+                    o.stage,
+                    `${formatPct(o.probability_pct, 0)} % de chances`,
+                    o.deadline ? `échéance ${formatDate(o.deadline)}` : "sans échéance",
+                  ].join(" · "),
+                  tag: `${formatMFcfa(o.weighted_xof)} M pondérés`,
+                  tagVariant: o.probability_pct >= 75 ? ("s" as const) : ("w" as const),
+                  detail: {
+                    kicker: "Opportunité · à conclure",
+                    title: String(o.name),
+                    tag: `${formatPct(o.probability_pct, 0)} % de chances`,
+                    tagVariant: o.probability_pct >= 75 ? ("s" as const) : ("w" as const),
+                    body: [
+                      `Affaire chez ${o.client}, portée par ${o.commercial} à l'étape « ${o.stage} » : ${formatMFcfa(o.value_xof)} M FCFA de valeur brute, ramenés à ${formatMFcfa(o.weighted_xof)} M FCFA une fois la probabilité de ${formatPct(o.probability_pct, 0)} % appliquée.`,
+                      o.deadline
+                        ? `Clôture annoncée au ${formatDate(o.deadline)}, encore devant nous. L'affaire est ouverte depuis ${formatNumber(o.age_days)} jours.`
+                        : `Aucune date de clôture n'est renseignée : l'affaire ne peut pas être rattachée à un mois du forecast. Elle est ouverte depuis ${formatNumber(o.age_days)} jours.`,
+                      "Le classement retient le montant pondéré, pas la valeur brute : c'est ce qui permet de comparer une grosse affaire incertaine à une plus petite presque acquise.",
+                    ],
+                    kv: [
+                      ["Client", o.client],
+                      ["Commercial", o.commercial],
+                      ["Étape", o.stage],
+                      ["Valeur brute", `${formatMFcfa(o.value_xof)} M FCFA`],
+                      ["Valeur pondérée", `${formatMFcfa(o.weighted_xof)} M FCFA`],
+                      ["Probabilité", `${formatPct(o.probability_pct, 0)} %`],
+                      ["Échéance", o.deadline ? formatDate(o.deadline) : "non renseignée"],
+                      ["Ouverte depuis", `${formatNumber(o.age_days)} jours`],
+                    ],
+                  },
+                }))}
+              />
+              <Reste
+                affiches={aConclure.length}
+                total={conclurables.length}
+                nom="affaires"
+                ou={`${formatMFcfa(aConclureTotal)} M FCFA pondérés au total`}
+              />
+            </>
+          ) : (
+            <Note style={{ marginTop: 0 }}>
+              Aucune affaire ouverte n&apos;atteint 50 % de probabilité avec une échéance encore à venir.
             </Note>
           )}
         </Tile>

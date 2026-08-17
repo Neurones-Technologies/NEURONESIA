@@ -891,6 +891,30 @@ table{border-spacing:0}
 .fld:last-child{border-bottom:0}
 .fld-n{font-size:13.5px;font-weight:500}
 .fld-s{font-size:12.5px;color:var(--t2);margin-top:2px;line-height:1.5}
+/* liste de cases à cocher — composition du débrief quotidien. Pas de `.rows` :
+   celui-ci peint une bordure par ligne pour un tableau de faits en LECTURE,
+   alors qu'ici chaque ligne est une CIBLE DE CLIC et réclame un survol et un
+   focus visibles. Cases natives teintées par accent-color : aucun contrôle
+   custom, donc l'accessibilité clavier reste celle du navigateur. */
+.chks{display:grid;gap:2px;margin:4px 0 6px}
+.chk{
+  display:grid;grid-template-columns:auto 1fr;gap:11px;align-items:start;
+  padding:11px 12px;border-radius:var(--r-md);cursor:pointer;
+  transition:background-color .15s ease
+}
+.chk:hover{background:var(--paper-2)}
+/* le focus se pose sur la LIGNE entière : au clavier, la cible utile est
+   l'étiquette, pas la case seule */
+.chk:focus-within{background:var(--paper-2);box-shadow:var(--ring)}
+.chk input[type="checkbox"]{
+  width:15px;height:15px;margin:2px 0 0;accent-color:var(--accent-strong);cursor:pointer
+}
+.chk-n{display:block;font-size:13.5px;font-weight:500}
+.chk-s{display:block;font-size:12.5px;color:var(--t2);margin-top:2px;line-height:1.5}
+/* variante de `.fld` pour un champ qui ne tient pas sur une ligne : la grille
+   `1fr auto` de `.fld` écraserait un textarea contre sa colonne droite. */
+.fld--stack{grid-template-columns:minmax(0,1fr);gap:8px}
+.fld--stack .txa{width:100%}
 .inp{
   font-family:var(--mono);font-size:12.5px;width:74px;text-align:right;padding:6px 9px;
   border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);color:var(--t1);

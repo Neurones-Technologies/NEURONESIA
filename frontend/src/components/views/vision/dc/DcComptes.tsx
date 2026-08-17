@@ -1,5 +1,6 @@
 import { getComptesDc } from "@/lib/api/commercial";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { getSupplierIntelligence } from "@/lib/api/partners";
+import { formatDate, formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 
@@ -19,7 +20,7 @@ import { Note } from "@/components/ui/primitives";
  * justifient la demande du DC.
  */
 export async function DcComptes() {
-  const comptes = await getComptesDc(20);
+  const [comptes, fournisseurs] = await Promise.all([getComptesDc(20), getSupplierIntelligence(30)]);
 
   if (!comptes) {
     return (
@@ -36,6 +37,23 @@ export async function DcComptes() {
   const { top_comptes: top } = comptes;
   const maxCa = Math.max(...top.comptes.map((c) => c.ca_realise_xof), 1);
   const divergents = top.comptes.filter((c) => c.lecture_divergente);
+
+  // Partenaires qui font gagner le plus de marge de revente. Le DC ne pilote pas
+  // les achats — il regarde ces lignes pour savoir avec QUI la revente est
+  // rentable, l'exécution restant l'affaire des opérations.
+  //
+  // Les partenaires sans marge mesurable sont écartés plutôt que classés à zéro :
+  // une marge nulle ne distingue pas « revente à prix coûtant » de « aucun dossier
+  // rapproché », et mélanger les deux ferait remonter du vide dans un classement.
+  const marges = (fournisseurs ?? []).filter((f) => f.marge_sous_traitance_xof !== 0);
+  const topMarges = marges
+    .slice()
+    .sort((a, b) => b.marge_sous_traitance_xof - a.marge_sous_traitance_xof)
+    .slice(0, 5);
+  // L'échelle des barres est prise sur la plus forte marge EN VALEUR ABSOLUE :
+  // une marge négative doit tracer une barre comparable à une positive de même
+  // ampleur, sinon la perte se lit comme un détail.
+  const maxMarge = Math.max(...topMarges.map((f) => Math.abs(f.marge_sous_traitance_xof)), 1);
 
   return (
     <>
@@ -217,6 +235,58 @@ export async function DcComptes() {
                 },
               }))}
             />
+          </Tile>
+        )}
+
+        {topMarges.length > 0 && (
+          <Tile
+            span={12}
+            title="Partenaires qui rapportent le plus"
+            kick={`marge de revente · ${formatNumber(marges.length)} partenaires mesurés`}
+            aide="Ce que vous gagnez en revendant la prestation de chaque partenaire. Une marge négative signale une revente à perte : le dossier a été vendu moins cher qu'il n'a coûté."
+          >
+            <HintLine>Cliquez un partenaire pour le détail de sa marge</HintLine>
+            <Bars
+              rows={topMarges.map((f) => {
+                const perte = f.marge_sous_traitance_xof < 0;
+                return {
+                  name: f.name,
+                  sub: [
+                    `${formatNumber(f.nb_dossiers_lies)} dossier(s) lié(s)`,
+                    `${formatMFcfa(f.montant_total_xof)} M achetés`,
+                    `${formatPct(f.taux_dependance_pct, 1)} % des achats`,
+                  ].join(" · "),
+                  value: `${signed(mFcfa(f.marge_sous_traitance_xof))} M`,
+                  pct: (Math.abs(f.marge_sous_traitance_xof) / maxMarge) * 100,
+                  variant: perte ? ("r" as const) : ("s" as const),
+                  detail: {
+                    kicker: "Partenaire · marge de revente",
+                    title: f.name,
+                    tag: perte ? "revente à perte" : "marge positive",
+                    tagVariant: perte ? ("r" as const) : ("s" as const),
+                    body: [
+                      `La revente des prestations de ${f.name} dégage ${signed(mFcfa(f.marge_sous_traitance_xof))} M FCFA, sur ${formatNumber(f.nb_dossiers_lies)} dossier(s) et ${formatMFcfa(f.montant_total_xof)} M FCFA d'achats.`,
+                      perte
+                        ? "La marge est négative : sur ces dossiers, ce qui a été facturé au client est inférieur à ce qui a été acheté au partenaire. À reprendre au chiffrage — c'est une décision commerciale, pas un problème d'exécution."
+                        : "La revente est rentable sur le périmètre rapproché. C'est un partenaire sur lequel s'appuyer pour construire une offre.",
+                      "La marge rapproche les achats et la facturation d'un même dossier. Elle ne couvre donc que les dossiers où les deux sont renseignés — un partenaire mal rapproché apparaît plus bas qu'il ne l'est réellement.",
+                    ],
+                    kv: [
+                      ["Marge de revente", `${signed(mFcfa(f.marge_sous_traitance_xof))} M FCFA`],
+                      ["Montant acheté", `${formatMFcfa(f.montant_total_xof)} M FCFA`],
+                      ["Dossiers liés", formatNumber(f.nb_dossiers_lies)],
+                      ["Part des achats", `${formatPct(f.taux_dependance_pct, 1)} %`],
+                      ["Commandes", formatNumber(f.nb_commandes)],
+                    ],
+                  },
+                };
+              })}
+            />
+            <Reste affiches={topMarges.length} total={marges.length} nom="partenaires" />
+            <Note style={{ marginTop: 14 }}>
+              Les achats du miroir ne remontent qu&apos;à 2024, alors que les ventes remontent à 2021 : ce
+              classement porte sur une histoire plus courte que celle des comptes ci-dessus.
+            </Note>
           </Tile>
         )}
       </Bento>
