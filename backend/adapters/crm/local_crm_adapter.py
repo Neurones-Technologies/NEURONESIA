@@ -331,6 +331,45 @@ class LocalCRMAdapter(CRMRepository):
                 for row in result.fetchall()
             ]
 
+    async def get_top_orders(self, limit: int = 5, year: int | None = None) -> list[dict]:
+        """Commandes signées les plus importantes, par montant.
+
+        `get_recent_orders` classe les mêmes commandes par DATE : elle répond à
+        « qu'est-ce qui vient d'être signé », pas à « quelles sont les grosses
+        affaires de l'exercice ». Le filtre d'état est celui de `get_top_clients`
+        ('sale'/'done'), pour que la somme des commandes d'un client ici
+        corresponde au CA que le classement clients lui attribue.
+        """
+        from sqlalchemy import text
+        async with AsyncSessionLocal() as session:
+            base_sql = """
+                SELECT o.name, o.client_name, o.amount, o.date_order,
+                       COALESCE(NULLIF(c.country, ''), 'Autres/non renseigné') as pays
+                FROM sale_orders o
+                LEFT JOIN clients c ON o.client_id = c.client_id
+                WHERE o.state IN ('sale', 'done')
+            """
+            params: dict = {}
+            if year is not None:
+                base_sql += " AND substr(o.date_order, 1, 4) = :year"
+                params["year"] = str(year)
+            base_sql += " ORDER BY o.amount DESC LIMIT :limit"
+            params["limit"] = limit
+            result = await session.execute(text(base_sql), params)
+            return [
+                {
+                    "ref": row[0],
+                    "client": row[1],
+                    "montant_xof": float(row[2] or 0),
+                    # `date_order` est stocké en texte dans le miroir : on ne
+                    # garde que la partie date, sans reformater côté serveur —
+                    # la vue applique le format local.
+                    "date": (row[3] or "")[:10] or None,
+                    "pays": row[4],
+                }
+                for row in result.fetchall()
+            ]
+
     async def get_unpaid_invoices(self, limit: int = 10) -> list[dict]:
         async with AsyncSessionLocal() as session:
             result = await session.execute(

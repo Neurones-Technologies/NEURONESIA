@@ -196,6 +196,16 @@ async def top_clients(
     return await _crm(request).get_top_clients(limit=limit, year=year)
 
 
+@router.get("/top-orders", dependencies=[Depends(require_views("dashboard", "clients"))])
+async def top_orders(
+    request: Request,
+    year: int | None = Query(default=None),
+    limit: int = Query(default=10, le=50),
+):
+    """Les plus grosses commandes signées, par montant (et non par date)."""
+    return await _crm(request).get_top_orders(limit=limit, year=year)
+
+
 # ---------- Performance ----------
 
 @router.get("/performance/summary", dependencies=[Depends(require_views("performance"))])
