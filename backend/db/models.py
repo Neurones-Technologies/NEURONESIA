@@ -975,6 +975,37 @@ class CommercialParamModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class BriefingPreferenceModel(Base):
+    """Composition du débrief quotidien, décidée PAR RÔLE (pas par utilisateur).
+
+    Portée assumée : le briefing est déjà généré par rôle (un `sections[role]`
+    unique dans le store) et lu par tous les porteurs de ce rôle. Une préférence
+    par utilisateur imposerait d'en générer autant que de comptes, pour un coût
+    LLM qu'aucun usage ne réclame — S2I compte un titulaire par direction.
+
+    Pourquoi une table et pas le store JSON : data/briefing_store/latest.json est
+    un CACHE JETABLE, supprimé par scripts/purge_partenaires_exclus.py et réécrit
+    intégralement à chaque `service.generate`. Une préférence qui y vivrait
+    disparaîtrait à la première purge, sans trace ni message.
+
+    Table vide = comportement d'origine (le catalogue par défaut s'applique),
+    même doctrine que ModulePermissionModel où l'absence de ligne signifie
+    « défauts du code » : rien à migrer, rien à initialiser.
+
+    `value_json` est un blob et non des colonnes typées parce que le projet n'a
+    pas d'Alembic (db/database.py::init_db fait create_all + des _migrate_*
+    manuels) : y ajouter un champ ne doit pas coûter une migration.
+    """
+    __tablename__ = "briefing_preferences"
+
+    role: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value_json: Mapped[str] = mapped_column(Text, default="{}")
+    # Le réglage est PARTAGÉ : un DG qui trouve son débrief changé doit pouvoir
+    # savoir qui l'a changé. C'est la contrepartie obligatoire de la portée par rôle.
+    updated_by: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class SalespersonModel(Base):
     """Identité commerciale canonique — ce qu'Odoo ne porte pas.
 

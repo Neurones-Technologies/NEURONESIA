@@ -1,10 +1,12 @@
+import { getBriefingPreferences } from "@/lib/api/briefing";
 import { getMirrorCoverageSafe } from "@/lib/api/donnees";
 import { getMe } from "@/lib/api/me";
 import { engineFiability, ENGINES } from "@/lib/data/donnees";
-import { ROLE_LABELS } from "@/lib/auth/roles";
+import { profileToRole, ROLE_LABELS } from "@/lib/auth/roles";
 import { formatDate } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { Note, Tag } from "@/components/ui/primitives";
+import { DebriefForm } from "@/components/views/params/DebriefForm";
 
 const VIEW_LABELS: Record<string, string> = {
   briefing: "Briefing quotidien",
@@ -24,12 +26,25 @@ const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
 /** Vue Réglages — connectée au backend réel : identité et périmètre depuis
  * `/v1/auth/me` (matrice module × rôle appliquée côté serveur, pas un
- * masquage d'écran), fiabilité des moteurs depuis `/v1/stats/mirror`. Aucun
- * bouton n'est ajouté sans un état serveur derrière : ni seuils éditables (ils
- * vivent dans le code), ni préférences de notification (aucune table ne les
- * persiste aujourd'hui). */
-export async function ParamsView({ profile: _profile }: { profile: ProfileKey }) {
-  const [me, coverage] = await Promise.all([getMe(), getMirrorCoverageSafe()]);
+ * masquage d'écran), fiabilité des moteurs depuis `/v1/stats/mirror`.
+ *
+ * La règle tenue ici depuis l'origine : aucun bouton sans un état serveur
+ * derrière. Les seuils des moteurs restent donc en lecture seule — ils vivent
+ * dans le code. La composition du débrief, elle, y satisfait : la table
+ * `briefing_preferences` la persiste par rôle, et `PUT /v1/briefing/preferences`
+ * l'écrit. C'est la seule section modifiable de cet écran, et ce n'est pas une
+ * exception à la règle mais son application. */
+export async function ParamsView({ profile }: { profile: ProfileKey }) {
+  // Le prop `profile` était ignoré tant que l'écran était en lecture seule. Il
+  // devient signifiant : un admin peut ouvrir /dc/params (cf. [profile]/layout)
+  // et doit alors régler le débrief DU PROFIL AFFICHÉ, pas le sien. Pour un
+  // non-admin, le layout a déjà garanti que ce profil est le sien.
+  const roleCible = profileToRole(profile);
+  const [me, coverage, prefs] = await Promise.all([
+    getMe(),
+    getMirrorCoverageSafe(),
+    getBriefingPreferences(roleCible),
+  ]);
   const isAdmin = me.allowed_views === null;
   const allowed = new Set(me.allowed_views ?? ALL_VIEWS);
 
@@ -75,6 +90,31 @@ export async function ParamsView({ profile: _profile }: { profile: ProfileKey })
           </div>
         </div>
       </div>
+
+      {prefs && (
+        <div className="pblk">
+          <div className="pblk-h">
+            <h3>Personnaliser mon débrief</h3>
+            <p>
+              Ce que le briefing quotidien de {ROLE_LABELS[roleCible] ?? roleCible} doit contenir. Un
+              élément décoché n&apos;est plus calculé du tout — ni sa puce, ni son chiffre. Le résumé de
+              tête garde 5 lignes quel que soit le nombre d&apos;éléments : l&apos;analyse complète, elle,
+              les reprend tous. Réglage partagé par tous les comptes de ce profil.
+            </p>
+          </div>
+          <div className="pblk-b">
+            <DebriefForm
+              profile={profile}
+              role={prefs.role}
+              elements={prefs.elements}
+              consigne={prefs.consigne}
+              consigneMax={prefs.consigne_max}
+              source={prefs.source}
+              updatedBy={prefs.updated_by}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="pblk">
         <div className="pblk-h">
