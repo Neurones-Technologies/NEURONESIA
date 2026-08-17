@@ -10,11 +10,14 @@ contenait déjà une décision réelle avant ce module (cf. db/models.py).
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, HTTPException, Request
 
 from api.v1.dependencies import CurrentUser
-from modules.uc_arbitrage import aggregation, narratif, service, store
+from modules.uc_arbitrage import aggregation, conditions, narratif, service, store
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/arbitrage", tags=["Arbitrages"])
 
@@ -23,13 +26,17 @@ def _crm(request: Request):
     return request.app.state.container.crm_repo
 
 
+def _role(current_user) -> str:
+    return current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+
+
 def _require_mandate(current_user, mandat_role: str | None) -> None:
     """Le mandat (`dg` | `dir_financier`, cf. aggregation._mandat) est la seule
     autorité qui peut engager OU refermer un dossier. L'admin n'est jamais bloqué,
     comme partout ailleurs dans l'app. Un mandat vide (décisions antérieures à ce
     module, cf. le GO/NO-BID d'avant-vente) ne bloque personne : on ne verrouille
     pas rétroactivement des lignes qui n'ont jamais porté de mandat."""
-    role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    role = _role(current_user)
     mandat = (mandat_role or "").strip()
     if role != "admin" and mandat and role != mandat:
         raise HTTPException(
@@ -43,10 +50,85 @@ async def _compute_candidates(request: Request, subject_ref: str | None = None) 
 
 
 @router.get("/file")
-async def arbitrage_file(request: Request):
+async def arbitrage_file(request: Request, current_user: CurrentUser):
     """Module 26 — dossiers ouverts : conflits détectés en temps réel +
-    décisions persistées non tranchées."""
-    return await service.compute_file(_crm(request))
+    décisions persistées non tranchées.
+
+    La liste est restreinte aux conditions d'entrée activées par le profil du
+    demandeur (cf. `conditions.py`) ; les KPI, eux, restent ceux de la file
+    entière — cf. `service.compute_file`."""
+    return await service.compute_file(_crm(request), role=_role(current_user))
+
+
+# ─── Conditions d'entrée en arbitrage ─────────────────────────────────────────
+
+
+@router.get("/conditions")
+async def get_conditions(request: Request, current_user: CurrentUser):
+    """Catalogue des conditions, réglage de chaque profil, et effet mesuré sur
+    la file réelle.
+
+    `mesure.refs_par_condition` permet à l'écran de recalculer l'effet de
+    n'importe quelle combinaison pendant que l'utilisateur coche, sans nouvel
+    appel : sans ce compteur, le ET se découvre en vidant sa file.
+    """
+    role = _role(current_user)
+    candidats, par_profil = await asyncio.gather(
+        _compute_candidates(request),
+        store.get_conditions_par_profil(),
+    )
+    return {
+        "catalogue": conditions.catalogue_public(),
+        "profil": role,
+        # L'admin n'a pas de profil métier : il règle ceux des autres, il n'en a
+        # pas pour lui-même (sa propre file n'est donc jamais filtrée).
+        "profils_parametrables": list(conditions.PROFILS_PARAMETRABLES),
+        "conditions_actives": par_profil.get(role, []),
+        "par_profil": par_profil,
+        "mesure": conditions.mesurer(candidats, par_profil.get(role, [])),
+    }
+
+
+@router.put("/conditions/{profil}")
+async def update_conditions(profil: str, payload: dict, request: Request, current_user: CurrentUser):
+    """Active / désactive les conditions d'un profil.
+
+    Chacun règle SON profil ; l'admin règle n'importe lequel. Le réglage est
+    attaché au profil et non à la personne : il vaut donc pour tous les
+    utilisateurs qui portent ce rôle — l'écran le dit explicitement, faute de
+    quoi on modifierait la file d'un collègue sans le savoir.
+    """
+    if profil not in conditions.PROFILS_PARAMETRABLES:
+        raise HTTPException(status_code=404, detail=f"Profil « {profil} » inconnu.")
+
+    role = _role(current_user)
+    if role != "admin" and role != profil:
+        raise HTTPException(
+            status_code=403,
+            detail="Ce réglage est celui d'un autre profil que le vôtre.",
+        )
+
+    codes = payload.get("codes")
+    if not isinstance(codes, list):
+        raise HTTPException(status_code=422, detail="`codes` doit être une liste de codes de conditions.")
+
+    # Un code non implémenté n'est pas une erreur (il peut venir d'un écran plus
+    # ancien que ce backend) mais il ne doit pas passer inaperçu : sans cette
+    # trace, un réglage qui ne s'applique pas se diagnostique à l'aveugle.
+    ignores = conditions.inconnus(codes)
+    if ignores:
+        logger.warning("Conditions d'arbitrage inconnues ignorées pour « %s » : %s", profil, ", ".join(ignores))
+
+    par_profil = await store.set_conditions_profil(profil, codes, updated_by=current_user.email)
+    candidats = await _compute_candidates(request)
+    actives = par_profil.get(profil, [])
+    return {
+        "profil": profil,
+        "conditions_actives": actives,
+        "conditions_ignorees": ignores,
+        "par_profil": par_profil,
+        "mesure": conditions.mesurer(candidats, actives),
+    }
 
 
 @router.get("/dossier/{subject_ref}")
