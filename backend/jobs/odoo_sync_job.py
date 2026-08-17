@@ -47,6 +47,31 @@ def _get_odoo_name(field: list | None, default: str = "") -> str:
     return field[1] or default
 
 
+def _est_exclu(odoo_id: int | str | None, nom: str = "") -> bool:
+    """Partenaire intra-groupe à ne jamais écrire dans le miroir.
+
+    Le test porte sur le PARTENAIRE PORTÉ par l'enregistrement (son partner_id),
+    pas sur l'id de l'enregistrement lui-même : c'est ce qui écarte les BDC et
+    factures de l'entité, et pas seulement sa fiche.
+
+    `nom` n'est renseigné que pour les `dossiers`, seule table du miroir sans
+    client_id. Comparaison sur le nom EXACT (casse ignorée) et jamais en
+    sous-chaîne : dix entités « NEURONES » distinctes cohabitent en base et
+    seule celle explicitement listée doit sortir.
+
+    Cf. settings.excluded_partner_odoo_ids pour le motif de l'exclusion.
+    """
+    try:
+        if odoo_id is not None and int(odoo_id) in settings.excluded_partner_odoo_ids:
+            return True
+    except (TypeError, ValueError):
+        # client_id vide ou non numérique (partenaire absent) : jamais exclu par id.
+        pass
+    if not nom:
+        return False
+    return nom.strip().upper() in {n.strip().upper() for n in settings.excluded_partner_names}
+
+
 def _save_last_sync(ts: datetime):
     try:
         _LAST_SYNC_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +114,8 @@ async def _sync_clients_by_ids(odoo: OdooAdapter, ids: list[int]):
     async with AsyncSessionLocal() as session:
         for r in records:
             client_id = str(r["id"])
+            if _est_exclu(client_id, r.get("name") or ""):
+                continue
             sector = _get_odoo_name(r.get("industry_id"))
             country = _get_odoo_name(r.get("country_id"))
             existing = await session.get(ClientModel, client_id)
@@ -123,6 +150,8 @@ async def _sync_invoices_by_ids(odoo: OdooAdapter, ids: list[int]):
     async with AsyncSessionLocal() as session:
         for r in records:
             inv = _OA._move_to_invoice(r, str((r.get("partner_id") or [0])[0]))
+            if _est_exclu(inv.client_id):
+                continue
             amount_xof = _to_xof(inv.amount, inv.currency, rates)
             residual_xof = _to_xof(float(r.get("amount_residual") or 0), inv.currency, rates)
             existing = await session.get(InvoiceModel, inv.invoice_id)
@@ -202,6 +231,8 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
         for so in records:
             order_id = f"so_{so['id']}"
             partner = so.get("partner_id") or [None, ""]
+            if _est_exclu(partner[0], _get_odoo_name(partner)):
+                continue
             date_order = _parse_date(so.get("date_order"))
             salesperson = _get_odoo_name(so.get("user_id"))
             dossier = _get_odoo_name(so.get("dossier_id")) or None
@@ -254,6 +285,8 @@ async def _sync_purchase_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
         for po in records:
             order_id = f"po_{po['id']}"
             partner = po.get("partner_id") or [None, ""]
+            if _est_exclu(partner[0], _get_odoo_name(partner)):
+                continue
             date_order = _parse_date(po.get("date_order"))
             currency = _get_odoo_name(po.get("currency_id"), "XOF")
             amount_xof = _to_xof(float(po.get("amount_total", 0)), currency, rates)
@@ -299,6 +332,8 @@ async def _sync_suppliers_by_ids(odoo: OdooAdapter, ids: list[int]):
     async with AsyncSessionLocal() as session:
         for r in records:
             supplier_id = str(r["id"])
+            if _est_exclu(supplier_id, r.get("name") or ""):
+                continue
             term = r.get("property_supplier_payment_term_id") or None
             term_id = term[0] if term else None
             term_name = term[1] if term else None
@@ -348,6 +383,8 @@ async def _sync_supplier_invoices_by_ids(odoo: OdooAdapter, ids: list[int]):
         for r in records:
             invoice_id = f"si_{r['id']}"
             partner = r.get("partner_id") or [None, ""]
+            if _est_exclu(partner[0], _get_odoo_name(partner)):
+                continue
             currency = _get_odoo_name(r.get("currency_id"), "XOF")
             amount_xof = _to_xof(float(r.get("amount_total") or 0), currency, rates)
             residual_xof = _to_xof(float(r.get("amount_residual") or 0), currency, rates)
@@ -409,6 +446,8 @@ async def _sync_dossiers(odoo: OdooAdapter, since: datetime | None = None):
             for d in records:
                 ref = d["name"]
                 client = (d.get("partner_id") or [None, ""])[1] or ""
+                if _est_exclu((d.get("partner_id") or [None])[0], client):
+                    continue
                 salesperson = (d.get("saler_id") or [None, ""])[1] or ""
                 date_c_raw = d.get("date_creation") or ""
                 date_e_raw = d.get("date_end_project") or ""
@@ -467,6 +506,11 @@ async def run_odoo_sync(force_full: bool = False):
     mode = "complète" if since is None else f"incrémentale (depuis {since.strftime('%H:%M:%S')})"
     logger.info("Démarrage sync Odoo → SQLite [%s]", mode)
 
+    # Enregistrements écartés parce qu'ils portent un partenaire intra-groupe
+    # exclu (cf. _est_exclu). Journalisé en fin de sync : c'est le seul moyen de
+    # vérifier que le filtre mord encore après une évolution des domaines Odoo.
+    ignores = 0
+
     odoo = OdooAdapter()
     try:
         # ─── Taux de change (utilisés par factures, BDC et achats) ──────────
@@ -476,6 +520,9 @@ async def run_odoo_sync(force_full: bool = False):
         clients = await odoo.get_all_clients(limit=5000, since=since)
         async with AsyncSessionLocal() as session:
             for c in clients:
+                if _est_exclu(c.client_id, c.name or ""):
+                    ignores += 1
+                    continue
                 existing = await session.get(ClientModel, c.client_id)
                 if existing:
                     existing.name = c.name
@@ -500,6 +547,9 @@ async def run_odoo_sync(force_full: bool = False):
         async with AsyncSessionLocal() as session:
             new_inv = 0
             for inv in invoices:
+                if _est_exclu(inv.client_id):
+                    ignores += 1
+                    continue
                 amount_xof = _to_xof(inv.amount, inv.currency, rates)
                 residual_xof = _to_xof(inv.amount_residual, inv.currency, rates)
                 existing = await session.get(InvoiceModel, inv.invoice_id)
@@ -554,6 +604,9 @@ async def run_odoo_sync(force_full: bool = False):
             new_so = 0
             for so in sale_orders:
                 partner = so.get("partner_id") or [None, ""]
+                if _est_exclu(partner[0], _get_odoo_name(partner)):
+                    ignores += 1
+                    continue
                 order_id = f"so_{so['id']}"
                 date_order = _parse_date(so.get("date_order"))
                 salesperson = _get_odoo_name(so.get("user_id"))
@@ -610,6 +663,9 @@ async def run_odoo_sync(force_full: bool = False):
             new_po = 0
             for po in purchase_orders:
                 partner = po.get("partner_id") or [None, ""]
+                if _est_exclu(partner[0], _get_odoo_name(partner)):
+                    ignores += 1
+                    continue
                 order_id = f"po_{po['id']}"
                 date_order = _parse_date(po.get("date_order"))
                 currency = _get_odoo_name(po.get("currency_id"), "XOF")
@@ -642,6 +698,9 @@ async def run_odoo_sync(force_full: bool = False):
             new_sup = 0
             for s in suppliers:
                 supplier_id = str(s["id"])
+                if _est_exclu(supplier_id, s.get("name") or ""):
+                    ignores += 1
+                    continue
                 existing = await session.get(SupplierModel, supplier_id)
                 if existing:
                     existing.name = s["name"]
@@ -675,6 +734,9 @@ async def run_odoo_sync(force_full: bool = False):
             for r in supplier_invoices:
                 invoice_id = f"si_{r['id']}"
                 partner = r.get("partner_id") or [None, ""]
+                if _est_exclu(partner[0], _get_odoo_name(partner)):
+                    ignores += 1
+                    continue
                 currency = _get_odoo_name(r.get("currency_id"), "XOF")
                 amount_xof = _to_xof(float(r.get("amount_total") or 0), currency, rates)
                 residual_xof = _to_xof(float(r.get("amount_residual") or 0), currency, rates)
@@ -760,6 +822,9 @@ async def run_odoo_sync(force_full: bool = False):
                 for opp in opportunities:
                     opp_id = f"opp_{opp['id']}"
                     partner = opp.get("partner_id") or [None, ""]
+                    if _est_exclu(partner[0], _get_odoo_name(partner)):
+                        ignores += 1
+                        continue
                     stage = _get_odoo_name(opp.get("stage_id"))
                     salesperson = _get_odoo_name(opp.get("user_id"))
                     deadline = _parse_date(opp.get("date_deadline"))
@@ -823,8 +888,14 @@ async def run_odoo_sync(force_full: bool = False):
             "purchase_orders": len(purchase_orders),
             "suppliers": len(suppliers),
             "supplier_invoices": len(supplier_invoices),
+            "ignores_partenaires_exclus": ignores,
             "elapsed_seconds": round(elapsed, 2),
         }
+        if ignores:
+            logger.info(
+                "Sync : %d enregistrement(s) ignoré(s) — partenaires intra-groupe exclus %s",
+                ignores, sorted(settings.excluded_partner_odoo_ids),
+            )
         if clients or invoices or sale_orders or purchase_orders or suppliers or supplier_invoices:
             logger.info(
                 "Sync terminée en %.1fs : %d clients, %d factures, %d BDC, %d achats, "

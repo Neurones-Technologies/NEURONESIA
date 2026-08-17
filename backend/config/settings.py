@@ -55,6 +55,27 @@ class Settings(BaseSettings):
     odoo_sync_interval_minutes: int = 2  # sync incrémentale rapide
     odoo_webhook_secret: str = ""        # HMAC secret pour les webhooks Odoo
 
+    # ── Partenaires intra-groupe exclus du miroir ────────────────────────────
+    # Ni synchronisés depuis Odoo, ni conservés en base locale. Odoo (la source)
+    # n'est jamais modifié : ces entités continuent d'y vivre normalement.
+    #
+    # NEURONES TECHNOLOGIES BF porte DEUX fiches Odoo : client 2671 et
+    # fournisseur 3485. Motif de l'exclusion : entité du groupe, dont un seul BDC
+    # (FP/2022/6658, saisie erronée à 15,27 Md XOF) représentait 93 % du CA
+    # qu'elle portait et écrasait tous les classements client du cockpit.
+    #
+    # Exclure par ID Odoo et NON par motif de nom : la base compte 10 entités
+    # « NEURONES » distinctes (NEURONES TECHNOLOGIES, BENIN, ACADEMY, GROUP,
+    # DISTRIBUTIONS, GUINEE, SA…) qu'un LIKE '%NEURONES%' ferait disparaître avec.
+    #
+    # Ajouter une entité = ajouter son/ses ID ici, puis rejouer la purge :
+    #   python -m scripts.purge_partenaires_exclus --apply
+    excluded_partner_odoo_ids: set[int] = {2671, 3485}
+    # Utilisé pour la SEULE table `dossiers`, qui ne porte pas de client_id mais
+    # uniquement un client_name. Comparaison sur le nom exact (insensible à la
+    # casse), jamais en sous-chaîne — cf. les 10 entités ci-dessus.
+    excluded_partner_names: tuple[str, ...] = ("NEURONES TECHNOLOGIES BF",)
+
     # Chemins données
     ged_path: Path = Path("../data/ged")
     templates_path: Path = Path("../data/templates")
