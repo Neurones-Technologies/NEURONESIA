@@ -2,84 +2,23 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ProfileKey } from "@/lib/types";
-import { ROLE_LABELS } from "@/lib/auth/roles";
 import { defaultTarget, safeNextPath } from "@/lib/auth/redirect";
-
-// Mot de passe des comptes démo — doit rester aligné sur DEMO_USERS_PASSWORD
-// dans backend/scripts/seed_demo_users.py (défaut "neurones2026" si non surchargé).
-const DEMO_PASSWORD = "neurones2026";
-
-type DemoProfile = {
-  key: ProfileKey;
-  code: string;
-  label: string;
-  fullName: string;
-  email: string;
-  badge: string;
-};
-
-const PROFILES: DemoProfile[] = [
-  {
-    key: "dg",
-    code: "DG",
-    label: "Direction générale — arbitrage & atterrissage",
-    fullName: "Direction Generale",
-    email: "jmkouadio@neuronestech.com",
-    badge: ROLE_LABELS.dg,
-  },
-  {
-    key: "dc",
-    code: "DC",
-    label: "Direction commerciale — pipeline & forecast",
-    fullName: "Direction Commerciale",
-    email: "pbourron@neuronestech.com",
-    badge: ROLE_LABELS.dir_commercial,
-  },
-  {
-    key: "do",
-    code: "DO",
-    label: "Direction des opérations — backlog & visibilité",
-    fullName: "Direction des Operations",
-    email: "pyoro@neuronestech.com",
-    badge: ROLE_LABELS.dir_operations,
-  },
-  {
-    key: "df",
-    code: "DF",
-    label: "Direction financière — encaissement & marge",
-    fullName: "Direction Financiere",
-    email: "cdjereke@neuronestech.com",
-    badge: ROLE_LABELS.dir_financier,
-  },
-  {
-    key: "am",
-    code: "AM",
-    label: "Account manager — portefeuille & alertes",
-    fullName: "Commercial",
-    email: "sales@neuronestech.com",
-    badge: ROLE_LABELS.commercial,
-  },
-];
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [profileKey, setProfileKey] = useState<ProfileKey>("dg");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
-  const [session12h, setSession12h] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const current = PROFILES.find((p) => p.key === profileKey) ?? PROFILES[0];
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!password.trim()) {
-      setError("Le mot de passe est requis.");
+    if (!email.trim() || !password) {
+      setError("Email et mot de passe sont requis.");
       return;
     }
 
@@ -88,7 +27,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: current.email, password: DEMO_PASSWORD }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -96,11 +35,18 @@ function LoginForm() {
         return;
       }
       // `?next=` est posé par le proxy quand une page protégée a été demandée
-      // sans session (cf. src/proxy.ts) : on y retourne, sinon cockpit du profil.
+      // sans session (cf. src/proxy.ts) : on y retourne, sinon le cockpit du
+      // profil renvoyé PAR LE BACKEND — jamais un profil choisi côté client.
       // Un `next` hors domaine ou pointant sur /login est écarté par
       // safeNextPath. Si la cible appartient à un autre profil, le layout
       // [profile] ramène de lui-même l'utilisateur sur le sien.
-      router.push(safeNextPath(searchParams.get("next")) ?? defaultTarget(profileKey));
+      // `profile` est null pour un admin (accès à tous les cockpits) → repli
+      // sur « dg », comme la page racine.
+      router.push(
+        safeNextPath(searchParams.get("next")) ?? defaultTarget(data.profile ?? "dg")
+      );
+    } catch {
+      setError("Service indisponible — réessayez dans un instant.");
     } finally {
       setLoading(false);
     }
@@ -141,31 +87,21 @@ function LoginForm() {
         <div className="auth-box">
           <img src="/logo.png" alt="Neurones" className="auth-logo" />
           <h2>Connexion</h2>
-          <p className="sub">Authentification unique Odoo · second facteur actif</p>
+          <p className="sub">Accès réservé aux comptes Neurones</p>
 
           <form onSubmit={onSubmit}>
             <div className="fgrp">
-              <label htmlFor="profile">Profil d&apos;accès</label>
-              <select
-                id="profile"
-                value={profileKey}
-                onChange={(e) => setProfileKey(e.target.value as ProfileKey)}
-              >
-                {PROFILES.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="auth-persona">
-              <span className="psel-av">{current.code}</span>
-              <span className="psel-txt">
-                <b>{current.fullName}</b>
-                <span>{current.email}</span>
-              </span>
-              <span className="tag tag--a">{current.badge}</span>
+              <label htmlFor="email">Adresse email</label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="username"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="prenom.nom@neuronestech.com"
+              />
             </div>
 
             <div className="fgrp">
@@ -191,15 +127,9 @@ function LoginForm() {
               </div>
             </div>
 
-            <div className="frow">
-              <label className="chk">
-                <input type="checkbox" checked={session12h} onChange={(e) => setSession12h(e.target.checked)} />
-                Session de 12 h
-              </label>
-              <a href="#" onClick={(e) => e.preventDefault()}>
-                Mot de passe oublié
-              </a>
-            </div>
+            <p className="frow" style={{ display: "block", fontSize: 13, color: "var(--t2)" }}>
+              Session de 12 h. Mot de passe oublié : contactez un administrateur.
+            </p>
 
             {error && (
               <p className="note" style={{ borderLeftColor: "var(--alert)", color: "var(--alert)", marginBottom: 18 }}>
@@ -211,7 +141,7 @@ function LoginForm() {
               {loading ? "Connexion…" : "Se connecter"}
             </button>
             <p className="auth-foot">
-              Maquette de démonstration — aucune donnée réelle.
+              Accès restreint aux personnes autorisées.
               <br />
               Neurones Côte d&apos;Ivoire · exercice 2026
             </p>

@@ -1,17 +1,22 @@
 """
-Cree (ou met a jour) les 7 comptes demo du cockpit — un par persona.
+Cree (ou met a jour) les 7 comptes de demonstration du cockpit — un par persona.
 
-Ces comptes alimentent l'ecran de connexion du frontend :
-- POST /v1/auth/login (email + mot de passe) — mot de passe demo connu
-- POST /v1/auth/demo-login (par role, sans mot de passe, si active)
+Ces comptes se connectent comme n'importe quel autre : POST /v1/auth/login
+avec leur email et leur mot de passe (verification bcrypt cote backend).
 
 Idempotent : relancable sans risque. Migre aussi les anciens emails demo
 (@neurones-tech.com) vers les nouveaux (@neuronestech.com) sans creer de
 doublon.
 
-Mot de passe des comptes demo : variable d'environnement DEMO_USERS_PASSWORD
-(defaut "neurones2026"). Applique a la creation ; pour l'appliquer aussi aux
-comptes existants : python scripts/seed_demo_users.py --reset-passwords
+MOT DE PASSE — fourni par la variable d'environnement DEMO_USERS_PASSWORD,
+SANS valeur par defaut : aucun mot de passe n'est ecrit dans le depot, et le
+script refuse de tourner si elle est absente. Generer une valeur, par exemple
+`openssl rand -base64 24`, puis :
+
+    DEMO_USERS_PASSWORD='<valeur>' python scripts/seed_demo_users.py
+
+Le mot de passe n'est applique qu'a la CREATION des comptes ; pour le
+reappliquer aux comptes existants, ajouter --reset-passwords.
 """
 import asyncio
 import os
@@ -25,7 +30,25 @@ from adapters.auth.jwt_adapter import hash_password
 from db.database import AsyncSessionLocal, init_db
 from db.models import UserModel
 
-DEMO_PASSWORD = os.environ.get("DEMO_USERS_PASSWORD", "neurones2026")
+_MIN_PASSWORD_LEN = 6  # aligne sur la validation de POST /v1/auth/users
+
+
+def _read_demo_password() -> str:
+    """Lit DEMO_USERS_PASSWORD ou arrete le script avec la marche a suivre."""
+    password = os.environ.get("DEMO_USERS_PASSWORD", "")
+    if not password:
+        sys.exit(
+            "DEMO_USERS_PASSWORD absente - aucun mot de passe par defaut n'est "
+            "code dans ce depot.\n"
+            "Genere une valeur (`openssl rand -base64 24`) puis relance :\n"
+            "    DEMO_USERS_PASSWORD='<valeur>' python scripts/seed_demo_users.py"
+        )
+    if len(password) < _MIN_PASSWORD_LEN:
+        sys.exit(
+            f"DEMO_USERS_PASSWORD trop courte ({len(password)} caracteres) - "
+            f"{_MIN_PASSWORD_LEN} minimum, comme a la creation d'un compte via l'API."
+        )
+    return password
 
 # Alignes sur frontend/lib/fixtures/profiles.ts (mockup v17)
 DEMO_USERS = [
@@ -52,6 +75,7 @@ LEGACY_EMAILS = {
 
 async def main():
     reset_passwords = "--reset-passwords" in sys.argv
+    demo_password = _read_demo_password()
     await init_db()
     created, updated = 0, 0
 
@@ -86,7 +110,7 @@ async def main():
                 user.full_name = spec["full_name"]
                 user.is_active = True
                 if reset_passwords:
-                    user.hashed_password = hash_password(DEMO_PASSWORD)
+                    user.hashed_password = hash_password(demo_password)
                     changed = True
                 if changed:
                     updated += 1
@@ -97,7 +121,7 @@ async def main():
                 user = UserModel(
                     email=spec["email"],
                     full_name=spec["full_name"],
-                    hashed_password=hash_password(DEMO_PASSWORD),
+                    hashed_password=hash_password(demo_password),
                     role=spec["role"],
                     is_active=True,
                 )
@@ -108,8 +132,17 @@ async def main():
         await session.commit()
 
     print(f"\nOK - {created} cree(s), {updated} mis a jour, {len(DEMO_USERS)} comptes demo au total.")
-    print(f"Mot de passe demo : {DEMO_PASSWORD!r}"
-          + ("" if reset_passwords else " (nouveaux comptes uniquement — --reset-passwords pour tous)"))
+    # Le mot de passe n'est JAMAIS reaffiche : cette sortie finit dans les logs
+    # CI et les historiques de terminal. Il est deja connu de l'appelant, qui
+    # l'a fourni via DEMO_USERS_PASSWORD.
+    print(
+        "Mot de passe : celui de DEMO_USERS_PASSWORD"
+        + (
+            " (applique a TOUS les comptes)"
+            if reset_passwords
+            else " (nouveaux comptes uniquement - --reset-passwords pour tous)"
+        )
+    )
 
 
 if __name__ == "__main__":

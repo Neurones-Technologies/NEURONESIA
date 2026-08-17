@@ -1,4 +1,5 @@
 import { test, expect, type Cookie } from "@playwright/test";
+import { DEMO_EMAILS, demoPassword } from "./support/demo-credentials";
 
 // Nécessite un backend joignable (BACKEND_URL) avec les comptes démo seedés
 // via `python backend/scripts/seed_demo_users.py` — même prérequis que
@@ -32,7 +33,7 @@ test.describe("Cockpit DAF — les onglets rendent tous", () => {
   test.beforeAll(async ({ playwright, baseURL }) => {
     const api = await playwright.request.newContext({ baseURL });
     const reponse = await api.post("/api/auth/login", {
-      data: { email: "cdjereke@neuronestech.com", password: "neurones2026" },
+      data: { email: DEMO_EMAILS.df, password: demoPassword() },
     });
     expect(reponse.ok(), "connexion du compte démo DAF").toBeTruthy();
     session = (await api.storageState()).cookies;

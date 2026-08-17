@@ -7,16 +7,19 @@ test.describe("Page de connexion", () => {
     await page.goto("/login");
 
     await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
-    await expect(page.locator("#profile")).toBeVisible();
+    // Un champ email, pas un sélecteur de persona : le profil découle du rôle
+    // du compte authentifié, il n'est plus choisi côté client.
+    await expect(page.locator("#email")).toBeVisible();
     await expect(page.locator("#password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Se connecter" })).toBeVisible();
   });
 
-  test("refuse la soumission sans mot de passe", async ({ page }) => {
+  test("refuse la soumission sans identifiants", async ({ page }) => {
     await page.goto("/login");
 
-    // Le champ #password est `required` : le navigateur bloque la soumission
-    // nativement avant même le handler React, donc pas de navigation.
+    // #email et #password sont `required` : le navigateur bloque la soumission
+    // nativement avant même le handler React, donc pas de navigation ni d'appel
+    // réseau (ce test ne consomme rien du budget rate-limit de /auth/login).
     await page.getByRole("button", { name: "Se connecter" }).click();
 
     await expect(page).toHaveURL(/\/login$/);
