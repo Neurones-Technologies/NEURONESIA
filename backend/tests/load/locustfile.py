@@ -12,6 +12,10 @@ volontairement EXCLUS : ils appellent le LLM (coût réel en tokens) et sont
 figés par un cache journalier (modules/uc_daily_analysis/store.py), donc ils
 mesureraient le cache, pas le service.
 
+IDENTIFIANTS — LOAD_TEST_EMAIL / LOAD_TEST_PASSWORD. Le mot de passe n'a PAS
+de valeur par défaut (rien de secret dans le dépôt) : sans lui, le run s'arrête
+au premier login avec la marche à suivre.
+
 AUTHENTIFICATION — un SEUL login pour tout le run, partagé par tous les
 utilisateurs virtuels. Deux raisons :
   - `/auth/login` est rate-limité à 5/minute par IP (config/rate_limit.py) ;
@@ -25,7 +29,10 @@ import gevent
 from locust import HttpUser, between, task
 
 EMAIL = os.environ.get("LOAD_TEST_EMAIL", "oboyer@neuronestech.com")
-PASSWORD = os.environ.get("LOAD_TEST_PASSWORD", "neurones2026")
+# Aucune valeur par defaut : un mot de passe code dans le depot est un mot de
+# passe public. Absent, le run echoue au premier login avec la marche a suivre
+# (cf. _fetch_token) plutot que sur un 401 opaque.
+PASSWORD = os.environ.get("LOAD_TEST_PASSWORD", "")
 
 # Token partagé par tous les utilisateurs virtuels, obtenu UNE seule fois.
 #
@@ -52,6 +59,14 @@ def _fetch_token(user: HttpUser) -> str:
         if _TOKEN:
             return _TOKEN
         if _TOKEN_ERROR:
+            raise RuntimeError(_TOKEN_ERROR)
+
+        if not PASSWORD:
+            _TOKEN_ERROR = (
+                "LOAD_TEST_PASSWORD absente — exporte le mot de passe du compte "
+                f"{EMAIL} (celui utilise au seed, cf. scripts/seed_demo_users.py) "
+                "avant de lancer locust."
+            )
             raise RuntimeError(_TOKEN_ERROR)
 
         # `catch_response` : le login est une amorce du test, pas une mesure —

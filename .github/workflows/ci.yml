@@ -84,11 +84,20 @@ jobs:
         run: |
           mkdir -p "$CI_DATA_DIR"/{ged,templates,uploads,chromadb,bm25_index,local_db}
 
-      - name: Generate ephemeral SECRET_KEY
-        # main.py refuse de démarrer hors APP_ENV=development avec la clé JWT
-        # par défaut codée en dur (garde-fou anti-prod) — il en faut une vraie,
-        # même jetable, pour APP_ENV=test.
-        run: echo "SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Generate ephemeral secrets
+        # SECRET_KEY : main.py refuse de démarrer hors APP_ENV=development avec
+        # la clé JWT par défaut codée en dur (garde-fou anti-prod) — il en faut
+        # une vraie, même jetable, pour APP_ENV=test.
+        #
+        # DEMO_USERS_PASSWORD : le mot de passe des comptes démo n'existe nulle
+        # part dans le dépôt. On en tire un au sort par run, utilisé au seed
+        # puis relu par Playwright (E2E_DEMO_PASSWORD). `add-mask` évite qu'il
+        # ne se retrouve en clair dans les logs du job.
+        run: |
+          echo "SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          DEMO_PWD="$(openssl rand -base64 24)"
+          echo "::add-mask::$DEMO_PWD"
+          echo "DEMO_USERS_PASSWORD=$DEMO_PWD" >> "$GITHUB_ENV"
 
       - name: Start backend
         working-directory: backend
@@ -120,6 +129,9 @@ jobs:
         working-directory: backend
         env:
           LOCAL_DB_PATH: ${{ env.CI_DATA_DIR }}/local_db/neurones.db
+        # DEMO_USERS_PASSWORD vient de $GITHUB_ENV (étape « Generate ephemeral
+        # secrets ») et est donc déjà dans l'environnement. Sans elle le script
+        # s'arrête : aucun mot de passe démo n'est codé dans le dépôt.
         run: python scripts/seed_demo_users.py
 
       - name: Install frontend dependencies
@@ -158,7 +170,9 @@ jobs:
         working-directory: frontend
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
-        run: npx playwright test
+        # Les specs se connectent avec les comptes démo : elles ont besoin de la
+        # MÊME valeur qu'au seed, sous le nom E2E_DEMO_PASSWORD.
+        run: E2E_DEMO_PASSWORD="$DEMO_USERS_PASSWORD" npx playwright test
 
       - name: Upload Playwright report
         if: failure()
