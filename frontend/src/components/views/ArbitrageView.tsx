@@ -1,30 +1,24 @@
 import { Suspense } from "react";
 
 import { getArbitrageFile, getReliability, listDecisions } from "@/lib/api/arbitrage";
-import type { ArbitrageCandidate, Decision } from "@/lib/api/arbitrage";
+import type { ArbitrageCandidate } from "@/lib/api/arbitrage";
 import { getMe } from "@/lib/api/me";
-import { isAdminRole, roleToProfile } from "@/lib/auth/roles";
+import { isAdminRole } from "@/lib/auth/roles";
 import { META } from "@/lib/data/profiles";
-import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
+import { formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { StatTile } from "@/components/ui/bento";
-import { Note, Section, ViewHeader } from "@/components/ui/primitives";
+import { InfoBulle, Note, Section, ViewHeader } from "@/components/ui/primitives";
 import { DossierPanel } from "@/components/views/arbitrage/DossierPanel";
 import { DossierPending } from "@/components/views/arbitrage/DossierPending";
-import { Registre, type RegistreRow } from "@/components/views/arbitrage/Registre";
 import { Worklist, type QueueItem } from "@/components/views/arbitrage/Worklist";
-import { candidateDetail, decisionDetail } from "@/components/views/arbitrage/details";
+import { candidateDetail } from "@/components/views/arbitrage/details";
 import {
   PAYEUR_VARIANT,
-  STATUS_LABELS,
-  VERDICT_LABELS,
-  VERDICT_VARIANT,
   isRowRelevant,
-  joursAvant,
   roleLabel,
   roleShort,
   splitSujet,
-  statusVariant,
   trajectoireCourte,
 } from "@/components/views/arbitrage/shared";
 
@@ -33,9 +27,10 @@ import {
  * impayés (Direction financière) et les signaux commerciaux (renouvellement,
  * cross-sell) déjà produits par les autres modules — jamais un scénario inventé.
  *
- * L'écran est organisé en trois temps, dans l'ordre où on y travaille :
- * choisir un dossier dans la file (colonne de gauche, `Worklist`), l'instruire
- * (`DossierPanel`), puis relire ce qui a déjà été décidé (`Registre`). Le
+ * L'écran est organisé dans l'ordre où on y travaille : choisir un dossier dans
+ * la file (colonne de gauche, `Worklist`) puis l'instruire (`DossierPanel`). Le
+ * tableau du registre des décisions (`arbitrage/Registre.tsx`) n'est plus rendu
+ * ici — seuls les taux de fiabilité qu'il alimentait restent affichés. Le
  * dossier ouvert vit dans l'URL (`?dossier=<ref>`) : il est partageable et
  * survit au rechargement, là où l'écran n'instruisait auparavant que le premier
  * dossier du périmètre, sans aucun moyen d'en ouvrir un autre.
@@ -66,43 +61,6 @@ function queueItem(c: ArbitrageCandidate, rang: number, relevant: boolean, seuil
     retardMax: c.retard_max_jours,
     relevant,
     detail: candidateDetail(c, seuilM),
-  };
-}
-
-function registreRow(d: Decision, profile: ProfileKey, isAdmin: boolean): RegistreRow {
-  const reste = joursAvant(d.review_date);
-  const relueDeja = Boolean(d.review_verdict);
-  const enRetard = !relueDeja && reste !== null && reste < 0;
-
-  const revueLabel = relueDeja
-    ? VERDICT_LABELS[d.review_verdict] ?? d.review_verdict
-    : reste === null
-      ? "sans échéance de relecture"
-      : reste < 0
-        ? `en retard de ${formatNumber(Math.abs(reste))} j`
-        : `à relire dans ${formatNumber(reste)} j`;
-
-  return {
-    id: d.id,
-    titre: d.title,
-    sujet: d.subject_label || d.title,
-    statutLabel: STATUS_LABELS[d.status] ?? d.status,
-    statutVariant: statusVariant(d.status),
-    mandatLabel: d.mandat_role ? roleLabel(d.mandat_role) : "—",
-    enjeuLabel: d.enjeu_xof ? `${formatMFcfa(d.enjeu_xof)} M` : "—",
-    creeLe: d.created_at ? `journalisée le ${formatDate(d.created_at)}` : "date de création inconnue",
-    optionRetenue: d.option_retenue,
-    suiviLabel:
-      d.reco_suivie === null ? "suivi non tracé" : d.reco_suivie ? "recommandation suivie" : "recommandation écartée",
-    suiviVariant: d.reco_suivie === null ? "n" : d.reco_suivie ? "s" : "w",
-    revueLabel,
-    revueVariant: relueDeja ? VERDICT_VARIANT[d.review_verdict] ?? "n" : enRetard ? "r" : "n",
-    enRetard,
-    relueDeja,
-    // Même règle que `router._require_mandate` : l'admin passe partout, un mandat
-    // vide (décision antérieure à ce module) ne verrouille personne.
-    peutRelire: isAdmin || !d.mandat_role || roleToProfile(d.mandat_role) === profile,
-    detail: decisionDetail(d),
   };
 }
 
@@ -138,7 +96,6 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
     null;
 
   const registre = decisions ?? [];
-  const rows = registre.map((d) => registreRow(d, profile, isAdmin));
   const revuesFaites = registre.filter((d) => Boolean(d.review_verdict)).length;
   const urgent = file.kpi.echeance_plus_proche_jours !== null && file.kpi.echeance_plus_proche_jours < 15;
 
@@ -161,6 +118,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Dossiers ouverts"
           value={formatNumber(file.kpi.dossiers_ouverts)}
           unit="dossiers"
+          info="Le nombre de situations qui attendent une décision : un même client a des factures échues d'un côté et une opportunité commerciale active de l'autre. Relancer le recouvrement ou pousser la vente — les deux ne se font pas en même temps."
           reading={
             isAdmin
               ? "conflits détectés + décisions en cours"
@@ -191,6 +149,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Enjeu cumulé"
           value={formatNumber(file.kpi.enjeu_cumule_m_fcfa)}
           unit="M FCFA"
+          info="Le montant commercial que ces dossiers mettent en jeu : renouvellements et commandes qui basculent selon ce qui sera décidé. Ce n'est pas la somme que les clients doivent."
           reading={isAdmin ? "tous profils confondus" : `dont ${formatNumber(monEnjeuM)} M dans votre périmètre`}
           detail={{
             kicker: "Indicateur · enjeu",
@@ -219,6 +178,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Prochaine échéance"
           value={file.kpi.echeance_plus_proche_jours !== null ? formatNumber(file.kpi.echeance_plus_proche_jours) : "—"}
           unit="jours"
+          info="Dans combien de jours la décision déjà prise la plus urgente doit être réexaminée. En dessous de 15 jours, la fenêtre pour agir est courte. Les conflits pas encore tranchés, eux, n'ont pas de date."
           reading={
             file.kpi.echeance_plus_proche_jours === null
               ? "aucune décision ouverte n'est datée"
@@ -255,6 +215,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Coût du report"
           value={`≈ ${formatNumber(file.kpi.cout_report_m_fcfa_semaine)}`}
           unit="M FCFA / semaine"
+          info="Ce que coûte, à peu près, chaque semaine où l'on ne tranche pas. C'est une estimation calculée à partir de l'enjeu et du comportement de paiement du client : elle sert à savoir quel dossier passe en premier, pas à provisionner un montant."
           reading="estimation calibrée par client, pas une mesure"
           readingVariant="wat"
           detail={{
@@ -283,9 +244,10 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Revues en retard"
           value={formatNumber(file.kpi.revues_en_retard)}
           unit="décisions"
+          info="Une décision prise est censée être réexaminée à date fixe pour comparer ce qui s'est réellement passé à ce qui avait été recommandé. Ce chiffre compte celles dont la date est passée sans que ce bilan ait été fait."
           reading={
             file.kpi.revues_en_retard > 0
-              ? "à traiter dans le registre, plus bas"
+              ? "échéance de relecture dépassée"
               : `${formatNumber(revuesFaites)} revue(s) faite(s) sur ${formatNumber(registre.length)} décision(s)`
           }
           readingVariant={file.kpi.revues_en_retard > 0 ? "wat" : undefined}
@@ -303,7 +265,6 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
                     revuesFaites
                   )} revue(s) ont été réellement faites sur ${formatNumber(registre.length)} décision(s) au registre.`,
               "La revue est le seul mécanisme qui rend l'outil vérifiable après coup : elle compare l'issue constatée à ce qui avait été recommandé. Son verdict est choisi par celui qui a le mandat, jamais imposé par l'outil.",
-              "Le registre est affiché en bas de cet écran : chaque décision non relue y porte son formulaire de revue, pour qui en a le mandat.",
             ],
             kv: [
               ["Revues en retard", formatNumber(file.kpi.revues_en_retard)],
@@ -346,13 +307,16 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
 
       <Section
         id="registre"
-        title="Registre des décisions"
-        subtitle="ce qui a été engagé, par qui, et ce que la relecture en a dit"
+        title="Fiabilité des recommandations"
+        subtitle="ce que la relecture des décisions déjà prises dit de l'outil"
       >
         {reliability && (
           <div className="arb-rel">
             <div className="arb-rel-c">
-              <span>Recommandations suivies</span>
+              <span>
+                Recommandations suivies
+                <InfoBulle info="Sur les décisions déjà prises, la part où le mandataire a effectivement retenu l'option que le cockpit recommandait. Un taux bas ne dit pas que l'outil a tort : il dit que ses propositions ne sont pas suivies." />
+              </span>
               <b>{reliability.taux_suivi_pct !== null ? `${reliability.taux_suivi_pct} %` : "—"}</b>
               <i>
                 {formatNumber(reliability.nb_reco_suivies)} sur {formatNumber(reliability.nb_decisions_tracees)}{" "}
@@ -360,7 +324,10 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
               </i>
             </div>
             <div className="arb-rel-c">
-              <span>Recommandations confirmées à la revue</span>
+              <span>
+                Recommandations confirmées à la revue
+                <InfoBulle info="Quand on rouvre une décision quelques semaines plus tard pour regarder ce qui s'est réellement passé, la part des cas où la recommandation s'avère avoir été la bonne." />
+              </span>
               <b>{reliability.taux_confirmation_pct !== null ? `${reliability.taux_confirmation_pct} %` : "—"}</b>
               <i>
                 {formatNumber(reliability.nb_confirmees)} sur {formatNumber(reliability.nb_decisions_revues)} revue(s)
@@ -368,7 +335,10 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
               </i>
             </div>
             <div className="arb-rel-c">
-              <span>Confirmées parmi les recommandations suivies</span>
+              <span>
+                Confirmées parmi les recommandations suivies
+                <InfoBulle info="Le même taux, mais en ne gardant que les décisions où la recommandation a été suivie. C'est le seul chiffre qui mesure l'outil : ailleurs, on mesure surtout le jugement de celui qui a tranché." />
+              </span>
               <b>
                 {reliability.taux_confirmation_reco_suivie_pct !== null
                   ? `${reliability.taux_confirmation_reco_suivie_pct} %`
@@ -386,7 +356,6 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
             </p>
           </div>
         )}
-        <Registre rows={rows} profile={profile} />
       </Section>
     </>
   );
