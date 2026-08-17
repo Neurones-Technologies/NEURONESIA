@@ -7,8 +7,9 @@ import { isAdminRole } from "@/lib/auth/roles";
 import { META } from "@/lib/data/profiles";
 import { formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
+import { Aide } from "@/components/ui/aide";
 import { StatTile } from "@/components/ui/bento";
-import { InfoBulle, Note, Section, ViewHeader } from "@/components/ui/primitives";
+import { Note, Section, ViewHeader } from "@/components/ui/primitives";
 import { DossierPanel } from "@/components/views/arbitrage/DossierPanel";
 import { DossierPending } from "@/components/views/arbitrage/DossierPending";
 import { Worklist, type QueueItem } from "@/components/views/arbitrage/Worklist";
@@ -118,7 +119,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Dossiers ouverts"
           value={formatNumber(file.kpi.dossiers_ouverts)}
           unit="dossiers"
-          info="Le nombre de situations qui attendent une décision : un même client a des factures échues d'un côté et une opportunité commerciale active de l'autre. Relancer le recouvrement ou pousser la vente — les deux ne se font pas en même temps."
+          aide="Le nombre de situations qui attendent une décision : un même client a des factures échues d'un côté et une opportunité commerciale active de l'autre. Relancer le recouvrement ou pousser la vente — les deux ne se font pas en même temps."
           reading={
             isAdmin
               ? "conflits détectés + décisions en cours"
@@ -149,7 +150,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Enjeu cumulé"
           value={formatNumber(file.kpi.enjeu_cumule_m_fcfa)}
           unit="M FCFA"
-          info="Le montant commercial que ces dossiers mettent en jeu : renouvellements et commandes qui basculent selon ce qui sera décidé. Ce n'est pas la somme que les clients doivent."
+          aide="Le montant commercial que ces dossiers mettent en jeu : renouvellements et commandes qui basculent selon ce qui sera décidé. Ce n'est pas la somme que les clients doivent."
           reading={isAdmin ? "tous profils confondus" : `dont ${formatNumber(monEnjeuM)} M dans votre périmètre`}
           detail={{
             kicker: "Indicateur · enjeu",
@@ -178,7 +179,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Prochaine échéance"
           value={file.kpi.echeance_plus_proche_jours !== null ? formatNumber(file.kpi.echeance_plus_proche_jours) : "—"}
           unit="jours"
-          info="Dans combien de jours la décision déjà prise la plus urgente doit être réexaminée. En dessous de 15 jours, la fenêtre pour agir est courte. Les conflits pas encore tranchés, eux, n'ont pas de date."
+          aide="Dans combien de jours la décision déjà prise la plus urgente doit être réexaminée. En dessous de 15 jours, la fenêtre pour agir est courte. Les conflits pas encore tranchés, eux, n'ont pas de date."
           reading={
             file.kpi.echeance_plus_proche_jours === null
               ? "aucune décision ouverte n'est datée"
@@ -215,7 +216,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Coût du report"
           value={`≈ ${formatNumber(file.kpi.cout_report_m_fcfa_semaine)}`}
           unit="M FCFA / semaine"
-          info="Ce que coûte, à peu près, chaque semaine où l'on ne tranche pas. C'est une estimation calculée à partir de l'enjeu et du comportement de paiement du client : elle sert à savoir quel dossier passe en premier, pas à provisionner un montant."
+          aide="Ce que coûte, à peu près, chaque semaine où l'on ne tranche pas. C'est une estimation calculée à partir de l'enjeu et du comportement de paiement du client : elle sert à savoir quel dossier passe en premier, pas à provisionner un montant."
           reading="estimation calibrée par client, pas une mesure"
           readingVariant="wat"
           detail={{
@@ -244,7 +245,7 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
           label="Revues en retard"
           value={formatNumber(file.kpi.revues_en_retard)}
           unit="décisions"
-          info="Une décision prise est censée être réexaminée à date fixe pour comparer ce qui s'est réellement passé à ce qui avait été recommandé. Ce chiffre compte celles dont la date est passée sans que ce bilan ait été fait."
+          aide="Une décision prise est censée être réexaminée à date fixe pour comparer ce qui s'est réellement passé à ce qui avait été recommandé. Ce chiffre compte celles dont la date est passée sans que ce bilan ait été fait."
           reading={
             file.kpi.revues_en_retard > 0
               ? "échéance de relecture dépassée"
@@ -315,7 +316,11 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
             <div className="arb-rel-c">
               <span>
                 Recommandations suivies
-                <InfoBulle info="Sur les décisions déjà prises, la part où le mandataire a effectivement retenu l'option que le cockpit recommandait. Un taux bas ne dit pas que l'outil a tort : il dit que ses propositions ne sont pas suivies." />
+                <Aide id="reco-suivies">
+                Sur les décisions déjà prises, la part où le mandataire a effectivement retenu l&apos;option que le
+                cockpit recommandait. Un taux bas ne dit pas que l&apos;outil a tort : il dit que ses propositions ne
+                sont pas suivies.
+              </Aide>
               </span>
               <b>{reliability.taux_suivi_pct !== null ? `${reliability.taux_suivi_pct} %` : "—"}</b>
               <i>
@@ -326,7 +331,10 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
             <div className="arb-rel-c">
               <span>
                 Recommandations confirmées à la revue
-                <InfoBulle info="Quand on rouvre une décision quelques semaines plus tard pour regarder ce qui s'est réellement passé, la part des cas où la recommandation s'avère avoir été la bonne." />
+                <Aide id="reco-confirmees">
+                Quand on rouvre une décision quelques semaines plus tard pour regarder ce qui s&apos;est réellement
+                passé, la part des cas où la recommandation s&apos;avère avoir été la bonne.
+              </Aide>
               </span>
               <b>{reliability.taux_confirmation_pct !== null ? `${reliability.taux_confirmation_pct} %` : "—"}</b>
               <i>
@@ -337,7 +345,10 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
             <div className="arb-rel-c">
               <span>
                 Confirmées parmi les recommandations suivies
-                <InfoBulle info="Le même taux, mais en ne gardant que les décisions où la recommandation a été suivie. C'est le seul chiffre qui mesure l'outil : ailleurs, on mesure surtout le jugement de celui qui a tranché." />
+                <Aide id="reco-confirmees-parmi-suivies">
+                Le même taux, mais en ne gardant que les décisions où la recommandation a été suivie. C&apos;est le seul
+                chiffre qui mesure l&apos;outil : ailleurs, on mesure surtout le jugement de celui qui a tranché.
+              </Aide>
               </span>
               <b>
                 {reliability.taux_confirmation_reco_suivie_pct !== null

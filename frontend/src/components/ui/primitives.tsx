@@ -19,35 +19,6 @@ export function ViewHeader({
   );
 }
 
-/** Pastille « i » posée à côté du libellé d'un indicateur : dit en une phrase
- * de quoi parle le chiffre.
- *
- * Un libellé de tuile est un raccourci de métier (« Dossiers ouverts »,
- * « Coût du report ») : il nomme l'indicateur pour qui le connaît déjà et ne dit
- * rien à qui ouvre l'écran pour la première fois. Le tiroir de détail portait
- * bien l'explication, mais derrière un clic que rien n'annonçait.
- *
- * Le texte vit dans le DOM plutôt que dans un attribut `title` : il s'affiche
- * sans le délai d'une seconde des infobulles natives, il tient sur plusieurs
- * lignes, et un lecteur d'écran le restitue comme une partie de la carte.
- * L'ouverture est purement CSS — survol de la pastille, ou focus clavier de la
- * carte cliquable qui la contient (cf. `.info-i` dans globals.css) : rien à
- * hydrater, l'appelant reste un composant serveur.
- *
- * Pas de `tabIndex` sur la pastille : un élément focalisable à l'intérieur d'un
- * `role="button"` (la tuile cliquable) casserait la navigation au clavier. */
-export function InfoBulle({ info, plus }: { info: string; plus?: string }) {
-  return (
-    <span className="info-i">
-      <b aria-hidden="true">i</b>
-      <span className="info-tip" role="note">
-        {info}
-        {plus && <em>{plus}</em>}
-      </span>
-    </span>
-  );
-}
-
 export function KpiStrip({ children }: { children: ReactNode }) {
   return <div className="kpis">{children}</div>;
 }
