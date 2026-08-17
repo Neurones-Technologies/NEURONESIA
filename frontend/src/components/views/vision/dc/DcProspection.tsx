@@ -61,6 +61,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
           span={4}
           rang="contexte"
           label="Opportunités générées"
+          aide="Le nombre d'affaires nouvellement ouvertes sur la période. Le chiffre est une illustration : les dates de création du miroir sont faussées par des imports en masse."
           value={formatNumber(prosp.totaux.nb_opportunites)}
           unit={`objectif ${formatNumber(prosp.objectif_annuel_nb)}`}
           reading="données statiques — flux non mesurable"
@@ -88,6 +89,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
             span={4}
             rang="principal"
             label={`Nouveaux comptes ${acquisition.annee_courante.annee}`}
+            aide="Les clients qui ont commandé chez vous pour la première fois cette année. C'est la mesure fiable de l'acquisition : une première commande ne s'invente pas."
             value={formatNumber(acquisition.annee_courante.nb_comptes)}
             unit="premières commandes"
             reading={`${formatNumber(acquisition.annee_courante.nb_comptes_annee_precedente)} sur l'exercice précédent complet — mesuré`}
@@ -113,6 +115,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
           <StatTile
             span={4}
             label="Vivier de prospects"
+            aide="Les contacts enregistrés qui n'ont encore jamais commandé. C'est la réserve dans laquelle aller chercher les prochains clients."
             value={formatNumber(acquisition.vivier.nb_prospects)}
             unit="jamais commandé"
             reading={`${formatNumber(acquisition.vivier.nb_comptes_avec_commande)} comptes ont déjà commandé — mesuré`}
@@ -143,6 +146,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
             prosp.source,
             prosp.periode === "mois" ? "mensuel" : prosp.periode === "trimestre" ? "trimestriel" : "annuel",
           )}
+          aide="Le rythme d'ouverture de nouvelles affaires, période par période. La forme de l'indicateur est là ; les chiffres deviendront justes quand les dates de création seront fiables."
         >
           <HintLine>Cliquez une période pour l&apos;écart à l&apos;objectif</HintLine>
           <Bars
@@ -178,7 +182,12 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
 
         {acquisition && (
           <>
-            <Tile span={7} title="Acquisition de nouveaux comptes par exercice" kick="mesuré · première commande signée">
+            <Tile
+              span={7}
+              title="Acquisition de nouveaux comptes par exercice"
+              kick="mesuré · première commande signée"
+              aide="Combien de nouveaux clients vous gagnez chaque année, et comment ce rythme évolue. Un client compte l'année de sa première commande."
+            >
               <HintLine>Cliquez un exercice pour ses comptes entrants</HintLine>
               <Bars
                 rows={acquisition.annees
@@ -222,6 +231,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
               span={5}
               title={`Comptes entrés en ${acquisition.annee_courante.annee}`}
               kick="mesuré · par CA depuis l'entrée"
+              aide="Qui sont les nouveaux clients de l'année et ce qu'ils ont acheté depuis leur arrivée. Sert à voir si l'acquisition amène du volume ou seulement des noms."
             >
               {(acquisition.annees.find((a) => a.annee === acquisition.annee_courante.annee)?.comptes ?? []).length >
               0 ? (

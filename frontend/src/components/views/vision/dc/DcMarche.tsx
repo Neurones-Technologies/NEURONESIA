@@ -93,6 +93,7 @@ export async function DcMarche() {
           span={4}
           rang="principal"
           label="Axe dominant du pipe"
+          aide="Le domaine sur lequel vous avez le plus d'affaires en cours, en montant. Il dit où votre activité se concentre aujourd'hui — pas où elle rapporte le plus."
           value={axes.dominante?.axe ?? "—"}
           unit={axes.dominante ? `${formatPct(axes.dominante.part_montant_pct, 0)} % du pipe qualifié` : ""}
           reading={`calculé sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe en montant`}
@@ -120,6 +121,7 @@ export async function DcMarche() {
         <StatTile
           span={4}
           label="Part de marché"
+          aide="La place que vous occuperiez sur votre marché. Le chiffre est une illustration, pas une mesure : il faudrait connaître la taille réelle du marché, information dont le cockpit ne dispose pas."
           value={
             secteurs.totaux.part_marche_globale_pct !== null
               ? formatPct(secteurs.totaux.part_marche_globale_pct, 2)
@@ -154,6 +156,7 @@ export async function DcMarche() {
           span={4}
           rang="contexte"
           label="Signaux de veille exploitables"
+          aide="Les actualités de marché collectées automatiquement qui sont réellement consultables. Une partie de la collecte est inutilisable, ce compteur ne retient que le reste."
           value={formatNumber(veille.qualite.nb_avec_url)}
           unit={`sur ${formatNumber(veille.qualite.nb_total)} collectés`}
           reading={
@@ -188,6 +191,7 @@ export async function DcMarche() {
           span={12}
           title="Santé du marché orienté — axes du pipe ouvert"
           kick={`mesuré · calculé sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe`}
+          aide="Vos affaires en cours réparties par domaine d'activité, de la plus grosse enveloppe à la plus petite. À lire en comparant deux choses : le poids d'un domaine et le taux de réussite qui l'accompagne."
         >
           <HintLine>Cliquez un axe pour son poids et son taux de réussite</HintLine>
           <Bars
@@ -231,7 +235,12 @@ export async function DcMarche() {
           <Note style={{ marginTop: 14 }}>{axes.note}</Note>
         </Tile>
 
-        <Tile span={12} title="Part de marché : ce qui est calculable et ce qui ne l'est pas" quiet>
+        <Tile
+          span={12}
+          title="Part de marché : ce qui est calculable et ce qui ne l'est pas"
+          aide="La différence entre deux chiffres qu'on confond souvent : votre place sur le marché (inconnue, faute de référence extérieure) et le poids d'un domaine chez vous (connu). Les traiter comme équivalents conduit à des décisions fausses."
+          quiet
+        >
           <Bars
             rows={[
               {
@@ -263,6 +272,7 @@ export async function DcMarche() {
           span={12}
           title="Signaux de marché détectés"
           kick={`mesuré · ${formatNumber(veille.signaux.length)} signaux exploitables`}
+          aide="Les actualités repérées automatiquement qui peuvent justifier une prise de contact : appels d'offres, levées de fonds, nominations. Classées par urgence à les traiter."
         >
           {veille.signaux.length > 0 ? (
             <>

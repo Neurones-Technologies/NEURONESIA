@@ -122,6 +122,7 @@ export async function DgVision() {
           <StatTile
             span={4}
             label={`CA commandé ${year} au ${formatDate(dateArret)}`}
+            aide="Ce que vos clients ont commandé depuis le 1er janvier. Ce sont des commandes fermes, pas des factures : l'argent n'est pas encore encaissé."
             value={formatMFcfa(kpis.ytd.revenue_xof)}
             unit="M FCFA"
             reading={
@@ -155,6 +156,7 @@ export async function DgVision() {
           <StatTile
             span={4}
             label="Pipeline pondéré (réaliste)"
+            aide="Ce que les affaires en cours devraient rapporter, en tenant compte de leurs chances d'aboutir. Le scénario médian, ni optimiste ni prudent."
             value={formatMFcfa(forecast.scenarios.realiste_xof)}
             unit="M FCFA"
             reading={`probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %`}
@@ -180,6 +182,7 @@ export async function DgVision() {
           <StatTile
             span={4}
             label="Concentration top 5"
+            aide="La part de votre chiffre d'affaires portée par vos cinq plus gros clients. Plus elle est élevée, plus le départ de l'un d'eux serait difficile à absorber."
             value={top5Pct !== null ? `${formatPct(top5Pct, 0)}` : "—"}
             unit={top5Pct !== null ? "% du CA" : undefined}
             reading={
@@ -223,7 +226,12 @@ export async function DgVision() {
 
       <Section id="trajectoire" title="Trajectoire financière" subtitle="Où atterrit l'exercice, et pourquoi">
         <Bento>
-          <Tile span={7} title="Atterrissage et scénarios" kick="pipeline pondéré Odoo">
+          <Tile
+            span={7}
+            title="Atterrissage et scénarios"
+            kick="pipeline pondéré Odoo"
+            aide="Où devrait finir l'année selon trois hypothèses : prudente, réaliste, optimiste. L'écart entre les trois dit à quel point la fin d'exercice est incertaine."
+          >
             <ScenPanel
               items={[
                 {
@@ -295,7 +303,12 @@ export async function DgVision() {
             </FootNote> */}
           </Tile>
 
-          <Tile span={5} title="Commandes par mois" kick={`exercice ${year}`}>
+          <Tile
+            span={5}
+            title="Commandes par mois"
+            kick={`exercice ${year}`}
+            aide="Le rythme des commandes mois par mois. Fait apparaître la saisonnalité et les mois creux."
+          >
             <HintLine>Cliquez un mois pour son détail</HintLine>
             <Bars
               rows={kpis.monthly.map((m, i) => {
@@ -335,7 +348,12 @@ export async function DgVision() {
             />
           </Tile> */}
 
-          <Tile span={12} title="Explication d'écart budgétaire" kick={`${variance.annee} vs ${variance.annee_precedente}`}>
+          <Tile
+            span={12}
+            title="Explication d'écart budgétaire"
+            kick={`${variance.annee} vs ${variance.annee_precedente}`}
+            aide="Pourquoi votre chiffre d'affaires a changé depuis l'an dernier : clients gagnés, clients perdus, clients qui commandent plus ou moins. Décompose l'écart au lieu de le constater."
+          >
             <HintLine>Cliquez un effet pour les clients concernés</HintLine>
             <div style={{ overflowX: "auto" }}>
               <table className="tb">
@@ -452,7 +470,12 @@ export async function DgVision() {
 
       <Section id="risques" title="Dépendances et risques" subtitle="Ce qui fragilise l'entreprise">
         <Bento>
-          <Tile span={7} title="Où se concentre le risque client" kick="part du CA commandé">
+          <Tile
+            span={7}
+            title="Où se concentre le risque client"
+            kick="part du CA commandé"
+            aide="Le poids de chacun de vos plus gros clients. Sert à voir de qui votre activité dépend réellement."
+          >
             <HintLine>Cliquez un compte pour son exposition</HintLine>
             <Bars
               rows={(topClients ?? []).slice(0, 5).map((c) => {
@@ -492,7 +515,12 @@ export async function DgVision() {
             </FootNote> */}
           </Tile>
 
-          <Tile span={5} title="Paliers de concentration" kick="cumul du CA">
+          <Tile
+            span={5}
+            title="Paliers de concentration"
+            kick="cumul du CA"
+            aide="Combien de clients faut-il additionner pour atteindre la moitié, puis les trois quarts de votre chiffre. Peu de clients pour beaucoup de chiffre signale une dépendance forte."
+          >
             <Bars
               rows={[
                 ...(top1Pct !== null && top1
@@ -540,7 +568,13 @@ export async function DgVision() {
 
       {/* <Section id="copilote" title="Copilote" subtitle="Poser une question directement">
         <Bento>
-          <Tile span={12} quiet title="Interrogation en langage naturel" kick="sémantique · M5">
+          <Tile
+            span={12}
+            quiet
+            title="Interrogation en langage naturel"
+            kick="sémantique · M5"
+            aide="Poser une question sur vos données en français, sans passer par un tableau ni un filtre."
+          >
             <p style={{ margin: "0 0 4px", fontSize: 14, color: "var(--t2)", lineHeight: 1.6 }}>
               Le Copilote interroge le même miroir Odoo, avec les outils réels (CRM, factures, statistiques) — jamais de
               donnée inventée. Si une donnée manque, il le dit plutôt que de l&apos;estimer.

@@ -94,6 +94,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           span={3}
           rang="principal"
           label="DSO constaté"
+          aide="Le nombre de jours que mettent vos clients à vous payer, en moyenne. Calculé sur les factures déjà réglées : c'est du constaté."
           value={formatPct(dso.delai_encaissement_moyen_jours, 0)}
           unit="jours"
           reading={`cible ${formatNumber(dso.cible_dso_jours)} j · médiane ${formatPct(dso.delai_encaissement_median_jours, 0)} j`}
@@ -120,6 +121,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
         <StatTile
           span={3}
           label="DSO sur encours"
+          aide="Le même délai, mais calculé sur ce qui reste dû aujourd'hui. Un écart important avec le délai constaté signale que les impayés anciens s'accumulent."
           value={formatNumber(dso.dso_encours_jours ?? 0)}
           unit="jours de CA"
           reading={
@@ -155,6 +157,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           span={3}
           rang={dpo.source === "reel" ? "secondaire" : "contexte"}
           label="DPO"
+          aide="Le délai que vous mettez à payer vos fournisseurs. Aucune facture fournisseur n'étant raccordée au cockpit, ce chiffre est une hypothèse, pas une mesure."
           value={formatPct(dpo.dpo_jours, 0)}
           unit="jours"
           reading={dpo.source === "reel" ? "mesuré" : "gabarit · dettes non synchronisées"}
@@ -188,6 +191,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
         <StatTile
           span={3}
           label="Clients à risque"
+          aide="Les clients qui paient mal ou tard de façon répétée. À surveiller avant d'accepter une nouvelle commande importante."
           value={formatNumber(payeurs.totaux.nb_clients_a_risque)}
           unit={`sur ${formatNumber(payeurs.totaux.nb_clients_factures)}`}
           reading={`dont ${formatNumber(payeurs.totaux.nb_contentieux)} en contentieux`}
@@ -219,6 +223,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           span={7}
           title="Où va l'encours client"
           kick={`${formatNumber(courbeEncours.profondeur_mois)} mois · par ancienneté`}
+          aide="L'évolution de ce que vos clients vous doivent, réparti par ancienneté. Si les tranches anciennes grossissent, le recouvrement décroche."
         >
           <StackedAreaChart
             abscisses={courbeEncours.points.map((p) => p.libelle)}
@@ -255,6 +260,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           span={5}
           title="Délai d'encaissement dans le temps"
           kick={`moyenne glissante ${formatNumber(courbeDso.fenetre_mois)} mois`}
+          aide="Comment évolue le temps que mettent vos clients à payer. La tendance compte plus que le chiffre d'un mois isolé."
         >
           <LineChart
             series={[
@@ -295,7 +301,12 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             entre les deux). Ils viennent après les courbes, qui montrent
             l'évolution, et avant le tableau des payeurs, qui descend au client :
             du général au particulier. */}
-        <Tile span={4} title="Balance âgée des créances" kick={`${formatMFcfa(balance.total_xof)} M FCFA d'encours`}>
+        <Tile
+          span={4}
+          title="Balance âgée des créances"
+          kick={`${formatMFcfa(balance.total_xof)} M FCFA d'encours`}
+          aide="Ce qu'on vous doit, rangé par ancienneté du retard. Plus une créance est ancienne, moins elle a de chances d'être encaissée."
+        >
           <Bars
             rows={balance.tranches.map((t) => ({
               name: t.libelle,
@@ -340,6 +351,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           span={4}
           title="Dette fournisseurs par ancienneté"
           kick={sourceKick(dpo.source, `${formatMFcfa(dpo.dette_xof)} M FCFA`)}
+          aide="Ce que vous devez à vos fournisseurs. Les factures fournisseurs n'étant pas raccordées, ce bloc montre la forme de l'indicateur sans en mesurer le contenu."
         >
           <Bars
             rows={dpo.tranches.map((t) => ({
@@ -356,7 +368,12 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           <SourceNote source={dpo.source} raison={dpo.raison} avertissement={dpo.avertissement} />
         </Tile>
 
-        <Tile span={4} title="Cycle de cash" kick={sourceKick(cycle.source, "DSO contre DPO")}>
+        <Tile
+          span={4}
+          title="Cycle de cash"
+          kick={sourceKick(cycle.source, "DSO contre DPO")}
+          aide="L'écart entre le moment où vous payez vos fournisseurs et celui où vos clients vous payent. Quand vous payez avant d'être payé, il faut financer la différence."
+        >
           <Bars
             rows={[
               {
@@ -390,7 +407,12 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           />
         </Tile>
 
-        <Tile span={12} title="Suivi des mauvais payeurs" kick={`${formatNumber(payeurs.clients.length)} clients classés par risque`}>
+        <Tile
+          span={12}
+          title="Suivi des mauvais payeurs"
+          kick={`${formatNumber(payeurs.clients.length)} clients classés par risque`}
+          aide="Les clients qui paient mal, classés du plus problématique au moins. Sert à décider qui relancer en priorité et à qui demander des garanties."
+        >
           <HintLine>Cliquez un client pour son comportement de paiement et son exposition</HintLine>
           <div style={{ overflowX: "auto" }}>
             <table className="tb">

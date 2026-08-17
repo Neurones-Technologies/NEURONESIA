@@ -80,6 +80,7 @@ export async function AmVision() {
         <StatTile
           span={4}
           label="CA cumulé du portefeuille"
+          aide="Ce que vos clients vous ont acheté au total. C'est le poids de votre portefeuille."
           value={formatMFcfa(totalCa)}
           unit="M FCFA"
           reading={`${formatNumber((portfolio ?? []).length)} comptes actifs`}
@@ -105,6 +106,7 @@ export async function AmVision() {
         <StatTile
           span={4}
           label="Reste à encaisser"
+          aide="Ce que vos clients vous doivent encore. Une partie de votre travail consiste à faire rentrer cet argent."
           value={formatMFcfa(totalReste)}
           unit="M FCFA"
           reading={totalReste > 0 ? "sur l'ensemble du portefeuille" : "portefeuille soldé"}
@@ -132,6 +134,7 @@ export async function AmVision() {
         <StatTile
           span={4}
           label="Comptes sans commande > 90 j"
+          aide="Vos clients qui n'ont rien commandé depuis plus de trois mois. Au-delà de ce délai, la relation se distend et le client peut être en train de partir ailleurs."
           value={formatNumber(rupture.length)}
           unit={`sur ${formatNumber((portfolio ?? []).length)}`}
           reading={
@@ -168,7 +171,12 @@ export async function AmVision() {
         />
 
         {focusClient && (
-          <Tile span={7} title="Fiche compte" kick={focusClient.client}>
+          <Tile
+            span={7}
+            title="Fiche compte"
+            kick={focusClient.client}
+            aide="Tout ce qu'il faut savoir sur un client avant de l'appeler : ce qu'il achète, ce qu'il doit, où en sont les affaires en cours."
+          >
             <Narr style={{ fontSize: 13.5, marginBottom: 14 }}>
               {profile?.activite && <p>{profile.activite}</p>}
               {(profile?.recommandations ?? []).map((r, i) => (
@@ -205,7 +213,12 @@ export async function AmVision() {
           </Tile>
         )}
 
-        <Tile span={5} title="Ma prochaine action" kick={`${formatNumber(actions?.actions.length ?? 0)} actions`}>
+        <Tile
+          span={5}
+          title="Ma prochaine action"
+          kick={`${formatNumber(actions?.actions.length ?? 0)} actions`}
+          aide="Ce qu'il y a de plus utile à faire maintenant, dans l'ordre. Une liste de travail, pas un tableau de bord à interpréter."
+        >
           {actions && actions.actions.length > 0 ? (
             <>
               <HintLine>Cliquez une action pour son contexte</HintLine>
@@ -246,7 +259,12 @@ export async function AmVision() {
           )}
         </Tile>
 
-        <Tile span={7} title="Mon portefeuille par poids" kick="CA facturé">
+        <Tile
+          span={7}
+          title="Mon portefeuille par poids"
+          kick="CA facturé"
+          aide="Vos clients classés par ce qu'ils vous rapportent. Sert à répartir votre temps en connaissance de cause."
+        >
           {portfolio && portfolio.length > 0 ? (
             <>
               <HintLine>Cliquez un compte pour sa fiche</HintLine>
@@ -308,7 +326,12 @@ export async function AmVision() {
           )}
         </Tile>
 
-        <Tile span={5} title="Alerte rupture de rythme" kick="sans commande > 90 j">
+        <Tile
+          span={5}
+          title="Alerte rupture de rythme"
+          kick="sans commande > 90 j"
+          aide="Les clients qui commandaient régulièrement et se sont tus. Le silence d'un habitué est un signal, pas une pause."
+        >
           {rupture.length > 0 ? (
             <Lst
               items={rupture.map((c) => ({
@@ -343,7 +366,12 @@ export async function AmVision() {
           )}
         </Tile>
 
-        <Tile span={12} title="Radar renouvellement et obsolescence" kick="narration">
+        <Tile
+          span={12}
+          title="Radar renouvellement et obsolescence"
+          kick="narration"
+          aide="Les contrats et équipements qui arrivent en fin de vie chez vos clients. Autant d'occasions de revenir les voir avant un concurrent."
+        >
           <AnalysisSlot load={getCrossSellAnalysis} />
           {crosssell && (
             <div style={{ marginTop: 18 }}>
@@ -384,7 +412,13 @@ export async function AmVision() {
           )}
         </Tile>
 
-        <Tile span={12} quiet title="Aide à la rédaction contextualisée" kick="narration">
+        <Tile
+          span={12}
+          quiet
+          title="Aide à la rédaction contextualisée"
+          kick="narration"
+          aide="De quoi rédiger un message ou une proposition à partir de ce que le cockpit sait déjà du client."
+        >
           <p style={{ margin: "0 0 4px", fontSize: 14, color: "var(--t2)", lineHeight: 1.6 }}>
             Le Copilote rédige relances, propositions et comptes rendus à partir des données réelles du compte.
             Demandez par exemple : « Rédige une relance pour {focusClient?.client ?? "un client"} ».

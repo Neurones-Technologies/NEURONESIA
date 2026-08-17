@@ -63,7 +63,12 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
 
   return (
     <Bento>
-      <Tile span={7} title="Ce que le miroir contient" kick={`instantané du ${formatDate(coverage.generated_at)}`}>
+      <Tile
+        span={7}
+        title="Ce que le miroir contient"
+        kick={`instantané du ${formatDate(coverage.generated_at)}`}
+        aide="Les données dont le cockpit dispose, et à quelle date elles ont été relevées. Tout ce que vous voyez ailleurs en découle."
+      >
         <HintLine>Cliquez une source pour son mode d&apos;accès</HintLine>
         <div style={{ overflowX: "auto" }}>
           <table className="tb">
@@ -115,7 +120,12 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
         </FootNote> */}
       </Tile>
 
-      <Tile span={5} title="Ce que le cockpit ne peut pas dire" kick={`${gaps.length} limites`}>
+      <Tile
+        span={5}
+        title="Ce que le cockpit ne peut pas dire"
+        kick={`${gaps.length} limites`}
+        aide="Les questions auxquelles l'outil ne sait pas répondre, et pourquoi. À lire avant de conclure qu'un chiffre manque."
+      >
         <Lst
           items={gaps.map((g) => ({
             title: g.question,
@@ -138,7 +148,12 @@ export async function DonneesView({ profile }: { profile: ProfileKey }) {
         />
       </Tile>
 
-      <Tile span={12} title="Moteurs mobilisés par ce profil" kick={`${engines.length} moteurs`}>
+      <Tile
+        span={12}
+        title="Moteurs mobilisés par ce profil"
+        kick={`${engines.length} moteurs`}
+        aide="Les traitements qui alimentent vos écrans, et ce que chacun produit."
+      >
         <HintLine>Cliquez un moteur pour sa méthode</HintLine>
         <div style={{ overflowX: "auto" }}>
           <table className="tb">

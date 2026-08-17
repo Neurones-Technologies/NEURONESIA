@@ -54,6 +54,7 @@ export async function DcPics() {
           span={4}
           rang="principal"
           label="Pics d'activité détectés"
+          aide="Les clients qui commandent nettement plus que leur habitude en ce moment. Un pic se juge par rapport au rythme du compte lui-même, pas au montant : un gros client qui commande normalement n'est pas un pic."
           value={formatNumber(pics.couverture.nb_pics)}
           unit={`sur ${formatNumber(pics.fenetre_mois.length)} mois`}
           reading={`fenêtre ${pics.fenetre_mois[0]} → ${pics.fenetre_mois[pics.fenetre_mois.length - 1]}`}
@@ -80,6 +81,7 @@ export async function DcPics() {
           span={4}
           rang="contexte"
           label="Portefeuille mesurable"
+          aide="Le nombre de clients pour lesquels la détection peut fonctionner. Il faut assez de commandes passées pour savoir ce qui est habituel : un client trop récent ne peut pas être surveillé."
           value={formatNumber(pics.couverture.nb_comptes_eligibles)}
           unit={`comptes sur ${formatNumber(pics.couverture.nb_comptes_avec_commande)}`}
           reading={`${formatPct(pics.couverture.part_eligible_pct, 0)} % des comptes ayant déjà commandé`}
@@ -105,6 +107,7 @@ export async function DcPics() {
         <StatTile
           span={4}
           label="Alertes produites"
+          aide="Les signalements générés automatiquement et qui vous attendent ici. Ils ne partent pas en e-mail ni en notification : il faut venir les consulter."
           value={alertes ? formatNumber(alertes.totaux.nb_total) : "—"}
           unit={alertes ? `dont ${formatNumber(alertes.totaux.nb_critiques)} critiques` : "indisponible"}
           reading={alertes ? alertes.diffusion.canal : "file d'alertes inaccessible"}
@@ -149,6 +152,7 @@ export async function DcPics() {
           span={7}
           title="Pics d'activité sur la fenêtre récente"
           kick={`× ${pics.seuils.facteur} la médiane du compte`}
+          aide="Le détail des clients en accélération sur les derniers mois : lesquels, de combien, et à quel moment. C'est la liste sur laquelle appeler pendant que le besoin est là."
         >
           {pics.pics.length > 0 ? (
             <>
@@ -202,6 +206,7 @@ export async function DcPics() {
           rows={natureAffichee ? 2 : undefined}
           title="Alertes en attente"
           kick={alertes ? `${formatNumber(alertes.totaux.nb_total)} produites` : "indisponible"}
+          aide="Ce que le cockpit a repéré et qui n'a pas encore été traité, du plus urgent au moins urgent."
         >
           {alertes && alertes.alertes.length > 0 ? (
             <>
@@ -257,7 +262,12 @@ export async function DcPics() {
             déclarée après « Alertes en attente » parce que la grille remplit
             rangée par rangée. Même largeur que Pics. */}
         {alertes && alertes.totaux.par_type.length > 0 && (
-          <Tile span={7} title="Nature des alertes produites" quiet>
+          <Tile
+            span={7}
+            title="Nature des alertes produites"
+            aide="De quoi parlent les alertes en cours : clients qui décrochent, pics, échéances. Si une seule catégorie domine, c'est souvent le réglage qu'il faut revoir, pas le portefeuille."
+            quiet
+          >
             <Lst
               items={alertes.totaux.par_type.map((t) => ({
                 title: t.libelle,

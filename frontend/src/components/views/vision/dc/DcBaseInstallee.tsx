@@ -35,6 +35,7 @@ export async function DcBaseInstallee() {
         span={7}
         title="État du portefeuille par ancienneté de commande"
         kick={`au ${formatDate(dormance.as_of)} · seuil dormant ${dormance.seuils_mois.ralentit} mois`}
+        aide="Vos clients rangés selon la fraîcheur de leur dernière commande, des plus actifs aux endormis. C'est la photo de qui vous achète encore et qui s'éloigne."
       >
         <HintLine>Cliquez un segment pour ses comptes</HintLine>
         <Bars
@@ -104,7 +105,12 @@ export async function DcBaseInstallee() {
       </Tile>
 
       {dormance.decrochages.length > 0 && (
-        <Tile span={5} title="Comptes qui viennent de décrocher" kick="par CA historique">
+        <Tile
+          span={5}
+          title="Comptes qui viennent de décrocher"
+          kick="par CA historique"
+          aide="Les clients qui commandaient régulièrement et se sont arrêtés récemment. Les plus gros d'abord : ce sont ceux à rappeler avant que l'habitude ne se perde."
+        >
           <HintLine>Cliquez un compte pour son historique</HintLine>
           <Lst
             items={dormance.decrochages.slice(0, 6).map((c) => ({
@@ -151,7 +157,12 @@ export async function DcBaseInstallee() {
         </Tile>
       )}
 
-      <Tile span={12} title="Ciblage cross-sell et renouvellement" kick="M1 · narration">
+      <Tile
+        span={12}
+        title="Ciblage cross-sell et renouvellement"
+        kick="M1 · narration"
+        aide="Les occasions de vendre autre chose à des clients existants : ce qu'ils ont déjà, ce qui manque, ce qui arrive à échéance."
+      >
         <AnalysisSlot load={getCrossSellAnalysis} pliable titrePli="Lire l'analyse du ciblage" />
         {crosssell && (
           <div style={{ marginTop: 18 }}>

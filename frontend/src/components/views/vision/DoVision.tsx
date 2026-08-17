@@ -81,6 +81,7 @@ export async function DoVision() {
         <StatTile
           span={4}
           label="Backlog à consommer"
+          aide="Le travail déjà vendu qui reste à réaliser. C'est votre carnet de commandes : de l'activité assurée, pas encore exécutée."
           value={formatMFcfa(margins.stats.backlog_total)}
           unit="M FCFA"
           reading={`${formatNumber(margins.stats.nb_dossiers)} dossiers actifs`}
@@ -106,6 +107,7 @@ export async function DoVision() {
         <StatTile
           span={4}
           label="Mois de visibilité"
+          aide="Combien de mois d'activité votre carnet de commandes couvre, au rythme actuel. En dessous de quelques mois, il faut vendre pour ne pas avoir d'équipes sans travail."
           value={moisVisibilite !== null ? formatPct(moisVisibilite, 1) : "—"}
           unit={moisVisibilite !== null ? "mois" : undefined}
           reading={
@@ -139,6 +141,7 @@ export async function DoVision() {
         <StatTile
           span={4}
           label="Reste fournisseurs à payer"
+          aide="Ce que vous devez encore régler à vos sous-traitants et fournisseurs sur les chantiers en cours."
           value={formatMFcfa(margins.stats.fournisseurs_restant)}
           unit="M FCFA"
           reading={`${formatNumber(suppliers?.length ?? 0)} fournisseurs suivis`}
@@ -161,7 +164,12 @@ export async function DoVision() {
           }}
         />
 
-        <Tile span={12} title="Consommation du backlog vs plan" kick="narration">
+        <Tile
+          span={12}
+          title="Consommation du backlog vs plan"
+          kick="narration"
+          aide="Si vous réalisez le travail vendu au rythme prévu, ou si du retard s'accumule."
+        >
           <AnalysisSlot load={getMarginsAnalysis} />
           {/* <FootNote>
             Proxy assumé · l&apos;écart entre CA provisoire et définitif signale un décalage réel mais n&apos;en donne
@@ -169,7 +177,12 @@ export async function DoVision() {
           </FootNote> */}
         </Tile>
 
-        <Tile span={5} title="Cycle de la valeur" kick="du devis à l'encaissement">
+        <Tile
+          span={5}
+          title="Cycle de la valeur"
+          kick="du devis à l'encaissement"
+          aide="Le parcours d'une affaire, du devis jusqu'à l'encaissement, avec ce qui se perd à chaque étape. Montre où la valeur s'évapore."
+        >
           <Bars
             rows={[
               {
@@ -208,7 +221,12 @@ export async function DoVision() {
           {/* <FootNote>Toutes les barres sont exprimées en part du CA provisoire cumulé.</FootNote> */}
         </Tile>
 
-        <Tile span={7} title="Dossiers en dérive" kick="CA définitif < 50 % du provisoire">
+        <Tile
+          span={7}
+          title="Dossiers en dérive"
+          kick="CA définitif < 50 % du provisoire"
+          aide="Les chantiers qui rapportent beaucoup moins que ce qui était prévu au départ. À examiner un par un : l'écart vient soit du chiffrage, soit de l'exécution."
+        >
           {enDerive.length > 0 ? (
             <>
               <HintLine>Cliquez un dossier pour son écart détaillé</HintLine>
@@ -247,12 +265,22 @@ export async function DoVision() {
           )}
         </Tile>
 
-        <Tile span={12} title="Fiabilité fournisseurs" kick="narration">
+        <Tile
+          span={12}
+          title="Fiabilité fournisseurs"
+          kick="narration"
+          aide="Sur qui vous pouvez compter parmi vos sous-traitants, et qui pose des difficultés récurrentes."
+        >
           <AnalysisSlot load={getPartnersAnalysis} />
         </Tile>
 
         {suppliers && suppliers.length > 0 && (
-          <Tile span={7} title="Poids des fournisseurs" kick="part des achats">
+          <Tile
+            span={7}
+            title="Poids des fournisseurs"
+            kick="part des achats"
+            aide="La part de vos achats confiée à chaque fournisseur. Un fournisseur trop dominant devient un point de fragilité."
+          >
             <HintLine>Cliquez un fournisseur pour son exposition</HintLine>
             <Bars
               rows={suppliers.slice(0, 6).map((s) => ({
@@ -305,7 +333,12 @@ export async function DoVision() {
           </Tile>
         )}
 
-        <Tile span={5} title="Tension sur la sous-traitance" kick="M4">
+        <Tile
+          span={5}
+          title="Tension sur la sous-traitance"
+          kick="M4"
+          aide="Les endroits où la sous-traitance risque de manquer ou de coûter plus cher que prévu."
+        >
           {risquesSousTraitance.length > 0 ? (
             <Lst
               items={risquesSousTraitance.map((s) => ({

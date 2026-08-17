@@ -57,6 +57,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
         <StatTile
           span={4}
           label={`Objectif ${gap.annee}`}
+          aide="La cible de chiffre d'affaires de l'année. Tant qu'elle n'est pas saisie dans le référentiel, le cockpit en propose une, calculée sur l'exercice précédent."
           value={formatMFcfa(equipe.objectif_annuel_xof)}
           unit="M FCFA"
           reading={gap.source === "reel" ? "objectif saisi" : "gabarit · non validé"}
@@ -83,6 +84,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
         <StatTile
           span={4}
           label="Réalisé à date"
+          aide="Ce qui a effectivement été signé depuis le début de l'année. Ce sont des commandes fermes, pas des affaires en cours."
           value={formatMFcfa(equipe.realise_xof)}
           unit="M FCFA signés"
           reading={
@@ -119,6 +121,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           rang="principal"
           signeNeutre
           label="Gap vendu / objectif"
+          aide="Ce qui reste à vendre pour tenir l'objectif de l'année. À rapprocher du temps qui reste : l'écart seul ne dit pas s'il est rattrapable."
           value={`${equipe.ecart_xof > 0 ? "+" : ""}${formatMFcfa(equipe.ecart_xof)}`}
           unit="M FCFA"
           reading={
@@ -155,6 +158,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           span={7}
           title="Objectif et réalisé par période"
           kick={sourceKick(gap.source, gap.periode === "mois" ? "mensuel" : gap.periode === "trimestre" ? "trimestriel" : "annuel")}
+          aide="La cible et le réalisé côte à côte, période par période. Une période à venir n'affiche pas de taux d'atteinte : elle serait à zéro sans que ce soit un retard."
         >
           {/* Colonnes du réalisé, ligne de l'objectif — dans la MÊME unité, donc
               sans second axe (cf. l'avertissement de chart.tsx). Le classement en
@@ -248,6 +252,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           span={5}
           title="Gap par commercial"
           kick={`${formatNumber(commerciauxAvecObjectif.length)} avec objectif`}
+          aide="Ce qui reste à faire pour chaque commercial ayant une cible. Sert à voir où l'appui manque, pas à établir un palmarès."
         >
           {commerciauxAvecObjectif.length > 0 ? (
             <>
@@ -301,6 +306,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             span={6}
             title="Commerciaux sans objectif calculable"
             kick={`${formatNumber(sansObjectif.length)} à saisir`}
+            aide="Les commerciaux pour lesquels aucune cible n'a été fixée. Leur activité compte dans le total de l'équipe, mais ne peut pas être comparée à un objectif."
           >
             <Lst
               items={sansObjectif.slice(0, 6).map((c) => ({
@@ -340,6 +346,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             span={6}
             title="CA non imputable à une personne"
             kick={`${formatPct(100 - couverture.part_nominative_pct, 0)} % du CA`}
+            aide="La part du chiffre d'affaires qu'on ne peut rattacher à personne, faute de commercial renseigné. Elle limite d'autant la lecture par commercial ci-dessus."
           >
             <Bars
               rows={gap.porteurs_non_nominatifs.map((p) => ({

@@ -61,6 +61,7 @@ export async function DcMixOffreTuiles() {
         span={6}
         title="Mix d'offre du pipeline"
         kick={`calculé sur ${formatPct(couvertureMontant, 0)} % du pipe`}
+        aide="La répartition de vos affaires en cours entre vos différentes offres. Montre si votre activité future repose sur une seule ligne ou sur plusieurs."
       >
         {/* La famille dominante ouvre la carte en `.stat-block` interne plutôt
             qu'en tuile séparée : c'est la lecture en une ligne du classement qui
@@ -155,6 +156,7 @@ export async function DcMixOffreTuiles() {
           fill
           title="Mix d'atterrissage par trimestre d'échéance"
           kick={offerMix.historique_reel ? "évolution mesurée" : "projection · non historisée"}
+          aide="Comment se répartissent vos offres sur les trimestres à venir, selon les dates annoncées. Sert à repérer un trimestre qui reposerait sur une seule offre."
         >
           <HintLine>Cliquez un trimestre pour la répartition de son échéance</HintLine>
           {/* Repli calé sur le NOMBRE DE FAMILLES de la tuile de gauche, et non

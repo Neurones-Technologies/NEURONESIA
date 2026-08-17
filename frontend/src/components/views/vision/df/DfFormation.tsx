@@ -86,6 +86,7 @@ export async function DfFormation() {
           span={4}
           rang="principal"
           label="Score de qualité de saisie"
+          aide="Une note d'ensemble de la propreté des données. Plus elle est basse, moins les indicateurs du cockpit sont fiables."
           value={formatPct(score, 0)}
           unit="/ 100"
           reading={`${formatNumber(data.qualite.nb_critiques)} contrôles critiques sur ${formatNumber(data.qualite.nb_controles)}`}
@@ -113,6 +114,7 @@ export async function DfFormation() {
           span={4}
           rang="contexte"
           label="Modules de formation"
+          aide="Le nombre de sessions de formation prévues. Leur ordre est déterminé par les erreurs réellement constatées, pas par un programme théorique."
           value={formatNumber(data.modules.length)}
           unit="modules"
           reading={`${formatNumber(Math.round(data.duree_totale_min / 60))} h de formation au total`}
@@ -134,6 +136,7 @@ export async function DfFormation() {
         <StatTile
           span={4}
           label="Défauts structurels"
+          aide="Les problèmes qu'aucune formation ne corrigera : ils viennent de la façon dont l'outil est configuré, pas de la saisie."
           value={formatNumber(structurels.length)}
           unit="à raccorder"
           reading="hors portée d'une formation seule"
@@ -153,7 +156,12 @@ export async function DfFormation() {
       </div>
 
       <Bento>
-        <Tile span={7} title="Ce qui est réellement mal saisi" kick="contrôles mesurés">
+        <Tile
+          span={7}
+          title="Ce qui est réellement mal saisi"
+          kick="contrôles mesurés"
+          aide="Les erreurs de saisie effectivement trouvées dans les données, et leur fréquence. C'est ce qui détermine l'ordre des formations."
+        >
           <HintLine>Cliquez un contrôle pour l&apos;indicateur qu&apos;il casse et sa correction</HintLine>
           <Bars
             rows={data.controles.map((c) => ({
@@ -189,7 +197,12 @@ export async function DfFormation() {
           <Note style={{ marginTop: 14 }}>{data.qualite.methode}</Note>
         </Tile>
 
-        <Tile span={5} title="Règles d'or de l'utilisation du cockpit" kick="à rappeler en ouverture">
+        <Tile
+          span={5}
+          title="Règles d'or de l'utilisation du cockpit"
+          kick="à rappeler en ouverture"
+          aide="Les quelques principes à retenir pour ne pas dégrader les données en les saisissant."
+        >
           <Lst
             items={data.regles_or.map((r, i) => ({
               title: `Règle ${i + 1}`,
@@ -200,7 +213,12 @@ export async function DfFormation() {
           />
         </Tile>
 
-        <Tile span={12} title="Plan de formation" kick={`${formatNumber(data.modules.length)} modules · ordre de priorité mesuré`}>
+        <Tile
+          span={12}
+          title="Plan de formation"
+          kick={`${formatNumber(data.modules.length)} modules · ordre de priorité mesuré`}
+          aide="Le programme complet : quels sujets, pour qui, et dans quel ordre. Les modules les plus urgents sont ceux qui corrigent les erreurs les plus fréquentes."
+        >
           <HintLine>Cliquez un module pour son contenu et le défaut qu&apos;il vise</HintLine>
           <div style={{ overflowX: "auto" }}>
             <table className="tb">

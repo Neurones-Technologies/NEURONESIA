@@ -136,6 +136,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
         <StatTile
           span={3}
           label={`À échoir sous ${formatNumber(vigilance.horizon_jours)} jours`}
+          aide="L'argent que vos clients doivent vous régler dans les prochaines semaines. Pas encore en retard : c'est le moment de relancer pour que ça le reste."
           value={formatMFcfa(vigilance.totaux.montant_a_echoir_xof)}
           unit="M FCFA"
           reading={`${formatNumber(vigilance.totaux.nb_a_echoir)} créances · ${formatNumber(vigilance.totaux.nb_a_echoir_a_risque)} à risque de glissement`}
@@ -162,6 +163,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
         <StatTile
           span={3}
           label="Encaissement prévu restant"
+          aide="Ce qu'il reste à encaisser d'ici la fin de l'exercice, selon les échéances annoncées."
           value={formatMFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)}
           unit="M FCFA"
           reading={`sur ${formatNumber(aVenir.length)} mois · hors arriéré`}
@@ -190,6 +192,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={3}
           rang="principal"
           label="Arriéré hors calendrier"
+          aide="Les sommes déjà en retard de paiement. Elles n'apparaissent pas dans le calendrier prévisionnel : leur date est passée, on ne sait pas quand elles rentreront."
           value={formatMFcfa(arriere.montant_xof)}
           unit="M FCFA"
           reading={`${formatPct(arriere.part_encours_pct, 0)} % de l'encours · ${formatPct(arriere.part_plus_de_2_ans_pct, 0)} % au-delà de 2 ans`}
@@ -220,6 +223,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={3}
           signeNeutre
           label="Variation cumulée"
+          aide="Ce que la trésorerie aura gagné ou perdu sur l'ensemble de la période. Un chiffre négatif n'est pas forcément une alerte : tout dépend du niveau de départ."
           value={formatMFcfa(atterrissage.totaux.variation_cumulee_xof)}
           unit="M FCFA"
           reading="variation, pas un solde bancaire"
@@ -251,6 +255,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={12}
           title="Où va la trésorerie"
           kick={sourceKick(atterrissage.source, "variation cumulée, mois par mois")}
+          aide="La trajectoire de votre trésorerie sur les mois à venir : ce qui rentre, ce qui sort, et où cela vous mène."
         >
           {/* Le calendrier ci-dessous répond à « combien ce mois-là » ; cette courbe
               répond à « où on va ». Une seule série tracée, volontairement : une
@@ -290,6 +295,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={12}
           title="Atterrissage mensuel"
           kick={sourceKick(atterrissage.source, `${formatNumber(atterrissage.mois.length)} mois`)}
+          aide="Le détail mois par mois, sous forme de calendrier. Les mois déjà passés sont constatés, les suivants sont prévus — la distinction est marquée à l'écran."
         >
           <HintLine>Cliquez un mois pour le détail de ses encaissements et décaissements</HintLine>
           <div className="daf-cal">
@@ -389,6 +395,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={5}
           title="Créances à relancer avant échéance"
           kick={`${formatNumber(vigilance.a_echoir.length)} sous ${formatNumber(vigilance.horizon_jours)} jours`}
+          aide="Les factures dont la date de règlement approche. Les relancer maintenant évite qu'elles basculent en impayé."
         >
           {vigilance.a_echoir.length > 0 ? (
             <>
@@ -438,6 +445,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={7}
           title="Créances échues à recouvrer"
           kick={`${formatMFcfa(vigilance.totaux.montant_echu_xof)} M FCFA · ${formatNumber(vigilance.totaux.nb_contentieux)} au-delà de 90 j`}
+          aide="Les factures impayées dont l'échéance est dépassée, de la plus grosse à la plus petite. Au-delà de trois mois, le recouvrement devient nettement plus difficile."
         >
           <HintLine>Classées par montant restant dû — l&apos;arriéré ancien est traité à part</HintLine>
           <div style={{ overflowX: "auto" }}>

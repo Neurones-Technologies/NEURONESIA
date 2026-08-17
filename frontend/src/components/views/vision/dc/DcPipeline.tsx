@@ -62,6 +62,7 @@ export async function DcPipeline() {
             span={4}
             rang="principal"
             label="Portefeuille en sommeil"
+            aide="La part de vos clients qui n'ont rien commandé depuis longtemps. Ils restent au fichier mais ne contribuent plus : c'est le réservoir à réveiller."
             value={formatMFcfa(dormance.sommeil.ca_historique_xof)}
             unit="M FCFA historiques"
             reading={`${formatNumber(dormance.sommeil.nb_comptes)} comptes sans commande depuis plus de 12 mois`}
@@ -93,6 +94,7 @@ export async function DcPipeline() {
         <StatTile
           span={4}
           label="Taux de victoire"
+          aide="Sur les affaires déjà tranchées, la part que vous avez gagnée. Se lit en valeur, pas en nombre de dossiers : gagner beaucoup de petites affaires et perdre les grosses donne un mauvais taux."
           value={`${formatPct(performance?.win_rate.taux_valeur_pct ?? null, 0)}`}
           unit="% en valeur"
           reading="historique complet du miroir"
@@ -122,6 +124,7 @@ export async function DcPipeline() {
         <StatTile
           span={4}
           label="Opportunités à risque"
+          aide="Les affaires en cours qui montrent des signes de décrochage : plus de mouvement, échéance passée, ou trop longtemps au même stade."
           value={formatNumber(nbAtRisk)}
           unit="échéance dépassée"
           reading={`${formatMFcfa(atRiskTotal)} M FCFA pondérés concernés`}
@@ -147,7 +150,12 @@ export async function DcPipeline() {
       </div>
 
       <Bento>
-        <Tile span={7} title="Répartition du forecast par étape" kick="pondéré">
+        <Tile
+          span={7}
+          title="Répartition du forecast par étape"
+          kick="pondéré"
+          aide="Ce que vous pouvez raisonnablement espérer encaisser, étape par étape. Chaque montant est réduit selon les chances de conclure : une affaire au début compte moins qu'une affaire presque signée."
+        >
           {byStage.length > 0 ? (
             <>
               <HintLine>Cliquez une étape pour son poids dans le forecast</HintLine>
@@ -189,7 +197,12 @@ export async function DcPipeline() {
           )}
         </Tile>
 
-        <Tile span={5} title="Opportunités à requalifier" kick={`${atRisk.length} affichées`}>
+        <Tile
+          span={5}
+          title="Opportunités à requalifier"
+          kick={`${atRisk.length} affichées`}
+          aide="Les affaires dont la date annoncée est dépassée. Elles faussent la prévision tant que l'échéance n'a pas été reprise avec le client."
+        >
           {atRisk.length > 0 ? (
             <Lst
               items={atRisk.map((o) => ({
@@ -223,7 +236,12 @@ export async function DcPipeline() {
           )}
         </Tile>
 
-        <Tile span={12} title="Crédibilité du forecast" kick="narration · M5">
+        <Tile
+          span={12}
+          title="Crédibilité du forecast"
+          kick="narration · M5"
+          aide="Le degré de confiance à accorder à la prévision ci-dessus, et ce qui la fragilise. À lire avant de s'engager sur un chiffre."
+        >
           <AnalysisSlot load={getForecastAnalysis} />
         </Tile>
       </Bento>
