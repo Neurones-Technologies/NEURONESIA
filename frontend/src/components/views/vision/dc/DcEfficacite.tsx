@@ -65,6 +65,7 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
           span={4}
           rang="contexte"
           label="Commerciaux identifiés"
+          aide="Le nombre de commerciaux que le cockpit sait reconnaître de façon fiable. Le CRM ne stocke que du texte libre : plusieurs orthographes d'un même nom doivent d'abord être rattachées."
           value={formatNumber(fi.nb_personnes)}
           unit={`sur ${formatNumber(fi.nb_orthographes_observees)} orthographes`}
           reading={`${formatNumber(fi.nb_alias_non_confirmes)} rattachements non encore validés`}
@@ -92,6 +93,7 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
           span={4}
           rang="principal"
           label="CA rattaché à une personne"
+          aide="La part du chiffre d'affaires qu'on peut attribuer à un commercial nommé. Plus elle est basse, moins le classement ci-dessous décrit la réalité."
           value={formatPct(fi.part_ca_nominative_pct, 0)}
           unit="% du CA de l'exercice"
           reading={`${formatNumber(fi.nb_commandes_sans_commercial)} commandes et ${formatNumber(fi.nb_opportunites_sans_commercial)} opportunités sans commercial`}
@@ -117,6 +119,7 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
           span={4}
           rang="contexte"
           label="Seuil de significativité"
+          aide="Le nombre minimum d'affaires conclues pour qu'un commercial soit classé. En dessous, un ou deux dossiers suffiraient à le placer premier ou dernier."
           value={formatNumber(eff.seuil_significativite_closes)}
           unit="affaires closes minimum"
           reading="en dessous, le taux s'affiche mais ne classe pas"
@@ -144,6 +147,7 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
           span={12}
           title="Indice d'efficacité par commercial"
           kick={`${formatNumber(eff.commerciaux.length)} classés · ${eff.periodes_mesure.ca_signe}`}
+          aide="Une note d'efficacité par commercial, qui combine ce qu'il gagne et ce qu'il engage. À lire avec les limites indiquées juste en dessous, pas comme un palmarès définitif."
         >
           <HintLine>Cliquez un commercial pour ouvrir le calcul de son indice</HintLine>
           <Bars
@@ -194,7 +198,12 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
           </Note>
         </Tile>
 
-        <Tile span={6} title="Limites assumées de ce classement" quiet>
+        <Tile
+          span={6}
+          title="Limites assumées de ce classement"
+          aide="Ce que ce classement ne dit pas, et pourquoi. À lire avant d'en tirer une conclusion sur quelqu'un."
+          quiet
+        >
           <Lst
             items={eff.limites.map((l, i) => ({
               title: `Limite ${i + 1}`,
@@ -210,7 +219,12 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
         </Tile>
 
         {ref.doublons_orthographe.length > 0 || ref.porteurs_non_nominatifs.length > 0 ? (
-          <Tile span={6} title="Référentiel à valider" kick={`${formatNumber(fi.nb_alias_non_confirmes)} alias`}>
+          <Tile
+            span={6}
+            title="Référentiel à valider"
+            kick={`${formatNumber(fi.nb_alias_non_confirmes)} alias`}
+            aide="Les noms écrits de plusieurs façons dans le CRM et que le cockpit a rapprochés sans certitude. Les confirmer fiabilise directement le classement."
+          >
             <Lst
               items={[
                 ...ref.doublons_orthographe.map((d) => ({

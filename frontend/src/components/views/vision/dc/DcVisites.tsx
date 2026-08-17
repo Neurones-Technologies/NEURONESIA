@@ -52,6 +52,7 @@ export async function DcVisites() {
           span={4}
           rang="contexte"
           label="Visites enregistrées"
+          aide="Le nombre de visites clients consignées. Aucune visite réelle n'est encore saisie : ce module n'existe pas, ce que vous voyez est une maquette pour en décider la forme."
           value={formatNumber(c.nb_visites_enregistrees)}
           unit="au fichier"
           reading={`dont ${formatNumber(avecCr)} avec compte-rendu · données statiques`}
@@ -76,6 +77,7 @@ export async function DcVisites() {
         <StatTile
           span={4}
           label="Taux de couverture"
+          aide="La part de vos clients actifs qui ont reçu une visite. C'est l'indicateur visé : suivre un taux plutôt que de lire chaque compte-rendu."
           value={formatPct(c.taux_couverture_pct, 1)}
           unit="% des comptes actifs"
           reading={`${formatNumber(c.nb_comptes_sans_visite)} comptes actifs sans visite enregistrée`}
@@ -103,6 +105,7 @@ export async function DcVisites() {
           span={4}
           rang="principal"
           label="Comptes à couvrir en priorité"
+          aide="Les clients importants que personne n'est allé voir. Calculé sur des données réelles, contrairement aux visites elles-mêmes."
           value={formatNumber(fichier.comptes_a_visiter.length)}
           unit="affichés"
           reading="par CA historique — donnée réelle"
@@ -124,7 +127,12 @@ export async function DcVisites() {
       </div>
 
       <Bento>
-        <Tile span={7} title="Fichier de visite" kick={sourceKick(fichier.source, "gabarit de saisie")}>
+        <Tile
+          span={7}
+          title="Fichier de visite"
+          kick={sourceKick(fichier.source, "gabarit de saisie")}
+          aide="À quoi ressemblerait le journal des visites une fois le module en place. Les lignes affichées sont des exemples, posées à la main pour juger la forme."
+        >
           <HintLine>Cliquez une visite pour son compte-rendu</HintLine>
           <Lst
             items={fichier.visites.map((v) => ({
@@ -161,7 +169,12 @@ export async function DcVisites() {
           <SourceNote source={fichier.source} raison={fichier.raison} avertissement={fichier.avertissement} />
         </Tile>
 
-        <Tile span={5} title="Contenu minimal d'un compte-rendu" quiet>
+        <Tile
+          span={5}
+          title="Contenu minimal d'un compte-rendu"
+          aide="Ce qu'il faudrait saisir à chaque visite. Volontairement court : un formulaire trop long ne se remplit pas."
+          quiet
+        >
           <Lst
             items={fichier.contenu_minimal.map((champ, i) => ({
               title: champ,
@@ -180,6 +193,7 @@ export async function DcVisites() {
           span={12}
           title="Comptes actifs sans visite enregistrée"
           kick="mesuré · par CA historique"
+          aide="Vos clients qui achètent mais que personne ne va voir, les plus gros d'abord. Cette liste est réelle et exploitable dès maintenant."
         >
           <HintLine>Cliquez un compte pour son historique de commande</HintLine>
           <Lst
@@ -227,7 +241,12 @@ export async function DcVisites() {
           <Note style={{ marginTop: 14 }}>{c.lecture}</Note>
         </Tile>
 
-        <Tile span={12} title="Décisions à prendre avant de construire ce module" quiet>
+        <Tile
+          span={12}
+          title="Décisions à prendre avant de construire ce module"
+          aide="Les questions à trancher avant tout développement : qui saisit, à quel moment, et rattaché à quoi."
+          quiet
+        >
           <Lst
             items={fichier.questions_ouvertes.map((q, i) => ({
               title: `Question ${i + 1}`,

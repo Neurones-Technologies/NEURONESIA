@@ -88,6 +88,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={3}
           rang="principal"
           label="Performance"
+          aide="Une note d'ensemble de la santé financière, qui résume plusieurs indicateurs en un seul chiffre. Le détail de sa composition est juste en dessous."
           value={indice !== null ? formatPct(indice, 0) : "—"}
           unit="/ 100"
           reading={performance.verdict}
@@ -113,6 +114,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
         <StatTile
           span={3}
           label="Marge brute réalisée"
+          aide="Ce qui reste une fois retiré le coût direct de ce que vous avez vendu. C'est un chiffre constaté, pas une prévision."
           value={formatPct(marge.taux_retenu_pct, 1)}
           unit="%"
           reading={
@@ -145,6 +147,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
         <StatTile
           span={3}
           label="Résultat net projeté"
+          aide="Ce que l'exercice devrait laisser en fin d'année, une fois toutes les charges déduites. C'est une projection : elle repose sur des hypothèses de charges, pas sur des factures reçues."
           value={formatMFcfa(resultat.resultat_net_projete_xof)}
           unit="M FCFA"
           reading={`projection · ${formatNumber(resultat.mois_ecoules)} mois de charges`}
@@ -174,6 +177,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={3}
           rang="contexte"
           label="Charges engagées"
+          aide="Ce que vous avez commandé à vos fournisseurs depuis le début de l'exercice. Engagé ne veut pas dire payé : la dépense est décidée, le règlement peut venir plus tard."
           value={formatMFcfa(charges.totaux.montant_total_xof)}
           unit="M FCFA"
           reading={
@@ -207,6 +211,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={7}
           title="De quoi l'indice de performance est fait"
           kick={sourceKick(performance.source, `${formatNumber(performance.poids_retenu_pct)} % du poids retenu`)}
+          aide="Le détail de la note ci-dessus : quels éléments y entrent et combien chacun pèse. Permet de contester le calcul, pas seulement le résultat."
         >
           <HintLine>Cliquez une composante pour sa mesure et sa cible</HintLine>
           <Bars
@@ -248,7 +253,12 @@ export async function DfBudget({ annee }: { annee?: number }) {
           <SourceNote source={performance.source} raison={performance.regle} avertissement={performance.avertissement} />
         </Tile>
 
-        <Tile span={5} title="Charges de structure retenues dans la projection" kick={sourceKick("statique")}>
+        <Tile
+          span={5}
+          title="Charges de structure retenues dans la projection"
+          kick={sourceKick("statique")}
+          aide="Les dépenses fixes supposées pour l'année : loyers, salaires, abonnements. Elles ne sont pas lues dans la comptabilité mais posées à la main — les changer change le résultat projeté."
+        >
           <Bars
             rows={resultat.charges_detail.slice(0, 6).map((c) => ({
               name: c.poste,
@@ -281,6 +291,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={7}
           title="Consommation d'achats contre rythme budgétaire"
           kick={sourceKick(burn.source, `${formatNumber(burn.resume.mois_couverts)} mois cumulés`)}
+          aide="Votre rythme de dépense comparé à celui qui permettrait de tenir l'année. Au-dessus de la ligne, le budget s'épuise trop vite."
         >
           <LineChart
             series={[
@@ -333,6 +344,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={5}
           title="Taux de marge par exercice"
           kick={`${formatNumber(margeAn.resume.nb_exploitables)} exercices comparables`}
+          aide="L'évolution de votre marge d'une année sur l'autre. Seuls les exercices suffisamment documentés sont comparés — les autres donneraient une fausse tendance."
         >
           {/* Seuls les exercices comparables sont tracés. L'exercice en cours
               afficherait 96,7 % de marge sur deux dossiers imputés : la colonne
@@ -367,6 +379,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={12}
           title="Top des plus grosses charges"
           kick={`${formatNumber(charges.charges.length)} fournisseurs · voté`}
+          aide="Vos plus gros postes de dépense, par fournisseur. C'est là que quelques renégociations pèsent le plus."
         >
           <HintLine>Cliquez une ligne pour son détail et son rattachement budgétaire</HintLine>
           <div style={{ overflowX: "auto" }}>
@@ -456,6 +469,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
         <Tile
           span={7}
           title="Lignes budgétaires les plus consommées"
+          aide="Les postes du budget qui s'épuisent le plus vite, rapportés à ce qui était prévu. Sert à repérer un dépassement avant la fin de l'exercice."
           kick={sourceKick(
             lignes.source,
             lignes.totaux.part_exercice_ecoulee_pct !== null
@@ -519,6 +533,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={5}
           title={surFlux ? "Marge : les deux lectures disponibles" : "Marge réalisée mois par mois"}
           kick={surFlux ? "imputation insuffisante" : `${formatNumber(marge.couverture.nb_dossiers_imputes)} dossiers imputés`}
+          aide="L'évolution de la marge au fil des mois. Elle ne peut être calculée que sur les dossiers dont les dépenses ont été rattachées : la couverture est indiquée avec le chiffre."
         >
           {surFlux ? (
             <>

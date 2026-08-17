@@ -1509,6 +1509,66 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .tile-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:15px}
 .tile-h h3{font-family:var(--disp);font-size:17px;font-weight:400;letter-spacing:-.01em;margin:0}
 .tile-k{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);white-space:nowrap}
+
+/* Infobulle « ? » d'un titre de bloc (cf. ui/aide.tsx).
+   Tout en CSS : les vues sont rendues par le serveur, l'aide ne doit pas
+   attendre d'hydratation pour être consultable. */
+.aide{position:relative;display:inline-flex;vertical-align:baseline;margin-left:6px}
+/* L'infobulle DÉBORDE de sa tuile, et une tuile sans `position` ne participe pas
+   à l'empilement : l'ordre de peinture suivait alors l'ordre du DOM, et la tuile
+   suivante recouvrait l'infobulle de la précédente (« Arriéré hors calendrier »
+   masquée par « Variation cumulée »). Le `z-index` posé sur l'infobulle seule n'y
+   changeait rien — il n'avait aucun contexte où s'appliquer.
+
+   D'où ces deux règles : la tuile devient positionnée, et elle se hisse au-dessus
+   de ses voisines PENDANT le survol ou le focus du « ? » uniquement. Hors de ce
+   moment, l'empilement reste celui d'avant — un `z-index` permanent sur `.tile`
+   passerait devant le tiroir de détail et la barre supérieure.
+
+   `:focus-within` couvre le clavier, `:hover` la souris. Le sélecteur vise le
+   parent du « ? » : `.tile:has(...)` cible la tuile entière, pas le titre. */
+.tile:has(.aide-b:hover),
+.tile:has(.aide-b:focus-visible){position:relative;z-index:39}
+/* Le « ? » se lit comme une note de bas de page, pas comme une action : discret
+   au repos, il ne prend de l'encre qu'au survol. Un rond plein en accent tirait
+   l'œil avant le titre qu'il annote. */
+.aide-b{
+  width:15px;height:15px;border-radius:50%;border:1px solid var(--line-2);
+  background:transparent;color:var(--t3);font-family:var(--mono);font-size:9.5px;
+  line-height:1;cursor:help;padding:0;display:inline-flex;align-items:center;
+  justify-content:center;transition:color .14s ease,border-color .14s ease,background-color .14s ease
+}
+.aide-b:hover{color:var(--accent);border-color:var(--accent-border);background:var(--accent-soft)}
+.aide-b:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
+/* Ancrée au « ? » et alignée à GAUCHE de lui, pas centrée : un titre court en
+   bord de tuile (« Axe dominant du pipe », première colonne) envoyait la moitié
+   de l'infobulle hors de l'écran. Le débordement à droite est repris plus bas
+   pour les tuiles de fin de rangée.
+
+   SOUS le « ? » et non au-dessus : la première rangée de tuiles est à ~60 px du
+   haut du cadre, et une infobulle de trois lignes posée au-dessus y perdait ses
+   deux premières lignes, coupées par le bord de la fenêtre. Vers le bas, elle a
+   toute la hauteur de la tuile devant elle. */
+.aide-t{
+  position:absolute;top:calc(100% + 8px);left:-10px;
+  width:max-content;max-width:270px;padding:9px 11px;border-radius:9px;
+  background:var(--ink-2);color:#F3F0E9;border:1px solid var(--ink-4);
+  font-family:var(--sans);font-size:12px;font-weight:400;line-height:1.45;
+  letter-spacing:0;text-transform:none;text-align:left;white-space:normal;
+  box-shadow:var(--shadow-md);z-index:40;
+  opacity:0;visibility:hidden;transition:opacity .14s ease,visibility .14s ease;
+  pointer-events:none
+}
+.aide-b:hover + .aide-t,.aide-b:focus-visible + .aide-t{opacity:1;visibility:visible}
+/* Tuiles de fin de rangée : l'infobulle repart vers la gauche, sinon ses 270 px
+   sortent par la droite de la fenêtre. `:nth-child` sur la grille de 12 colonnes
+   ne suffit pas (les spans varient) — on cible les tuiles qui touchent le bord
+   droit de la grille, celles dont la colonne de fin est la douzième. */
+.bento > .t4:nth-child(3n) .aide-t,
+.bento > .t3:nth-child(4n) .aide-t,
+.bento > .t6:nth-child(2n) .aide-t,
+.kpi-row > *:last-child .aide-t{left:auto;right:-10px}
+@media (prefers-reduced-motion:reduce){.aide-t{transition:none}}
 /* Le chiffre est fluide, pas fixe : « -1712 » et « 2774 M FCFA » saturaient
    leur tuile à 44 px et l'unité venait coller le nombre. `clamp` rend la borne
    haute inchangée (44 px, cas courant) et laisse le chiffre se réduire quand la

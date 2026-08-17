@@ -50,6 +50,7 @@ export async function DcPipeQualite() {
           span={4}
           rang="principal"
           label="À closer"
+          aide="Les affaires proches de la signature, dont le dossier est complet. C'est là que l'effort commercial rapporte le plus vite."
           value={formatNumber(t.nb_a_closer)}
           unit="opportunités"
           reading={`${formatMFcfa(t.montant_a_closer_xof)} M FCFA en jeu${t.nb_prioritaires > 0 ? ` · ${formatNumber(t.nb_prioritaires)} avec dossier incomplet` : ""}`}
@@ -77,6 +78,7 @@ export async function DcPipeQualite() {
         <StatTile
           span={4}
           label="À compléter"
+          aide="Les affaires auxquelles il manque une information pour avancer : montant, échéance, interlocuteur. Le travail à faire est de saisie, pas de négociation."
           value={formatNumber(t.nb_a_completer)}
           unit="opportunités"
           reading={`${formatPct(t.part_a_completer_pct, 0)} % du pipe ouvert · ${formatMFcfa(t.montant_a_completer_xof)} M FCFA`}
@@ -102,6 +104,7 @@ export async function DcPipeQualite() {
         <StatTile
           span={4}
           label="À requalifier"
+          aide="Les affaires dont la date de conclusion annoncée est passée sans rien. Tant qu'elles ne sont pas revues, elles gonflent la prévision sans raison."
           value={formatNumber(t.nb_a_requalifier)}
           unit="échéances dépassées"
           reading={`${formatPct(t.part_montant_a_requalifier_pct, 0)} % du montant ouvert encore compté dans le forecast`}
@@ -127,7 +130,12 @@ export async function DcPipeQualite() {
       </div>
 
       <Bento>
-        <Tile span={7} title="Opportunités à closer" kick={`${formatNumber(qualite.a_closer.length)} affichées`}>
+        <Tile
+          span={7}
+          title="Opportunités à closer"
+          kick={`${formatNumber(qualite.a_closer.length)} affichées`}
+          aide="La liste des affaires mûres pour être conclues, les plus grosses d'abord. C'est la file de travail de la semaine."
+        >
           {qualite.a_closer.length > 0 ? (
             <>
               <HintLine>Cliquez une affaire pour son état de dossier</HintLine>
@@ -173,7 +181,12 @@ export async function DcPipeQualite() {
           )}
         </Tile>
 
-        <Tile span={5} title="Nature des informations manquantes" kick="sur le pipe ouvert">
+        <Tile
+          span={5}
+          title="Nature des informations manquantes"
+          kick="sur le pipe ouvert"
+          aide="Ce qui manque le plus souvent dans les dossiers. Si un même champ revient partout, c'est une habitude de saisie à corriger, pas un oubli isolé."
+        >
           <HintLine>Cliquez un défaut pour son poids</HintLine>
           <Bars
             rows={qualite.defauts.map((d) => ({
@@ -201,7 +214,12 @@ export async function DcPipeQualite() {
           />
         </Tile>
 
-        <Tile span={7} title="Dossiers les plus incomplets" kick="par gravité puis montant">
+        <Tile
+          span={7}
+          title="Dossiers les plus incomplets"
+          kick="par gravité puis montant"
+          aide="Les affaires où il manque le plus d'informations, en commençant par les plus grosses. Compléter celles-là fiabilise la prévision plus que toutes les autres."
+        >
           {qualite.a_completer.length > 0 ? (
             <Lst
               items={qualite.a_completer.map((o) => ({
@@ -236,7 +254,12 @@ export async function DcPipeQualite() {
           )}
         </Tile>
 
-        <Tile span={5} title="Plus gros montants à requalifier" kick="échéance dépassée">
+        <Tile
+          span={5}
+          title="Plus gros montants à requalifier"
+          kick="échéance dépassée"
+          aide="Les affaires en retard qui pèsent le plus lourd. Reprendre leur date avec le client corrige immédiatement la prévision."
+        >
           {qualite.a_requalifier.length > 0 ? (
             <Lst
               items={qualite.a_requalifier.map((o) => ({

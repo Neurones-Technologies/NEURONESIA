@@ -48,6 +48,7 @@ export async function DcCycleVie() {
         <StatTile
           span={4}
           label={`Affaires ≥ ${formatNumber(seuilM)} M FCFA`}
+          aide="Le nombre de grosses affaires actuellement en cours. Ce sont celles dont le cadrage demandait un suivi de bout en bout."
           value={formatNumber(stock.nb_ouvertes)}
           unit="ouvertes"
           reading={`${formatMFcfa(stock.montant_ouvert_xof)} M FCFA · ${formatPct(stock.part_pipe_ouvert_pct, 0)} % du pipe ouvert`}
@@ -76,6 +77,7 @@ export async function DcCycleVie() {
           span={4}
           rang="principal"
           label="Affaires enlisées"
+          aide="Les grosses affaires qui n'ont pas bougé depuis trop longtemps. Ni gagnées, ni perdues, ni avancées : ce sont celles à débloquer ou à fermer."
           value={formatNumber(stock.nb_enlisees)}
           unit={`ouvertes depuis ${stock.seuil_enlisement_jours} jours+`}
           reading={
@@ -104,6 +106,7 @@ export async function DcCycleVie() {
         <StatTile
           span={4}
           label="Durée de cycle mesurée"
+          aide="Le temps qu'il faut en moyenne entre l'ouverture d'une affaire et sa conclusion. Calculé sur les affaires déjà terminées qui portent les dates nécessaires."
           value={duree.exploitable && duree.mediane_jours !== null ? formatNumber(duree.mediane_jours) : "—"}
           unit={duree.exploitable ? "jours (médiane)" : "non mesurable"}
           reading={`${formatNumber(duree.nb_mesurees)} affaires datées sur ${formatNumber(duree.nb_closes_total)} closes (${formatPct(duree.couverture_pct, 1)} %)`}
@@ -132,7 +135,12 @@ export async function DcCycleVie() {
       </div>
 
       <Bento>
-        <Tile span={7} title={`Où se tiennent les affaires ≥ ${formatNumber(seuilM)} M`} kick="mesuré · par étape">
+        <Tile
+          span={7}
+          title={`Où se tiennent les affaires ≥ ${formatNumber(seuilM)} M`}
+          kick="mesuré · par étape"
+          aide="À quel stade d'avancement se trouvent vos grosses affaires en cours. Une accumulation sur une même étape signale l'endroit où ça coince."
+        >
           <HintLine>Cliquez une étape pour son poids</HintLine>
           <Bars
             rows={cycle.par_etape.slice(0, 8).map((e) => {
@@ -166,7 +174,12 @@ export async function DcCycleVie() {
           />
         </Tile>
 
-        <Tile span={5} title="Affaires suivies, par montant" kick={`${formatNumber(cycle.affaires.length)} affichées`}>
+        <Tile
+          span={5}
+          title="Affaires suivies, par montant"
+          kick={`${formatNumber(cycle.affaires.length)} affichées`}
+          aide="Le détail des grosses affaires une par une : montant, étape, et depuis combien de temps elles sont ouvertes."
+        >
           <HintLine>Cliquez une affaire pour son âge et son état</HintLine>
           {/* Repli à 7 : la liste porte jusqu'à quinze affaires et occupait à elle
               seule plus d'un écran, reléguant les blocs suivants sous la ligne de
@@ -220,6 +233,7 @@ export async function DcCycleVie() {
           span={7}
           title="Durée par étape du cycle"
           kick={sourceKick(histo.source, "gabarit")}
+          aide="Le temps passé à chaque étape. Ces durées ne sont pas mesurées : le système ne conserve pas l'étape précédente d'une affaire. C'est la forme que prendra l'indicateur, pas encore son contenu."
         >
           <HintLine>Cliquez une étape pour ce que le gabarit suppose</HintLine>
           <Bars
@@ -249,7 +263,12 @@ export async function DcCycleVie() {
           <SourceNote source={histo.source} raison={histo.raison} avertissement={histo.avertissement} />
         </Tile>
 
-        <Tile span={5} title="Historique en cours de constitution" kick="mesuré">
+        <Tile
+          span={5}
+          title="Historique en cours de constitution"
+          kick="mesuré"
+          aide="Depuis quand le cockpit enregistre les changements d'étape. Plus cette profondeur augmente, plus les durées par étape deviendront réelles."
+        >
           <Bars
             rows={[
               {
@@ -293,7 +312,12 @@ export async function DcCycleVie() {
         </Tile>
 
         {histo.mouvement_observe.changements_etape.length > 0 && (
-          <Tile span={12} title="Mouvements d'étape observés" kick="mesuré · entre deux instantanés">
+          <Tile
+            span={12}
+            title="Mouvements d'étape observés"
+            kick="mesuré · entre deux instantanés"
+            aide="Les affaires qui ont changé d'étape depuis le dernier relevé : ce qui a avancé, ce qui a reculé."
+          >
             <Lst
               items={histo.mouvement_observe.changements_etape.map((m) => ({
                 title: m.name,

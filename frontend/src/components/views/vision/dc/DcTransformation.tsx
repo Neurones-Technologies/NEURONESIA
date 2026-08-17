@@ -50,6 +50,7 @@ export async function DcTransformation() {
           span={4}
           rang="principal"
           label="Écart de victoire nombre / valeur"
+          aide="La différence entre le nombre d'affaires gagnées et l'argent qu'elles représentent. Gagner souvent mais petit, ou rarement mais gros : l'écart dit lequel des deux vous faites."
           value={ecartWin !== null ? `${ecartWin > 0 ? "+" : ""}${formatPct(ecartWin, 0)}` : "—"}
           unit="points"
           reading={
@@ -87,6 +88,7 @@ export async function DcTransformation() {
         <StatTile
           span={4}
           label="Valeur perdue"
+          aide="Le montant total des affaires que vous n'avez pas remportées. C'est le manque à gagner sur lequel travailler, pas une fatalité."
           value={performance ? formatMFcfa(performance.lost_deals.montant_total_xof) : "—"}
           unit="M FCFA"
           reading={
@@ -120,6 +122,7 @@ export async function DcTransformation() {
         <StatTile
           span={4}
           label="Premier contributeur"
+          aide="Le client qui pèse le plus lourd dans votre chiffre d'affaires. Plus sa part est grosse, plus son départ ferait mal : c'est une mesure de dépendance."
           value={premier ? premier.commercial : "—"}
           unit={partPremier !== null ? `${formatPct(partPremier, 0)} % du CA équipe` : ""}
           reading={
@@ -167,6 +170,7 @@ export async function DcTransformation() {
               span={7}
               title="Où se concentrent les pertes"
               kick={`${formatNumber(performance.lost_deals.nb_total)} affaires`}
+              aide="À quel moment et pour quelle raison vous perdez le plus d'affaires. Perdre tôt coûte peu ; perdre juste avant la signature coûte tout le travail engagé."
             >
               <HintLine>Cliquez un client pour ses affaires perdues</HintLine>
               <Bars
@@ -200,7 +204,12 @@ export async function DcTransformation() {
               />
             </Tile>
 
-            <Tile span={5} title="Plus grosses affaires perdues" kick="par montant">
+            <Tile
+              span={5}
+              title="Plus grosses affaires perdues"
+              kick="par montant"
+              aide="Les échecs qui ont coûté le plus cher, un par un. Ce sont ceux dont il vaut la peine de comprendre la raison."
+            >
               <Lst
                 items={performance.lost_deals.top_deals.slice(0, 5).map((d) => ({
                   title: String(d.name),
@@ -230,7 +239,12 @@ export async function DcTransformation() {
         )}
 
         {topSalespeople.length > 0 && (
-          <Tile span={12} title="Coaching de portefeuille" kick="CA par commercial">
+          <Tile
+            span={12}
+            title="Coaching de portefeuille"
+            kick="CA par commercial"
+            aide="Le poids de chaque commercial dans le chiffre d'affaires. Sert à repérer qui aurait besoin d'appui, et si l'activité tient sur trop peu de personnes."
+          >
             <HintLine>Cliquez un commercial pour son portefeuille</HintLine>
             <Bars
               rows={topSalespeople.slice(0, 8).map((s) => {
@@ -269,7 +283,12 @@ export async function DcTransformation() {
         )}
 
         {/* La narration ferme l'écran : cf. l'en-tête du composant. */}
-        <Tile span={12} title="Analyse des motifs de perte" kick="narration">
+        <Tile
+          span={12}
+          title="Analyse des motifs de perte"
+          kick="narration"
+          aide="La lecture d'ensemble de vos échecs : ce qui revient le plus souvent et ce qu'on peut y faire."
+        >
           <AnalysisSlot load={getPerformanceAnalysis} />
         </Tile>
       </Bento>

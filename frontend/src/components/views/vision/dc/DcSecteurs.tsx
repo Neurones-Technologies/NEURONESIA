@@ -55,6 +55,7 @@ export async function DcSecteurs() {
           span={4}
           rang="principal"
           label="Secteur renseigné"
+          aide="Le nombre de clients dont on connaît le domaine d'activité. C'est la limite de tout cet écran : sans secteur saisi, aucune analyse sectorielle n'est possible."
           value={formatNumber(reel.nb_avec_secteur)}
           unit={`client sur ${formatNumber(reel.nb_clients)}`}
           reading="analyse sectorielle réelle impossible en l'état"
@@ -84,6 +85,7 @@ export async function DcSecteurs() {
           span={4}
           rang="contexte"
           label="Nomenclature proposée"
+          aide="La liste de secteurs suggérée pour classer vos clients. Elle est à valider avant toute saisie en masse : la corriger après coup coûte beaucoup plus cher."
           value={formatNumber(secteurs.secteurs.length)}
           unit="catégories à valider"
           reading="c'est elle qui déterminera la saisie à mener"
@@ -104,6 +106,7 @@ export async function DcSecteurs() {
         <StatTile
           span={4}
           label="Secteurs en recul"
+          aide="Les domaines d'activité où votre chiffre baisse d'une année sur l'autre. À prendre comme une indication tant que peu de clients portent un secteur."
           value={formatNumber(enBaisse.length)}
           unit={`sur ${formatNumber(secteurs.secteurs.length)} · gabarit`}
           reading="données statiques — aucune tendance mesurée"
@@ -130,6 +133,7 @@ export async function DcSecteurs() {
           span={12}
           title="Performance commerciale par secteur d'activité"
           kick={sourceKick(secteurs.source, "nomenclature à valider")}
+          aide="Votre activité ventilée par domaine client. Repose sur la poignée de clients dont le secteur est connu : à lire comme une esquisse, pas comme un état des lieux."
         >
           <HintLine>Cliquez un secteur pour ce que le gabarit suppose</HintLine>
           <Bars
@@ -172,7 +176,12 @@ export async function DcSecteurs() {
           <SourceNote source={secteurs.source} raison={secteurs.raison} avertissement={secteurs.avertissement} />
         </Tile>
 
-        <Tile span={7} title="Ce que le référentiel porte réellement" kick="mesuré">
+        <Tile
+          span={7}
+          title="Ce que le référentiel porte réellement"
+          kick="mesuré"
+          aide="L'état réel de votre fichier client : ce qui est renseigné et ce qui ne l'est pas. Dit ce qu'il faudrait saisir pour que l'analyse par secteur tienne debout."
+        >
           <Bars
             rows={[
               {
@@ -209,7 +218,12 @@ export async function DcSecteurs() {
           </Note>
         </Tile>
 
-        <Tile span={5} title="Décisions à prendre avant la saisie" quiet>
+        <Tile
+          span={5}
+          title="Décisions à prendre avant la saisie"
+          aide="Les choix à arbitrer avant de lancer la saisie des secteurs : quelle liste, qui saisit, jusqu'où remonter."
+          quiet
+        >
           <Lst
             items={[
               {

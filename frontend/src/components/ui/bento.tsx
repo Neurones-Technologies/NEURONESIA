@@ -1,9 +1,27 @@
 import { ReactNode } from "react";
 import { Variant } from "@/lib/types";
+import { Aide } from "./aide";
 import { Clickable, DetailCard } from "./detail";
 import { LstRepli } from "./lst-repli";
 
 type Span = 3 | 4 | 5 | 6 | 7 | 8 | 12;
+
+/** Identifiant d'infobulle dérivé du titre, pour lier le `?` à son texte par
+ * `aria-describedby`.
+ *
+ * Dérivé du titre plutôt que tiré d'un compteur : `useId` imposerait un
+ * composant client, et un compteur de module donnerait des identifiants
+ * différents entre le rendu serveur et l'hydratation. Les titres portent des
+ * dates et des accents (« CA commandé 2026 au 17/08/2026 ») — d'où la
+ * normalisation. */
+function slugAide(titre: string): string {
+  return titre
+    .normalize("NFD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+}
 
 export function Bento({ children }: { children: ReactNode }) {
   return <div className="bento">{children}</div>;
@@ -13,6 +31,7 @@ export function Tile({
   span = 12,
   title,
   kick,
+  aide,
   quiet,
   rows,
   fill,
@@ -21,6 +40,10 @@ export function Tile({
   span?: Span;
   title?: string;
   kick?: string;
+  /** Ce que le bloc dit, en langage d'usage — rendu en infobulle « ? » après le
+   *  titre (cf. ui/aide.tsx). Sans titre, il n'y a rien à annoter : l'aide est
+   *  alors ignorée. */
+  aide?: string;
   quiet?: boolean;
   /** `2` : la tuile tient la hauteur de deux rangées, pour faire face à une
    *  colonne de deux tuiles empilées. Sans valeur, comportement d'avant. */
@@ -36,7 +59,12 @@ export function Tile({
     >
       {(title || kick) && (
         <div className="tile-h">
-          {title && <h3>{title}</h3>}
+          {title && (
+            <h3>
+              {title}
+              {aide && <Aide id={slugAide(title)}>{aide}</Aide>}
+            </h3>
+          )}
           {kick && <span className="tile-k">{kick}</span>}
         </div>
       )}
@@ -123,6 +151,7 @@ export function StatTile({
   label,
   value,
   unit,
+  aide,
   reading,
   readingVariant,
   spark,
@@ -135,6 +164,10 @@ export function StatTile({
   label: string;
   value: string;
   unit?: string;
+  /** Ce que l'indicateur mesure, en langage d'usage — infobulle « ? » après le
+   *  libellé (cf. ui/aide.tsx). Complète le tiroir `detail`, qui porte les
+   *  chiffres corroborants : ici le sens, là la provenance. */
+  aide?: string;
   reading?: string;
   readingVariant?: "pos" | "neg" | "wat";
   spark?: number[];
@@ -153,7 +186,10 @@ export function StatTile({
   const body = (
     <>
       <div className="tile-h">
-        <h3>{label}</h3>
+        <h3>
+          {label}
+          {aide && <Aide id={slugAide(label)}>{aide}</Aide>}
+        </h3>
       </div>
       <div className="stat-l">
         <span className={`stat-v num${negatif ? " neg" : ""}`}>{value}</span>

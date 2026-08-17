@@ -73,6 +73,7 @@ export async function DfVision() {
           span={4}
           rang="principal"
           label="Encours client"
+          aide="Le total de ce que vos clients vous doivent à ce jour, factures émises et non encore réglées."
           value={formatMFcfa(exposition)}
           unit="M FCFA"
           reading={`${formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)} factures impayées`}
@@ -98,6 +99,7 @@ export async function DfVision() {
         <StatTile
           span={4}
           label={dso?.delai_moyen_recouvrement_reel_jours != null ? "DSO réel" : "DSO approché"}
+          aide="Le nombre de jours que mettent vos clients à vous payer, en moyenne. « Approché » signale un calcul de substitution, faute des dates de règlement exactes."
           value={
             dso?.delai_moyen_recouvrement_reel_jours != null
               ? formatNumber(dso.delai_moyen_recouvrement_reel_jours)
@@ -144,6 +146,7 @@ export async function DfVision() {
         <StatTile
           span={4}
           label="Marge définitive moyenne"
+          aide="Ce que vous gardez en moyenne sur un dossier une fois tout facturé et payé. C'est la marge réellement constatée, pas celle espérée au devis."
           value={`${formatPct(margins.stats.perc_marge_definitive_moyen)}`}
           unit="%"
           reading={`${margeEcart >= 0 ? "+" : ""}${formatPct(margeEcart, 1)} pts vs provisoire`}
@@ -173,7 +176,12 @@ export async function DfVision() {
         {/* Appariées sur une ligne : les deux faces d'un même encours — par
             débiteur à gauche, par facture à droite. Le tableau de droite garde son
             `overflowX` et scrolle dans sa tuile plutôt que d'élargir la ligne. */}
-        <Tile span={6} title="Où se loge le retard" kick="par débiteur">
+        <Tile
+          span={6}
+          title="Où se loge le retard"
+          kick="par débiteur"
+          aide="Quels clients concentrent les impayés. Souvent quelques-uns portent l'essentiel du retard : ce sont eux qu'il faut traiter en premier."
+        >
           {topDebtors.length > 0 ? (
             <>
               <HintLine>Cliquez un compte pour son exposition détaillée</HintLine>
@@ -214,7 +222,12 @@ export async function DfVision() {
           )}
         </Tile>
 
-        <Tile span={6} title="Factures à investiguer" kick={`${formatNumber(topInvoices.length)} plus gros encours`}>
+        <Tile
+          span={6}
+          title="Factures à investiguer"
+          kick={`${formatNumber(topInvoices.length)} plus gros encours`}
+          aide="Les factures impayées les plus lourdes, à examiner une par une. Un blocage administratif ou un litige se cache souvent derrière un gros montant qui traîne."
+        >
           {topInvoices.length > 0 ? (
             <>
               <HintLine>Cliquez une facture pour son contexte</HintLine>
@@ -283,11 +296,21 @@ export async function DfVision() {
             puis l'analyse qui les relie. Pliées, elles annoncent leur sujet sans
             imposer leurs trois paragraphes : le lecteur ouvre celle qui le
             concerne. */}
-        <Tile span={6} title="Dérive du délai de paiement" kick="narration">
+        <Tile
+          span={6}
+          title="Dérive du délai de paiement"
+          kick="narration"
+          aide="Si vos clients mettent de plus en plus de temps à payer, et ce que cela coûte en trésorerie."
+        >
           <AnalysisSlot load={getUnpaidAnalysis} pliable titrePli="Lire l'analyse du délai de paiement" />
         </Tile>
 
-        <Tile span={6} title="Érosion de marge" kick="narration · proxy">
+        <Tile
+          span={6}
+          title="Érosion de marge"
+          kick="narration · proxy"
+          aide="Ce qui grignote votre marge au fil des dossiers. « Proxy » signale une mesure indirecte, faute d'un rattachement complet des dépenses."
+        >
           <AnalysisSlot load={getMarginsAnalysis} pliable titrePli="Lire l'analyse de la marge" />
         </Tile>
       </Bento>

@@ -46,6 +46,7 @@ export async function DcComptes() {
           span={4}
           rang="principal"
           label="CA réalisé du portefeuille"
+          aide="Ce que vos clients vous ont déjà acheté, depuis toujours. C'est de l'argent encaissé ou facturé, pas des affaires en cours."
           value={formatMFcfa(top.totaux.ca_realise_xof)}
           unit="M FCFA historiques"
           reading={`${formatNumber(top.totaux.nb_comptes_classes)} comptes classés · top affiché = ${formatPct(top.totaux.part_ca_top_pct, 0)} % du CA`}
@@ -68,6 +69,7 @@ export async function DcComptes() {
         <StatTile
           span={4}
           label="Pipe à venir"
+          aide="Les affaires encore en discussion chez ces clients. Rien n'est signé : c'est ce qui pourrait rentrer, pas ce qui est acquis."
           value={formatMFcfa(top.totaux.pipe_a_venir_xof)}
           unit="M FCFA d'opportunités ouvertes"
           reading={`top affiché = ${formatPct(top.totaux.part_pipe_top_pct, 0)} % du pipe à venir`}
@@ -90,6 +92,7 @@ export async function DcComptes() {
           span={4}
           rang="contexte"
           label="Comptes à lecture divergente"
+          aide="Les clients qui changent de rang selon qu'on les classe au nombre de commandes ou au montant. Beaucoup de petites commandes ou une grosse : ce ne sont pas les mêmes clients, ni la même façon de les suivre."
           value={formatNumber(top.totaux.nb_lectures_divergentes)}
           unit="jugés différemment selon l'axe"
           reading="quantité et montant ne disent pas la même chose"
@@ -118,6 +121,7 @@ export async function DcComptes() {
           span={12}
           title="Comptes générant le plus de ventes — en quantité et en montant"
           kick={`${formatNumber(top.totaux.nb_comptes_classes)} comptes classés`}
+          aide="Vos meilleurs clients, classés deux fois : par nombre de commandes et par montant. Les deux listes ne se recouvrent pas, et c'est justement ce qu'il faut regarder."
         >
           <HintLine>Cliquez un compte pour ses quatre mesures</HintLine>
           <Bars
@@ -182,6 +186,7 @@ export async function DcComptes() {
             span={12}
             title="Comptes à lire sur les deux axes"
             kick={`${formatNumber(divergents.length)} affichés`}
+            aide="Le détail des clients qui montent d'un côté et descendent de l'autre. Un client très présent mais peu rentable, ou l'inverse : chacun appelle une conduite différente."
           >
             <HintLine>Cliquez un compte pour voir l&apos;écart entre ses deux lectures</HintLine>
             <Lst
