@@ -48,7 +48,9 @@ interface DossierMarge {
 const MARGE_PLANCHER_PCT = -100;
 
 export async function DfBudget({ annee }: { annee?: number }) {
-  const [data, margins] = await Promise.all([getBudgetDaf(annee), getMargins(annee, 60)]);
+  // 50 est le plafond accepté par `/v1/dashboard/margins` (le=50) : au-delà,
+  // l'API répond 422 et le rendu serveur de la page tombe en erreur.
+  const [data, margins] = await Promise.all([getBudgetDaf(annee), getMargins(annee, 50)]);
 
   if (!data) {
     return (
