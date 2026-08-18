@@ -156,9 +156,11 @@ export function StatTile({
   readingVariant,
   spark,
   sparkAxis,
+  sparkLabels,
   detail,
   rang = "secondaire",
   signeNeutre,
+  fill,
 }: {
   span?: Span;
   label: string;
@@ -172,17 +174,37 @@ export function StatTile({
   readingVariant?: "pos" | "neg" | "wat";
   spark?: number[];
   sparkAxis?: string[];
+  /** Libellé au survol de chaque barre (« Juil : 12 M FCFA ») — même ordre que
+   *  `spark`. Les hauteurs sont des indices relatifs au meilleur point : sans
+   *  cette lecture, la valeur d'une barre est indevinable. */
+  sparkLabels?: string[];
   detail?: DetailCard;
   rang?: RangStat;
   /** Coupe la coloration automatique du négatif. À poser quand un montant
    *  négatif est le régime normal de l'indicateur (une variation de trésorerie
    *  n'est pas une alerte), sans quoi l'écran crie en permanence. */
   signeNeutre?: boolean;
+  /** Étire la tuile à la hauteur de sa rangée (cf. `Tile.fill`) : trois
+   *  indicateurs côte à côte dont un seul porte une sparkline gardent ainsi le
+   *  même cadre, au lieu de trois hauteurs différentes. */
+  fill?: boolean;
 }) {
   // Un montant négatif se lit d'abord au signe, pas à la ligne de lecture
   // dessous : « -1712 M FCFA » en encre neutre se lisait comme un montant
   // ordinaire. La règle ne vaut que pour le vrai signe moins d'un nombre.
   const negatif = !signeNeutre && /^-\s*\d/.test(value.trim());
+  // Surlignage des 3 plus FORTES barres — un marqueur de niveau, pas de
+  // récence : l'axe donne déjà l'ordre chronologique, tandis que les pics ne
+  // se repèrent pas seuls quand les hauteurs sont proches. Les barres à zéro
+  // ne sont jamais surlignées, même s'il y a moins de trois valeurs.
+  const sparkTop = new Set(
+    (spark ?? [])
+      .map((h, i) => [h, i] as const)
+      .filter(([h]) => h > 0)
+      .sort((a, b) => b[0] - a[0])
+      .slice(0, 3)
+      .map(([, i]) => i)
+  );
   const body = (
     <>
       <div className="tile-h">
@@ -198,8 +220,15 @@ export function StatTile({
       {reading && <div className={`stat-d${readingVariant ? " " + readingVariant : ""}`}>{reading}</div>}
       {spark && spark.length > 0 && (
         <div className="spark" aria-hidden="true">
+          {/* L'infobulle vit sur la COLONNE (pleine hauteur), pas sur la barre :
+              un mois à 4 % de hauteur serait impossible à survoler. */}
           {spark.map((h, i) => (
-            <i key={i} className={i >= spark.length - 3 ? "on" : ""} style={{ height: `${Math.max(4, h)}%` }} />
+            <span key={i} className="spark-c" title={sparkLabels?.[i]}>
+              <i
+                className={sparkTop.has(i) ? "on" : ""}
+                style={{ height: `${Math.max(4, h)}%` }}
+              />
+            </span>
           ))}
         </div>
       )}
@@ -214,7 +243,7 @@ export function StatTile({
       )}
     </>
   );
-  const cls = `tile t${span}${rang !== "secondaire" ? ` stat--${rang === "principal" ? "p" : "c"}` : ""}`;
+  const cls = `tile t${span}${rang !== "secondaire" ? ` stat--${rang === "principal" ? "p" : "c"}` : ""}${fill ? " tile--fill" : ""}`;
   if (!detail) return <div className={cls}>{body}</div>;
   return (
     <Clickable className={cls} detail={detail}>
