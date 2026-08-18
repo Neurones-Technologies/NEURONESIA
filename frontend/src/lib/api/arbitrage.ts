@@ -148,6 +148,21 @@ export interface Decision {
   reco_suivie: boolean | null;
 }
 
+/** État du filtre d'entrée en arbitrage appliqué à la liste (cf.
+ * `modules/uc_arbitrage/conditions.py`).
+ *
+ * `candidats` est restreint aux conditions cochées par le profil ; les KPI, eux,
+ * restent ceux de la file entière — un réglage d'affichage ne doit pas faire
+ * baisser l'enjeu cumulé. `nb_ecartes` est donc l'écart à afficher, jamais à
+ * taire : une file rétrécie sans explication se lit comme une file vide. */
+export interface ArbitrageFiltre {
+  profil: string;
+  conditions_actives: string[];
+  nb_total: number;
+  nb_retenus: number;
+  nb_ecartes: number;
+}
+
 export interface ArbitrageFile {
   kpi: {
     dossiers_ouverts: number;
@@ -160,6 +175,7 @@ export interface ArbitrageFile {
   };
   candidats: ArbitrageCandidate[];
   decisions_ouvertes: Decision[];
+  filtre: ArbitrageFiltre;
 }
 
 /** Profil posé quand la réponse serveur n'en porte pas — cf. `PayeurClasse`.
@@ -222,10 +238,80 @@ function normalizeDecision(d: Decision): Decision {
 export async function getArbitrageFile(): Promise<ArbitrageFile | null> {
   const file = await apiFetch<ArbitrageFile | null>("/v1/arbitrage/file", { allowForbidden: true });
   if (!file) return file;
+  const candidats = (file.candidats ?? []).map(normalizeCandidate);
   return {
     ...file,
-    candidats: (file.candidats ?? []).map(normalizeCandidate),
+    candidats,
     decisions_ouvertes: (file.decisions_ouvertes ?? []).map(normalizeDecision),
+    // Backend antérieur aux conditions d'entrée : la liste reçue EST la file
+    // entière. On le dit ainsi plutôt que d'afficher « 0 sur 0 », qui laisserait
+    // croire à un filtre actif ayant tout écarté.
+    filtre: file.filtre ?? {
+      profil: "",
+      conditions_actives: [],
+      nb_total: candidats.length,
+      nb_retenus: candidats.length,
+      nb_ecartes: 0,
+    },
+  };
+}
+
+/** Une condition d'entrée en arbitrage du catalogue. Le catalogue est figé dans
+ * le code du backend (`uc_arbitrage/conditions.py`) : l'écran ne peut qu'activer
+ * ou désactiver, jamais rédiger — une condition décide de ce qui est soumis à
+ * décision, elle doit rester relisible et testée. */
+export interface ArbitrageCondition {
+  code: string;
+  libelle: string;
+  explication: string;
+  /** Seuil affichable (« 730 jours »), vide quand la condition n'en a pas. */
+  seuil: string;
+  champs: string[];
+  recommandee_pour: string[];
+}
+
+/** Effet mesuré sur la file réelle. `refs_par_condition` porte, pour chaque
+ * condition prise seule, les dossiers qu'elle retient : l'écran en déduit
+ * l'effet de n'importe quelle combinaison par intersection, sans appel réseau.
+ * C'est ce qui rend le compteur vivant pendant que l'utilisateur coche — les
+ * conditions se combinant en ET, deux cases raisonnables peuvent vider la file. */
+export interface ArbitrageConditionsMesure {
+  nb_total: number;
+  nb_retenus: number;
+  nb_ecartes: number;
+  refs_par_condition: Record<string, string[]>;
+  refs_total: string[];
+}
+
+export interface ArbitrageConditionsReglage {
+  catalogue: ArbitrageCondition[];
+  /** Rôle du demandeur. `admin` n'est pas un profil métier : il règle ceux des
+   * autres et sa propre file n'est jamais filtrée. */
+  profil: string;
+  profils_parametrables: string[];
+  conditions_actives: string[];
+  par_profil: Record<string, string[]>;
+  mesure: ArbitrageConditionsMesure;
+}
+
+export async function getArbitrageConditions(): Promise<ArbitrageConditionsReglage | null> {
+  const reglage = await apiFetch<ArbitrageConditionsReglage | null>("/v1/arbitrage/conditions", {
+    allowForbidden: true,
+  });
+  if (!reglage) return reglage;
+  return {
+    ...reglage,
+    catalogue: reglage.catalogue ?? [],
+    profils_parametrables: reglage.profils_parametrables ?? [],
+    conditions_actives: reglage.conditions_actives ?? [],
+    par_profil: reglage.par_profil ?? {},
+    mesure: reglage.mesure ?? {
+      nb_total: 0,
+      nb_retenus: 0,
+      nb_ecartes: 0,
+      refs_par_condition: {},
+      refs_total: [],
+    },
   };
 }
 

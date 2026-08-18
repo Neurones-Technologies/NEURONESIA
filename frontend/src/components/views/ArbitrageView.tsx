@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 
 import { getArbitrageFile, getReliability, listDecisions } from "@/lib/api/arbitrage";
@@ -278,13 +279,33 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
       </div>
 
       <Section id="file" title="File d'arbitrage" subtitle="conflits détectés par recoupement, ordonnés par priorité de traitement">
-        {items.length === 0 ? (
+        {/* Une file rétrécie par un réglage ne doit jamais se lire comme une file
+            vide : ce que les conditions écartent est dit ici, avec le chemin pour
+            le défaire. Les KPI ci-dessus, eux, restent ceux de la file entière. */}
+        {file.filtre.nb_ecartes > 0 && items.length > 0 && (
           <Note style={{ marginTop: 0 }}>
-            Aucun conflit détecté actuellement — aucun client en retard de paiement ne cumule un signal commercial
-            actif. À noter : ce module ne détecte à ce jour qu&apos;un seul type de tension. Les conflits propres à
-            la livraison (plan de charge, fournisseurs, staffing) ne sont pas encore modélisés : leur absence ici ne
-            signifie donc pas qu&apos;il n&apos;y en a aucun.
+            {formatNumber(file.filtre.nb_ecartes)} dossier(s) sur {formatNumber(file.filtre.nb_total)} sont écartés
+            par les {file.filtre.conditions_actives.length} condition(s) d&apos;entrée actives de votre profil. Les
+            indicateurs ci-dessus restent calculés sur la file entière. Réglage :{" "}
+            <Link href={`/${profile}/params`}>écran Réglages</Link>.
           </Note>
+        )}
+        {items.length === 0 ? (
+          file.filtre.conditions_actives.length > 0 ? (
+            <Note style={{ marginTop: 0 }}>
+              Aucun des {formatNumber(file.filtre.nb_total)} dossier(s) de la file ne satisfait les{" "}
+              {file.filtre.conditions_actives.length} condition(s) d&apos;entrée actives de votre profil. Elles se
+              combinent en ET : deux conditions défendables séparément peuvent ne laisser passer personne. Décochez-en
+              une depuis l&apos;<Link href={`/${profile}/params`}>écran Réglages</Link>.
+            </Note>
+          ) : (
+            <Note style={{ marginTop: 0 }}>
+              Aucun conflit détecté actuellement — aucun client en retard de paiement ne cumule un signal commercial
+              actif. À noter : ce module ne détecte à ce jour qu&apos;un seul type de tension. Les conflits propres à
+              la livraison (plan de charge, fournisseurs, staffing) ne sont pas encore modélisés : leur absence ici ne
+              signifie donc pas qu&apos;il n&apos;y en a aucun.
+            </Note>
+          )
         ) : (
           <div className="arb-work">
             <Worklist
