@@ -110,14 +110,15 @@ async def fetch_achats() -> list[dict]:
     ]
 
 
-# ── Dettes fournisseurs (vides à ce jour, cf. statique.RAISON_DPO_STATIQUE) ──
+# ── Dettes fournisseurs ──────────────────────────────────────────────────────
 
 async def fetch_factures_fournisseurs() -> list[dict]:
-    """Factures fournisseurs — table VIDE aujourd'hui, lue quand même.
+    """Factures fournisseurs (`in_invoice`), synchronisées par jobs/odoo_sync_job.
 
-    C'est volontaire : le module calcule un DPO réel dès que la synchronisation
-    des `in_invoice` sera en place, sans changer de code ni de forme de réponse.
-    Câbler le gabarit en dur aurait rendu ce basculement invisible.
+    La table a longtemps été vide et le module servait alors un gabarit annoncé
+    comme tel (cf. statique.RAISON_DPO_STATIQUE) : ce repli reste en place pour
+    une base pas encore synchronisée, mais le régime nominal est désormais le
+    DPO mesuré.
     """
     rows = await _rows("""
         SELECT invoice_id, supplier_id, supplier_name, amount, amount_residual,

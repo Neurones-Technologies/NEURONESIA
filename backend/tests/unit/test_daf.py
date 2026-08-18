@@ -32,6 +32,7 @@ from modules.uc_daf.relation_commerciale import (
     build_dso,
     build_mauvais_payeurs,
     mesurer_creances,
+    situation_factures,
 )
 from modules.uc_daf.series import (
     MIN_REGLEMENTS_FENETRE,
@@ -246,6 +247,54 @@ def test_dpo_bascule_en_mesure_des_que_les_factures_fournisseurs_arrivent():
     assert dpo["source"] == statique.SOURCE_REELLE
     assert dpo["dpo_jours"] == 50.0
     assert dpo["retard_moyen_jours"] == 19.0
+
+
+# ── Situation des factures échues (débrief DG) ───────────────────────────────
+
+def _facture_fournisseur(invoice_id, *, montant=20 * M, reste=None, echeance="2026-02-01",
+                         reglee_le=None, statut="not_paid"):
+    return {
+        "invoice_id": invoice_id, "fournisseur_id": "f1", "fournisseur": "POLARIS",
+        "montant_xof": montant, "reste_du_xof": montant if reste is None else reste,
+        "devise": "XOF", "date_facture": "2026-01-01", "echeance": echeance,
+        "statut_paiement": statut, "date_reglement": reglee_le,
+    }
+
+
+def test_situation_factures_compte_comme_lecran():
+    """Le débrief DG et l'écran Relation commerciale doivent citer le même
+    chiffre : la situation réutilise mesurer_creances et build_dpo, le test
+    verrouille l'égalité."""
+    clients = [
+        _facture("echue", echeance="2026-07-01"),                       # échue, 42 j < 90 j
+        _facture("contentieux", echeance="2026-01-02", montant=30 * M), # échue, > 90 j
+        _facture("a_echoir", echeance="2026-12-31"),
+        _facture("reglee", reglee_le="2026-03-01", reste=0, statut="paid"),
+        _facture("annulee", annulee=True),
+    ]
+    fournisseurs = [
+        _facture_fournisseur("sf_echue"),                               # échue
+        _facture_fournisseur("sf_a_echoir", echeance="2026-12-31"),
+        _facture_fournisseur("sf_reglee", reste=0, statut="paid", reglee_le="2026-02-10"),
+    ]
+    sit = situation_factures(clients, fournisseurs, TODAY)
+
+    socle = mesurer_creances(clients, TODAY, 0, 0)
+    assert sit["client"]["nb_echues"] == socle["nb_factures_echues"] == 2
+    assert sit["client"]["montant_echu_xof"] == socle["encours_echu_xof"] == 40 * M
+    assert sit["client"]["montant_contentieux_xof"] == 30 * M
+
+    dpo = build_dpo(fournisseurs, [], [], TODAY, ANNEE)
+    assert sit["fournisseur"]["dette_echue_xof"] == dpo["dette_echue_xof"] == 20 * M
+    assert sit["fournisseur"]["nb_echues"] == 1
+
+
+def test_situation_factures_sans_fournisseur_reste_none():
+    """Table fournisseur vide : jamais la dette posée du gabarit dans un
+    débrief chiffré — le champ dit explicitement « pas mesurable »."""
+    sit = situation_factures([_facture("echue", echeance="2026-05-01")], [], TODAY)
+    assert sit["fournisseur"] is None
+    assert sit["client"]["nb_echues"] == 1
 
 
 # ── Marge brute : deux lectures mesurées ────────────────────────────────────

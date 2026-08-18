@@ -462,13 +462,14 @@ def build_dpo(factures_fournisseurs: list[dict], achats: list[dict], delais_nego
               aujourdhui: date, annee: int) -> dict:
     """DPO réel si des factures fournisseurs existent, gabarit sinon — même forme dans les deux cas.
 
-    Aujourd'hui la table est vide : le retour porte `source: "statique"` et dit
-    pourquoi. Le jour où la synchronisation des `in_invoice` sera en place, le même
-    code renvoie un DPO mesuré sans qu'aucun écran ne change.
+    Les `in_invoice` sont synchronisées (table `supplier_invoices`, cf.
+    jobs/odoo_sync_job) : le régime mesuré est le régime NOMINAL, `source:
+    "reel"`. Le gabarit statique reste le repli d'une base pas encore
+    synchronisée — un premier démarrage, jamais l'état courant.
 
-    Ce qui est mesuré dans les deux régimes : les achats ENGAGÉS de l'exercice.
-    C'est la seule charge fournisseur réellement observable, et elle est présentée
-    comme un engagement, jamais comme une dette échue.
+    Dans les deux régimes, `base_mesuree` porte les achats ENGAGÉS de
+    l'exercice (des commandes, pas des factures), présentés comme un
+    engagement, jamais comme une dette échue.
     """
     achats_exercice = [a for a in achats if (jour(a["date"]) or date(1900, 1, 1)).year == annee]
     engage_xof = sum(a["montant_xof"] for a in achats_exercice)
@@ -521,7 +522,7 @@ def build_dpo(factures_fournisseurs: list[dict], achats: list[dict], delais_nego
             ),
         }
 
-    # ── Régime mesuré (dès que les factures fournisseurs seront synchronisées) ──
+    # ── Régime mesuré (les factures fournisseurs synchronisées) ──
     reglees = [f for f in factures_fournisseurs if f["date_reglement"]]
     delais_reels, retards_reels = [], []
     for f in reglees:
@@ -578,3 +579,37 @@ def build_dpo(factures_fournisseurs: list[dict], achats: list[dict], delais_nego
             "vite que négocié est un financement gratuit consenti au fournisseur."
         ),
     }
+
+
+def situation_factures(factures_clients: list[dict], factures_fournisseurs: list[dict],
+                       aujourdhui: date) -> dict:
+    """Le strict nécessaire du stock échu des deux côtés — pour le débrief DG.
+
+    Réutilise `mesurer_creances` et `build_dpo` : le débrief et l'écran
+    Relation commerciale doivent citer LE MÊME chiffre pour le même sujet.
+    `ca=0/jours=0` : seuls les champs d'échu du socle sont lus, et
+    `dso_encours_jours` est gardé en interne contre la division par zéro.
+
+    `fournisseur` reste None quand aucune facture n'est synchronisée : le
+    gabarit posé de `build_dpo` sert un écran qui l'annonce comme tel, jamais
+    un débrief chiffré.
+    """
+    socle = mesurer_creances(factures_clients, aujourdhui, 0, 0)
+    resultat = {
+        "as_of": aujourdhui.isoformat(),
+        "client": {
+            "nb_echues": socle["nb_factures_echues"],
+            "montant_echu_xof": socle["encours_echu_xof"],
+            "montant_contentieux_xof": socle["encours_contentieux_xof"],
+        },
+        "fournisseur": None,
+    }
+    if factures_fournisseurs:
+        dpo = build_dpo(factures_fournisseurs, [], [], aujourdhui, aujourdhui.year)
+        resultat["fournisseur"] = {
+            "nb_echues": sum(
+                (t["nb_factures"] or 0) for t in dpo["tranches"] if t["code"] != "non_echu"
+            ),
+            "dette_echue_xof": dpo["dette_echue_xof"],
+        }
+    return resultat

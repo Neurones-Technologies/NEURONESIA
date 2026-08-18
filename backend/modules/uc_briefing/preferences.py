@@ -142,6 +142,9 @@ CATALOGUE: dict[str, list[Element]] = {
         Element("affaires_imminentes", "Affaires imminentes",
                 "Les opportunités les plus chaudes du pipeline, en score pondéré, et la première d'entre elles.",
                 False),
+        Element("factures_echues", "Factures échues",
+                "Le stock de factures échues non réglées, côté clients et côté fournisseurs — nombre, montant et part au-delà de 90 jours.",
+                False),
     ],
     "dir_commercial": [
         Element("pipeline_ouvert", "Pipeline ouvert",

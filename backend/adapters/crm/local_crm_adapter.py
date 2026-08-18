@@ -1575,11 +1575,12 @@ class LocalCRMAdapter(CRMRepository):
 
     async def get_top_suppliers(self, limit: int = 20) -> list[dict]:
         """Fournisseurs réels (purchase_orders, synchronisés depuis Odoo). Pas de
-        notion de dette/impayé ici : seules les factures clients (out_invoice)
-        sont synchronisées, pas les factures fournisseurs (in_invoice) — voir
-        [[operations-dirops-module]]. L'« engagement » exposé est donc calculé
-        sur les commandes d'achat réelles (montant, ancienneté, activité récente),
-        jamais un solde comptable inventé."""
+        notion de dette/impayé ici : la dette comptable vit dans la table
+        `supplier_invoices` (in_invoice, synchronisée) et se lit via uc_daf
+        (build_dpo) ou get_supplier_intelligence. L'« engagement » exposé ici est
+        calculé sur les commandes d'achat (montant, ancienneté, activité
+        récente) — ne JAMAIS l'additionner avec `amount_residual` des factures :
+        ce serait compter deux fois la même charge."""
         from sqlalchemy import text
         depuis_12m = (datetime.utcnow() - timedelta(days=365)).isoformat()
         sql = """
