@@ -42,6 +42,17 @@ RUPTURE_HORIZON_RECUPERABLE_JOURS = 365
 # générale.
 RUPTURE_MIN_CA_ANNUEL_XOF = 100_000_000
 
+# Étapes qui ferment une opportunité — même reconnaissance par mot-clé que
+# modules/uc_briefing/facts.py (_STADES_FERMES) : `stage` est du texte libre
+# Odoo qui mélange deux nomenclatures (« 6-Gagné » / « Won »). Sans ce filtre,
+# le « pipeline » additionnait les affaires gagnées (probabilité 100), perdues,
+# suspendues et annulées : le pondéré affiché au cockpit valait plusieurs fois
+# le vrai carnet d'affaires ouvert.
+_MOTS_STADES_FERMES = ("gagn", "won", "perdu", "lost", "annul", "cancel", "suspendu")
+_SQL_OPPORTUNITE_OUVERTE = "AND NOT (" + " OR ".join(
+    f"lower(COALESCE(stage,'')) LIKE '%{mot}%'" for mot in _MOTS_STADES_FERMES
+) + ")"
+
 
 class LocalCRMAdapter(CRMRepository):
     """
@@ -794,13 +805,17 @@ class LocalCRMAdapter(CRMRepository):
         }
 
     async def get_hot_leads(self, limit: int = 10) -> list[dict]:
+        """Opportunités OUVERTES au meilleur score pondéré. Sans le filtre
+        d'étape, la première « affaire chaude » était régulièrement une affaire
+        déjà gagnée (probabilité 100) — un lead chaud est par définition encore
+        à prendre."""
         from sqlalchemy import text
-        sql = """
+        sql = f"""
             SELECT name, client_name, stage, expected_revenue, probability,
                    (expected_revenue * probability / 100) as score_pondere,
                    salesperson_name, deadline
             FROM opportunities
-            WHERE probability > 0 AND expected_revenue > 0
+            WHERE probability > 0 AND expected_revenue > 0 {_SQL_OPPORTUNITE_OUVERTE}
             ORDER BY score_pondere DESC LIMIT :limit
         """
         async with AsyncSessionLocal() as session:
@@ -2069,7 +2084,14 @@ class LocalCRMAdapter(CRMRepository):
         return by_month
 
     async def list_opportunities(self, stage: str | None = None, limit: int = 50) -> list[dict]:
-        """Liste d'opportunités (kanban pipeline), triées par valeur pondérée décroissante."""
+        """Opportunités OUVERTES (kanban pipeline), triées par valeur pondérée décroissante.
+
+        Les étapes closes sont exclues d'office : tous les consommateurs
+        (forecast pondéré, échéances du briefing, pilotage DG) parlent du
+        carnet d'affaires en cours. Demander une `stage` explicite désactive ce
+        filtre — l'appelant qui vise « 6-Gagné » sait ce qu'il demande. Pour un
+        dump complet toutes étapes confondues, voir `list_all_opportunities`.
+        """
         from sqlalchemy import text
         sql = """
             SELECT name, client_name, stage, expected_revenue, probability,
@@ -2081,6 +2103,8 @@ class LocalCRMAdapter(CRMRepository):
         if stage:
             sql += " AND stage = :stage"
             params["stage"] = stage
+        else:
+            sql += f" {_SQL_OPPORTUNITE_OUVERTE}"
         sql += " ORDER BY (expected_revenue * probability / 100) DESC LIMIT :limit"
         async with AsyncSessionLocal() as session:
             rows = (await session.execute(text(sql), params)).fetchall()

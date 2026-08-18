@@ -67,6 +67,14 @@ export async function DgTableauDeBord() {
     ? briefing.section.resume
     : (briefing?.section?.bullets ?? []).slice(0, 5);
 
+  // Part du pondéré portée par des opportunités ouvertes à échéance DÉPASSÉE :
+  // des affaires jamais mises à jour dans Odoo, comptées comme vivantes. Le
+  // chiffre principal les inclut (elles sont ouvertes), mais la carte le dit —
+  // sinon le pipeline se lit comme un carnet frais alors qu'une partie est à
+  // requalifier ou à clore côté CRM.
+  const oppsEchues = forecast.opportunities.filter((o) => o.at_risk);
+  const pondereEchu = oppsEchues.reduce((s, o) => s + o.weighted_xof, 0);
+
   return (
     <Section id="tableau-de-bord">
       <Brief
@@ -143,25 +151,39 @@ export async function DgTableauDeBord() {
           span={4}
           fill
           label="Pipeline pondéré (réaliste)"
-          aide="Ce que les affaires en cours devraient rapporter, en tenant compte de leurs chances d'aboutir. Le scénario médian, ni optimiste ni prudent."
+          aide="Ce que les affaires encore ouvertes devraient rapporter, en tenant compte de leurs chances d'aboutir. Les affaires gagnées, perdues ou abandonnées n'y entrent pas."
           value={formatMFcfa(forecast.scenarios.realiste_xof)}
           unit="M FCFA"
-          reading={`probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %`}
+          reading={
+            `probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %` +
+            (pondereEchu > 0
+              ? ` · dont ${formatMFcfa(pondereEchu)} M à échéance dépassée (${formatNumber(oppsEchues.length)} opportunités à requalifier)`
+              : "")
+          }
+          readingVariant={
+            forecast.scenarios.realiste_xof && pondereEchu / forecast.scenarios.realiste_xof > 0.3
+              ? "wat"
+              : undefined
+          }
           detail={{
             kicker: "Indicateur · pipeline",
             title: "Pipeline pondéré, scénario réaliste",
-            tag: `${formatNumber(forecast.scenarios.nb_opportunites)} opportunités`,
+            tag: `${formatNumber(forecast.scenarios.nb_opportunites)} opportunités ouvertes`,
             tagVariant: "a",
             body: [
               `Le pipeline ouvert totalise ${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA non pondérés. Pondéré par la probabilité déclarée sur chaque opportunité, il ressort à ${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA.`,
               `Le scénario bas (${formatMFcfa(forecast.scenarios.pessimiste_xof)} M) exclut les opportunités dont l'échéance est déjà dépassée ; le scénario haut (${formatMFcfa(forecast.scenarios.optimiste_xof)} M) retient l'ensemble des opportunités ouvertes.`,
-            ],
+              pondereEchu > 0
+                ? `${formatNumber(oppsEchues.length)} opportunités encore ouvertes ont une échéance déjà dépassée, pour ${formatMFcfa(pondereEchu)} M FCFA pondérés. Ce ne sont pas des affaires vivantes tant qu'elles ne sont pas requalifiées dans Odoo : les compter sans le dire gonflerait le carnet.`
+                : "",
+            ].filter(Boolean),
             kv: [
               ["Pipeline non pondéré", `${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA`],
               ["Scénario bas", `${formatMFcfa(forecast.scenarios.pessimiste_xof)} M FCFA`],
               ["Scénario réaliste", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
               ["Scénario haut", `${formatMFcfa(forecast.scenarios.optimiste_xof)} M FCFA`],
               ["Probabilité moyenne", `${formatPct(forecast.scenarios.avg_probability_pct, 0)} %`],
+              ["À échéance dépassée", `${formatMFcfa(pondereEchu)} M FCFA (${formatNumber(oppsEchues.length)} opp.)`],
             ],
           }}
         />
