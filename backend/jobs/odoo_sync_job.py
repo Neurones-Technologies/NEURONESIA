@@ -728,7 +728,7 @@ async def run_odoo_sync(force_full: bool = False):
             await session.commit()
 
         # ─── 4c. Factures fournisseurs (échéances réelles pour le cash prévisionnel) ──
-        supplier_invoices = await odoo.get_all_supplier_invoices(limit=5000, since=since)
+        supplier_invoices = await odoo.get_all_supplier_invoices(limit=10000, since=since)
         async with AsyncSessionLocal() as session:
             new_si = 0
             for r in supplier_invoices:

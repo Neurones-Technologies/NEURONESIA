@@ -607,7 +607,7 @@ class OdooAdapter(CRMRepository):
         self._payment_terms_cache = days_by_term
         return days_by_term
 
-    async def get_all_supplier_invoices(self, limit: int = 5000, since: datetime | None = None) -> list[dict]:
+    async def get_all_supplier_invoices(self, limit: int = 10000, since: datetime | None = None) -> list[dict]:
         """Factures FOURNISSEURS (in_invoice) — jamais synchronisées avant ce soir (seules
         les factures clients out_invoice l'étaient, cf. get_all_invoices). Nécessaires pour
         la ligne de crédit consommée et le cash prévisionnel fournisseurs (échéances réelles,
