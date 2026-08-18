@@ -147,8 +147,12 @@ export async function DgVision() {
         />
 
         <Bento>
+          {/* `fill` sur les trois : seule la première porte une sparkline, sans
+              lui les deux autres s'arrêtaient plus haut et la rangée se lisait
+              comme trois cartes dépareillées. */}
           <StatTile
             span={4}
+            fill
             label={`CA commandé ${year} au ${formatDate(dateArret)}`}
             aide="Ce que vos clients ont commandé depuis le 1er janvier. Ce sont des commandes fermes, pas des factures : l'argent n'est pas encore encaissé."
             value={formatMFcfa(kpis.ytd.revenue_xof)}
@@ -161,6 +165,10 @@ export async function DgVision() {
             readingVariant={revenueDeltaPct === null ? undefined : revenueDeltaPct >= 0 ? "pos" : "neg"}
             spark={spark}
             sparkAxis={monthLabels}
+            sparkLabels={kpis.monthly.map(
+              (m) =>
+                `${MOIS_ABREV[m.mois - 1] ?? m.mois} : ${formatMFcfa(m.ca_xof)} M FCFA (${formatNumber(m.nb_commandes)} commande(s))`
+            )}
             detail={{
               kicker: "Indicateur · chiffre d'affaires",
               title: `CA commandé ${year} au ${formatDate(dateArret)}`,
@@ -183,6 +191,7 @@ export async function DgVision() {
           />
           <StatTile
             span={4}
+            fill
             label="Pipeline pondéré (réaliste)"
             aide="Ce que les affaires en cours devraient rapporter, en tenant compte de leurs chances d'aboutir. Le scénario médian, ni optimiste ni prudent."
             value={formatMFcfa(forecast.scenarios.realiste_xof)}
@@ -209,6 +218,7 @@ export async function DgVision() {
           />
           <StatTile
             span={4}
+            fill
             label="Concentration top 5"
             aide="La part de votre chiffre d'affaires portée par vos cinq plus gros clients. Plus elle est élevée, plus le départ de l'un d'eux serait difficile à absorber."
             value={top5Pct !== null ? `${formatPct(top5Pct, 0)}` : "—"}
@@ -624,6 +634,10 @@ export async function DgVision() {
               }
               spark={toSpark(pilotage.ca_annuel.map((a) => a.ca_xof))}
               sparkAxis={pilotage.ca_annuel.map((a) => String(a.annee))}
+              sparkLabels={pilotage.ca_annuel.map(
+                (a) =>
+                  `${a.annee} : ${formatMFcfa(a.ca_xof)} M FCFA (${formatNumber(a.nb_commandes)} commande(s))`
+              )}
             />
             <StatTile
               span={4}

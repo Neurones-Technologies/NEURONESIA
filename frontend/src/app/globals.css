@@ -1687,6 +1687,9 @@ table.tb tbody tr:hover{background:var(--paper-2)}
 .stat--c{background:var(--paper-2);box-shadow:none;border-color:var(--hair)}
 .stat--c .stat-d{font-size:10px;margin-top:6px}
 .spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:16px}
+/* colonne porteuse de l'infobulle (title) : pleine hauteur pour rester
+   survolable même quand la barre est au plancher de 4 % */
+.spark-c{flex:1;display:flex;align-items:flex-end;height:100%;min-width:0}
 .spark i{flex:1;background:var(--hair);border-radius:2px}
 .spark i.on{background:linear-gradient(180deg,var(--accent-2),var(--accent-strong))}
 
