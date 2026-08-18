@@ -193,6 +193,11 @@ export function StatTile({
   // dessous : « -1712 M FCFA » en encre neutre se lisait comme un montant
   // ordinaire. La règle ne vaut que pour le vrai signe moins d'un nombre.
   const negatif = !signeNeutre && /^-\s*\d/.test(value.trim());
+  // Une valeur TEXTUELLE (nom d'axe, libellé) n'est pas un montant : au corps
+  // des chiffres elle déborde du cadre. Détection par le contenu — un montant
+  // formaté ne porte que chiffres, espaces (y compris insécables d'Intl),
+  // séparateurs et signes.
+  const valeurTexte = !/^[\d\s  .,%+±/\-–—]*$/.test(value.trim());
   const body = (
     <>
       <div className="tile-h">
@@ -202,7 +207,9 @@ export function StatTile({
         </h3>
       </div>
       <div className="stat-l">
-        <span className={`stat-v num${negatif ? " neg" : ""}`}>{value}</span>
+        <span className={`stat-v num${negatif ? " neg" : ""}${valeurTexte ? " stat-v--txt" : ""}`}>
+          {value}
+        </span>
         {unit && <span className="stat-u">{unit}</span>}
       </div>
       {reading && <div className={`stat-d${readingVariant ? " " + readingVariant : ""}`}>{reading}</div>}

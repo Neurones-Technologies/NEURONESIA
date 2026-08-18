@@ -1647,7 +1647,14 @@ table.tb tbody tr:hover{background:var(--paper-2)}
    leur tuile à 44 px et l'unité venait coller le nombre. `clamp` rend la borne
    haute inchangée (44 px, cas courant) et laisse le chiffre se réduire quand la
    tuile se resserre, au lieu de déborder. */
-.stat-v{font-family:var(--disp);font-weight:300;font-size:clamp(26px,2.5vw,44px);letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums lining-nums}
+/* `min-width:0` : enfant d'un flex, la valeur refusait de rétrécir sous sa
+   largeur de contenu et DÉBORDAIT du cadre au lieu de se replier. */
+.stat-v{font-family:var(--disp);font-weight:300;font-size:clamp(26px,2.5vw,44px);letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums lining-nums;min-width:0}
+/* valeur TEXTUELLE (nom d'axe, libellé) : corps réduit et repli sur deux
+   lignes autorisé — au corps des chiffres, « Infrastructure et datacenter »
+   sortait du cadre. Posée automatiquement par StatTile. */
+.stat-v--txt{font-size:clamp(19px,1.7vw,26px);line-height:1.18;letter-spacing:-.02em;overflow-wrap:anywhere}
+.kpi-row .stat-v--txt,.kpi-row>.stat--p .stat-v--txt{font-size:20px;line-height:1.2}
 /* Ligne chiffre + unité : `baseline` garde l'unité assise sur le chiffre, et le
    `wrap` l'envoie à la ligne plutôt que de la faire déborder sur une tuile
    étroite. */
