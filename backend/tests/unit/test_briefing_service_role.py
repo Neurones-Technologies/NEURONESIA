@@ -131,3 +131,37 @@ async def test_composition_enregistree_est_appliquee(store_temporaire, monkeypat
     monkeypatch.setattr(preferences, "load", _load)
     section = await service.generate_role("dg", CRMMinimal(), None)
     assert len(section["bullets"]) == 1
+
+
+# ---------- traduction préférences → composition (mode « consigne pilote ») ----------
+
+
+def test_composition_pilote_ouvre_tout_le_pool():
+    """Rien de coché + consigne posée : la consigne pilote le contenu, donc
+    l'IA doit pouvoir piocher dans tout le catalogue du rôle."""
+    compo = service._composition_depuis({"elements": [], "consigne": "Parle des impayés."})
+    assert compo.pilote is True
+    assert compo.actif("ca_ytd") and compo.actif("nimporte_quel_element")
+
+
+def test_composition_vide_sans_consigne_reste_inerte():
+    """Rien de coché et pas de consigne : pas de pilote — l'aval produit le
+    message « Pas assez de données », et la garde du routeur refuse désormais
+    d'enregistrer cet état."""
+    compo = service._composition_depuis({"elements": [], "consigne": "   "})
+    assert compo.pilote is False
+    assert not compo.actif("ca_ytd")
+
+
+def test_composition_avec_elements_ignore_le_pilote():
+    compo = service._composition_depuis({"elements": ["ca_ytd"], "consigne": "x"})
+    assert compo.pilote is False
+    assert compo.actif("ca_ytd") and not compo.actif("rupture_rythme")
+
+
+def test_composition_sans_document_reste_le_briefing_historique():
+    """`None` signifie « aucune préférence » : tout actif, mode normal — à ne
+    jamais confondre avec la liste vide."""
+    compo = service._composition_depuis(None)
+    assert compo.pilote is False
+    assert compo.actif("ca_ytd")

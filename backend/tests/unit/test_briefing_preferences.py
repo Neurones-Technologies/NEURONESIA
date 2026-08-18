@@ -71,6 +71,25 @@ def test_consigne_est_tronquee_et_debarrassee_des_balises():
     assert preferences._sanitize_consigne("a\n\n\n\nb") == "a\nb"
 
 
+def test_sanitize_consigne_est_publique():
+    """Le routeur s'en sert pour juger une composition sans élément : le nom
+    public et l'alias historique doivent désigner la même fonction."""
+    assert preferences.sanitize_consigne is preferences._sanitize_consigne
+
+
+def test_garde_du_routeur_sur_les_quatre_combinaisons():
+    """Reflet exact de l'expression du PUT /v1/briefing/preferences :
+    refus seulement quand il n'y a NI élément NI consigne exploitable —
+    une consigne faite uniquement de balises compte pour vide."""
+    def refuse(elements, consigne):
+        return not elements and not preferences.sanitize_consigne(consigne)
+
+    assert refuse([], "") is True
+    assert refuse([], "<consigne></consigne>") is True
+    assert refuse([], "Parle des impayés.") is False   # mode consigne pilote
+    assert refuse(["ca_ytd"], "") is False
+
+
 def test_document_vide_retombe_sur_les_defauts():
     doc = preferences._document_vide("dir_financier")
     assert doc["elements"] == DEFAUTS["dir_financier"]

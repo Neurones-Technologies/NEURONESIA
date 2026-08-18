@@ -510,3 +510,63 @@ export async function getTrendAnalysis(
     allowForbidden: true,
   });
 }
+
+/** Vue 360 de l'onglet DG « Pilotage de l'activité » — un appel pour l'onglet
+ * entier. Mêmes agrégats que les éléments « vue 360 » du débrief DG. */
+export interface PilotageDg {
+  annee: number;
+  ca_annuel: Array<{ annee: number; ca_xof: number; nb_commandes: number }>;
+  marge: MarginStats;
+  atterrissage: {
+    trimestre: string;
+    realise_a_ce_jour_xof: number;
+    mois_restants_a_projeter: number;
+    tendance_mensuelle_xof: number;
+    projection_fin_trimestre: {
+      optimiste_xof: number;
+      realiste_xof: number;
+      pessimiste_xof: number;
+    };
+    note: string;
+  };
+  transformation: {
+    win_rate: { taux_nb_pct: number; taux_valeur_pct: number; [key: string]: unknown };
+    pertes: {
+      nb_total: number;
+      by_client: Array<{ client: string; montant_xof: number; nb: number }>;
+      [key: string]: unknown;
+    } | null;
+  };
+  echeances: {
+    fenetre_jours: number;
+    nb: number;
+    montant_xof: number;
+    prochaines: Array<{
+      opportunite: string;
+      client: string;
+      deadline: string;
+      revenu_attendu_xof: number | null;
+    }>;
+  };
+  encaissement: Dso | { error: string };
+  commerciaux: Array<{ commercial: string; ca_total_xof: number; nb_commandes: number }>;
+  secteurs: Array<{
+    secteur: string;
+    ca_total_xof: number;
+    nb_clients: number;
+    nb_commandes: number;
+    panier_moyen_client_xof: number;
+  }>;
+  mensuel: Array<{ mois: number; ca_xof: number; nb_commandes: number }>;
+  leads_chauds: Array<{
+    opportunite: string;
+    client: string;
+    score_pondere_xof: number;
+    [key: string]: unknown;
+  }>;
+}
+
+export async function getPilotageDg(year?: number): Promise<PilotageDg | null> {
+  const q = year ? `?year=${year}` : "";
+  return apiFetch<PilotageDg | null>(`/v1/dashboard/pilotage${q}`, { allowForbidden: true });
+}

@@ -43,12 +43,13 @@ async def _build_section(role: str, crm, llm, composition: facts.Composition | N
     built = await _FACTS_BUILDERS[role](crm, composition)
     action = built.get("action")
     consigne = composition.consigne if composition else ""
+    pilote = composition.pilote if composition else False
     # Résumé (tête de cockpit) et analyse (lecture longue) portent sur les mêmes
     # faits mais ne servent pas le même usage : générés en parallèle, ce job
     # tournant de nuit, sa latence n'est pas vue par l'utilisateur.
     resume, analysis = await asyncio.gather(
-        build_brief_resume(llm, role, built["bullets"], action, consigne=consigne),
-        build_daily_analysis(llm, role, built["bullets"], consigne=consigne),
+        build_brief_resume(llm, role, built["bullets"], action, consigne=consigne, pilote=pilote),
+        build_daily_analysis(llm, role, built["bullets"], consigne=consigne, pilote=pilote),
     )
     return {
         "facts": built["facts"],
@@ -60,9 +61,23 @@ async def _build_section(role: str, crm, llm, composition: facts.Composition | N
 
 
 def _composition_depuis(document: dict | None) -> facts.Composition:
-    """Traduit un document de préférences en composition exploitable par facts."""
+    """Traduit un document de préférences en composition exploitable par facts.
+
+    Rien de coché + consigne posée = mode « consigne pilote » : tout le
+    catalogue du rôle est activé (ids=None) pour que l'IA puisse piocher, et le
+    drapeau `pilote` fait basculer narratif sur le bloc de prompt où la
+    consigne choisit le CONTENU. Le cockpit n'y perd rien : `facts` devient un
+    sur-ensemble, jamais un sous-ensemble (DgVision lit facts.ca_ytd_xof).
+
+    Le test est `elements == []` et non `not elements` : `None` signifie
+    « aucune préférence » (tout actif, mode normal) et doit le rester.
+    """
     doc = document or {}
-    return facts.Composition(doc.get("elements"), doc.get("consigne", ""))
+    elements = doc.get("elements")
+    consigne = doc.get("consigne", "")
+    if elements == [] and consigne.strip():
+        return facts.Composition(None, consigne, pilote=True)
+    return facts.Composition(elements, consigne)
 
 
 async def generate(crm, llm, triggered_by: str = "schedule") -> dict:

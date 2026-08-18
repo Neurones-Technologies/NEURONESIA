@@ -131,11 +131,23 @@ async def compute_file(crm, exclude_internal: bool = False, role: str | None = N
     # apparaître tout de suite. Les deux lectures sont indépendantes, donc
     # simultanées. Le réglage du profil est lu à chaque appel (SELECT par clé
     # primaire) : mis en cache, une case cochée resterait sans effet visible.
-    candidates, open_decisions, actives = await asyncio.gather(
+    #
+    # `return_exceptions=True` puis relance : sans lui, le premier échec fait
+    # sortir du gather en abandonnant les autres lectures en plein vol — leur
+    # session DB n'est jamais refermée et la coroutine orpheline explose au
+    # ramassage, potentiellement dans un tout autre contexte (c'est ainsi qu'un
+    # test du briefing faisait échouer la fixture d'un test voisin). Avec trois
+    # lectures, il y a désormais deux coroutines à abandonner, pas une.
+    resultats = await asyncio.gather(
         compute_candidates(crm, exclude_internal=exclude_internal),
         store.list_decisions(status="en_cours"),
         store.get_conditions_profil(role),
+        return_exceptions=True,
     )
+    erreurs = [r for r in resultats if isinstance(r, BaseException)]
+    if erreurs:
+        raise erreurs[0]
+    candidates, open_decisions, actives = resultats
 
     retenus = conditions.appliquer(candidates, actives)
 

@@ -132,21 +132,30 @@ async def put_briefing_preferences(
             status_code=400,
             detail=f"Élément(s) inconnu(s) pour ce rôle : {', '.join(inconnus)}",
         )
-    if not body.elements:
-        # Sans puce, narratif ne produit ni résumé ni analyse : l'écran afficherait
-        # « Pas assez de données pour un briefing aujourd'hui » sans que personne
-        # comprenne que c'est un réglage qui l'a provoqué.
+    if not body.elements and not preferences.sanitize_consigne(body.consigne):
+        # Rien de coché ET pas de consigne exploitable (une consigne faite
+        # uniquement de balises <consigne> devient vide au nettoyage) : sans
+        # puce ni boussole, narratif afficherait « Pas assez de données pour un
+        # briefing aujourd'hui » sans que personne comprenne que c'est un
+        # réglage qui l'a provoqué. Rien de coché AVEC une consigne est en
+        # revanche accepté — mode « consigne pilote », où l'IA pioche dans tout
+        # le pool de faits du rôle ce qui répond à la consigne
+        # (cf. service._composition_depuis).
         raise HTTPException(
             status_code=400,
-            detail="Sélectionnez au moins un élément — un débrief vide n'afficherait rien.",
+            detail=(
+                "Cochez au moins un élément, ou rédigez une consigne : sans l'un "
+                "ni l'autre, le débrief n'aurait rien à raconter."
+            ),
         )
 
     saved = await preferences.save(
         cible, body.elements, body.consigne, updated_by=current_user.email
     )
     logger.info(
-        "Composition du débrief '%s' réglée par %s : %d élément(s), consigne %s",
+        "Composition du débrief '%s' réglée par %s : %d élément(s), consigne %s%s",
         cible, current_user.email, len(saved["elements"]), "posée" if saved["consigne"] else "vide",
+        " (mode consigne pilote)" if not saved["elements"] and saved["consigne"] else "",
     )
     return {
         "role": cible,

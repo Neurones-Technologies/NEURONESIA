@@ -111,6 +111,37 @@ CATALOGUE: dict[str, list[Element]] = {
         Element("engagement_fournisseurs", "Engagement fournisseurs",
                 "Le montant fournisseur restant dû et les fournisseurs qui concentrent l'engagement.",
                 False),
+        # ── Vue 360 (élargissement du pilotage DG) — tous décochés par défaut ──
+        Element("ca_pluriannuel", "CA pluriannuel",
+                "Le CA commandé des cinq derniers exercices, la meilleure année et où se situe l'exercice en cours.",
+                False),
+        Element("marge_exercice", "Marge de l'exercice",
+                "La marge provisoire et définitive de l'exercice, en montant et en pourcentage moyen.",
+                False),
+        Element("prevision_atterrissage", "Prévision d'atterrissage",
+                "Le réalisé du trimestre en cours et la projection de fin de trimestre, du pessimiste à l'optimiste.",
+                False),
+        Element("taux_transformation", "Taux de transformation",
+                "La part des affaires gagnées en nombre et en valeur, et le client qui concentre les pertes.",
+                False),
+        Element("echeances_affaires", "Affaires à échéance",
+                "Les opportunités encore ouvertes dont la clôture tombe dans les 60 jours, et la plus proche.",
+                False),
+        Element("delai_encaissement", "Délai d'encaissement",
+                "Le délai réel entre facturation et paiement, le retard moyen des impayés et le taux de recouvrement.",
+                False),
+        Element("performance_commerciaux", "Performance par commercial",
+                "La répartition du réalisé de l'exercice entre commerciaux, et qui le porte.",
+                False),
+        Element("mix_sectoriel", "Mix sectoriel",
+                "La répartition du CA de l'exercice par secteur client, et le secteur dominant.",
+                False),
+        Element("rythme_mensuel", "Rythme mensuel",
+                "Le CA mois par mois de l'exercice, et le dernier mois complet face à la moyenne de l'année.",
+                False),
+        Element("affaires_imminentes", "Affaires imminentes",
+                "Les opportunités les plus chaudes du pipeline, en score pondéré, et la première d'entre elles.",
+                False),
     ],
     "dir_commercial": [
         Element("pipeline_ouvert", "Pipeline ouvert",
@@ -252,17 +283,25 @@ def invalidate_cache() -> None:
     _cache = None
 
 
-def _sanitize_consigne(texte: str) -> str:
+def sanitize_consigne(texte: str) -> str:
     """Nettoie une consigne libre avant stockage.
 
     Retire les balises `<consigne>` : sans ça, une consigne qui en contient une
     fermante sortirait du bloc délimité du prompt système et se lirait comme une
     instruction de premier rang (cf. narratif._CONSIGNE_BLOC). Écrase aussi les
     lignes vides en série — une consigne de quarante lignes noierait les règles.
+
+    Publique : le routeur s'en sert pour juger si une consigne est exploitable
+    avant d'accepter une composition sans aucun élément (mode consigne pilote).
     """
     texte = re.sub(r"</?consigne>", "", texte or "", flags=re.IGNORECASE)
     texte = re.sub(r"\n{2,}", "\n", texte)
     return texte.strip()[:CONSIGNE_MAX]
+
+
+# Alias de compatibilité : la fonction est née privée et des appelants (tests)
+# la connaissent sous ce nom.
+_sanitize_consigne = sanitize_consigne
 
 
 def roles_connus() -> list[str]:
@@ -330,7 +369,7 @@ def _parse(role: str, row: BriefingPreferenceModel) -> dict:
 
     return {
         "elements": elements,
-        "consigne": _sanitize_consigne(brut.get("consigne", "")),
+        "consigne": sanitize_consigne(brut.get("consigne", "")),
         "source": "reglee",
         "updated_by": row.updated_by or None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -371,7 +410,7 @@ async def save(role: str, elements: list[str], consigne: str, updated_by: str) -
 
     connus = _IDS[role]
     retenus = [e for e in dict.fromkeys(elements) if e in connus]
-    propre = _sanitize_consigne(consigne)
+    propre = sanitize_consigne(consigne)
     document = {"version": VERSION, "elements": retenus, "consigne": propre}
     maintenant = datetime.now(timezone.utc).replace(tzinfo=None)
 

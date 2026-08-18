@@ -937,6 +937,31 @@ table{border-spacing:0}
   resize:vertical;min-height:60px;transition:border-color .18s ease,box-shadow .18s ease
 }
 .txa:focus{outline:none;border-color:var(--accent-strong);box-shadow:var(--ring)}
+/* consigne de rédaction saisie en items (params/DebriefForm) : même gabarit
+   que .txa — c'est le même champ, présenté en étiquettes. Le focus se peint
+   sur la ZONE et non sur l'input interne, nu par construction. */
+.tagbox{
+  display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;width:100%;min-height:60px;
+  padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);
+  cursor:text;transition:border-color .18s ease,box-shadow .18s ease
+}
+.tagbox:focus-within{border-color:var(--accent-strong);box-shadow:var(--ring)}
+.tagbox input{
+  flex:1;min-width:140px;border:0;background:none;padding:4px 0;
+  font-family:var(--sans);font-size:12.5px;line-height:1.55;color:var(--t1)
+}
+.tagbox input:focus{outline:none}
+.tag{
+  display:inline-flex;align-items:center;gap:5px;max-width:100%;
+  padding:3px 7px 3px 10px;border:1px solid var(--line-2);border-radius:999px;
+  background:var(--paper-2);font-size:12.5px;line-height:1.5;color:var(--t1)
+}
+.tag-x{
+  border:0;background:none;cursor:pointer;padding:0 2px;
+  font-size:14px;line-height:1;color:var(--t3);transition:color .15s ease
+}
+.tag-x:hover{color:var(--alert)}
+.tag-x:focus-visible{outline:2px solid var(--accent-strong);outline-offset:1px;border-radius:4px}
 
 /* ---------- comportement de paiement (dossier d'arbitrage) ----------
    Le fait qui décide du dossier : ce que le client paie RÉELLEMENT, et dans

@@ -1026,9 +1026,14 @@ class LocalCRMAdapter(CRMRepository):
         else:
             trend_next = sum(v for _, v in last_6) / len(last_6) if last_6 else 0
 
-        projection_realiste = realise + trend_next * len(remaining_months)
-        projection_optimiste = realise + trend_next * len(remaining_months) * 1.15
-        projection_pessimiste = realise + trend_next * len(remaining_months) * 0.85
+        # Bornées au réalisé : le CA commandé est cumulatif, une tendance
+        # mensuelle négative ne peut pas retrancher des commandes déjà signées.
+        # Sans cette borne, un trimestre entamé sur une pente descendante
+        # projetait un atterrissage négatif — mathématiquement cohérent,
+        # métier-absurde.
+        projection_realiste = max(realise, realise + trend_next * len(remaining_months))
+        projection_optimiste = max(realise, realise + trend_next * len(remaining_months) * 1.15)
+        projection_pessimiste = max(realise, realise + trend_next * len(remaining_months) * 0.85)
 
         current_day = dt.now().day
         import calendar

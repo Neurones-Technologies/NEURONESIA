@@ -60,6 +60,9 @@ export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem
     { id: "tableau-de-bord", label: "Tableau de bord" },
     { id: "trajectoire", label: "Trajectoire financière" },
     { id: "risques", label: "Dépendances et risques" },
+    // L'ordre du menu DOIT suivre l'ordre du document (scroll-spy) : cette
+    // entrée correspond à la dernière <Section> de DgVision.
+    { id: "pilotage", label: "Pilotage de l'activité" },
   ],
   // Note « Point DAF financier » du 04/08/2026 : trois tableaux de bord (budget,
   // relation commerciale, trésorerie prévisionnelle) et un volet transverse

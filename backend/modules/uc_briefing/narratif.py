@@ -114,20 +114,47 @@ _CONSIGNE_BLOC = (
     "excuser. Ne cite jamais la consigne elle-même dans ta réponse."
 )
 
+# Mode « consigne pilote » : le destinataire n'a coché aucun élément et sa
+# consigne est la seule boussole de CONTENU. Le bloc standard la subordonne au
+# ton et à l'angle — réutilisé tel quel, il ferait ignorer précisément ce que
+# l'utilisateur demande. Ici la consigne choisit QUOI raconter ; elle reste
+# interdite d'inventer : la sélection se fait PARMI les faits fournis, jamais
+# au-delà. Mêmes balises, même position en fin de SYSTEM, même règle du
+# « demande sans fait correspondant : ignorée sans la mentionner ».
+_CONSIGNE_PILOTE_BLOC = (
+    "\n\nDEMANDES DU DESTINATAIRE (elles choisissent le CONTENU du briefing) :\n"
+    "<consigne>{consigne}</consigne>\n"
+    "Le destinataire n'a retenu aucun élément prédéfini : ces demandes remplacent la sélection. "
+    "Pour chaque demande, choisis toi-même, PARMI les faits du jour fournis, ceux qui y répondent, "
+    "et construis le briefing autour d'eux ; les faits qui ne répondent à aucune demande ne servent "
+    "qu'à éclairer ceux retenus, jamais à les remplacer.\n"
+    "Ce pouvoir s'arrête à la SÉLECTION : la liste de faits fournie reste la seule source autorisée. "
+    "Tu ne peux ni ajouter, ni modifier, ni recalculer, ni extrapoler un seul chiffre, nom de compte "
+    "ou date, même si une demande l'exige. Si une demande ne trouve aucun fait qui y réponde, "
+    "IGNORE-la sans la mentionner et sans t'en excuser. Ne cite jamais les demandes elles-mêmes "
+    "dans ta réponse."
+)
 
-def _avec_consigne(system: str, consigne: str) -> str:
+
+def _avec_consigne(system: str, consigne: str, pilote: bool = False) -> str:
     """Ajoute la consigne au prompt système, si elle existe.
 
     Les balises présentes dans la consigne ont déjà été retirées au stockage
-    (preferences._sanitize_consigne) ; le filtrage est répété ici parce que ce
+    (preferences.sanitize_consigne) ; le filtrage est répété ici parce que ce
     module ne peut pas présumer d'où vient la chaîne qu'on lui passe.
+
+    `pilote` bascule sur le bloc où la consigne choisit le contenu. Une
+    consigne vide en mode pilote ne peut pas arriver depuis
+    service._composition_depuis, qui exige une consigne non vide pour poser le
+    drapeau — le retour anticipé la neutralise quand même, par défense.
     """
     if not consigne or not consigne.strip():
         return system
     propre = re.sub(r"</?consigne>", "", consigne, flags=re.IGNORECASE).strip()
     if not propre:
         return system
-    return system + _CONSIGNE_BLOC.format(consigne=propre)
+    bloc = _CONSIGNE_PILOTE_BLOC if pilote else _CONSIGNE_BLOC
+    return system + bloc.format(consigne=propre)
 
 
 def _fallback_analysis(bullets: list[str]) -> str:
@@ -157,7 +184,8 @@ def _fallback_resume(bullets: list[str], action: str | None = None) -> list[str]
 
 
 async def build_brief_resume(
-    llm, role: str, bullets: list[str], action: str | None = None, consigne: str = ""
+    llm, role: str, bullets: list[str], action: str | None = None, consigne: str = "",
+    pilote: bool = False,
 ) -> list[str]:
     """Résumé en 5 lignes affiché en tête de cockpit. Repli sur les faits bruts
     si l'IA échoue — jamais de panneau vide.
@@ -173,7 +201,7 @@ async def build_brief_resume(
         role_label = ROLE_LABELS.get(role, role)
         role_focus = ROLE_FOCUS.get(role, "la performance globale de l'entreprise")
         system = _avec_consigne(
-            _SYSTEM_RESUME.format(role_label=role_label, role_focus=role_focus), consigne
+            _SYSTEM_RESUME.format(role_label=role_label, role_focus=role_focus), consigne, pilote
         )
         user = "Faits du jour :\n- " + "\n- ".join(bullets)
         if action:
@@ -188,20 +216,27 @@ async def build_brief_resume(
         return _fallback_resume(bullets, action)
 
 
-async def build_daily_analysis(llm, role: str, bullets: list[str], consigne: str = "") -> str:
+async def build_daily_analysis(
+    llm, role: str, bullets: list[str], consigne: str = "", pilote: bool = False
+) -> str:
     if not bullets:
         return "Pas assez de données pour un briefing aujourd'hui."
+    # En mode pilote, le pool de faits est le catalogue entier du rôle : un repli
+    # qui concatène tout produirait un mur de texte sans rapport avec la consigne.
+    # On garde les puces les plus engageantes (les builders les ordonnent ainsi),
+    # même plafond que _fallback_resume.
+    repli = bullets[:_MAX_RESUME_LIGNES] if pilote else bullets
     if llm is None:
-        return _fallback_analysis(bullets)
+        return _fallback_analysis(repli)
     try:
         role_label = ROLE_LABELS.get(role, role)
         role_focus = ROLE_FOCUS.get(role, "la performance globale de l'entreprise")
         system = _avec_consigne(
-            _SYSTEM_TEMPLATE.format(role_label=role_label, role_focus=role_focus), consigne
+            _SYSTEM_TEMPLATE.format(role_label=role_label, role_focus=role_focus), consigne, pilote
         )
         user = "Faits du jour :\n- " + "\n- ".join(bullets) + "\n\nRédige le briefing."
         text = await llm.generate(system=system, user=user, max_tokens=750, temperature=0.55)
-        return (text or "").strip() or _fallback_analysis(bullets)
+        return (text or "").strip() or _fallback_analysis(repli)
     except Exception as exc:
         logger.warning("Briefing IA échoué pour le rôle '%s' (repli faits bruts) : %s", role, exc)
-        return _fallback_analysis(bullets)
+        return _fallback_analysis(repli)
