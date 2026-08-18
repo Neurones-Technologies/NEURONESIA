@@ -52,7 +52,7 @@ class FauxCRM:
             "impaye_cumule_xof": 800_000_000, "ca_annuel_historique_dormants_xof": 0.0,
         }
 
-    async def get_margin_stats(self):
+    async def get_margin_stats(self, year=None):
         self._trace("get_margin_stats")
         return {
             "nb_dossiers": 100, "ca_provisoire_total": 10_000_000_000,
@@ -61,6 +61,31 @@ class FauxCRM:
             "perc_marge_definitive_moyen": 33.0, "reste_a_encaisser": 4_000_000_000,
             "fournisseurs_restant": 6_000_000_000, "backlog_total": 1_000_000_000,
         }
+
+    async def get_year_stats(self, year, exclude_internal=False):
+        self._trace("get_year_stats")
+        return {"year": year, "revenue_xof": 1_000_000_000 * (year - 2020),
+                "orders_count": 10, "clients_with_orders": 5}
+
+    async def get_invoice_collection_stats(self, client_name="", year=None):
+        self._trace("get_invoice_collection_stats")
+        return {
+            "total_factures": 200, "payees": 150, "en_attente": 50,
+            "taux_recouvrement_pct": 75.0, "montant_en_attente_xof": 2_500_000_000,
+            "delai_moyen_recouvrement_reel_jours": 147,
+            "retard_moyen_impayes_jours": 210, "nb_impayes_en_souffrance": 40,
+        }
+
+    async def get_revenue_by_sector(self, year=None, limit=20):
+        self._trace("get_revenue_by_sector")
+        return [
+            {"secteur": "Banque", "ca_total_xof": 1_800_000_000, "nb_clients": 4, "nb_commandes": 12},
+            {"secteur": "Télécoms", "ca_total_xof": 900_000_000, "nb_clients": 2, "nb_commandes": 6},
+        ]
+
+    async def get_monthly_revenue(self, year):
+        self._trace("get_monthly_revenue")
+        return [{"mois": m, "ca_xof": 400_000_000, "nb_commandes": 4} for m in range(1, 8)]
 
     async def get_top_clients(self, limit, year=None):
         self._trace("get_top_clients")
@@ -258,6 +283,47 @@ async def test_chaque_role_gate_ses_elements(role, builder):
     defaut = await builder(FauxCRM(), facts.Composition(DEFAUTS[role]))
     assert len(complet["bullets"]) >= len(defaut["bullets"])
     assert len(defaut["bullets"]) >= 1
+
+
+# ── Vue 360 DG (éléments décochés par défaut) ─────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_pluriannuel_interroge_chaque_exercice():
+    """La série 5 ans, c'est cinq appels — et rien d'autre du pool 360."""
+    from datetime import datetime
+    crm = FauxCRM()
+    res = await facts.build_dg_facts(crm, facts.Composition(["ca_pluriannuel"]))
+    assert crm.appels.count("get_year_stats") == 5
+    assert "get_win_rate" not in crm.appels
+    assert len(res["bullets"]) == 1
+    # Le faux CRM fait croître le CA avec l'année : la meilleure est la plus récente.
+    assert res["facts"]["pluriannuel_meilleure_annee"] == datetime.now().year
+
+
+@pytest.mark.asyncio
+async def test_mix_sectoriel_denonce_le_non_renseigne():
+    """« Non renseigné » en tête n'est pas un secteur dominant : la puce doit le
+    dire comme un défaut de qualification, pas comme un fait de marché."""
+    crm = FauxCRM()
+
+    async def _secteurs_non_qualifies(year=None, limit=20):
+        return [{"secteur": "Non renseigné", "ca_total_xof": 2_000_000_000,
+                 "nb_clients": 9, "nb_commandes": 20}]
+
+    crm.get_revenue_by_sector = _secteurs_non_qualifies
+    res = await facts.build_dg_facts(crm, facts.Composition(["mix_sectoriel"]))
+    assert "qualification sectorielle" in res["bullets"][0]
+
+
+@pytest.mark.asyncio
+async def test_rythme_mensuel_ignore_le_mois_en_cours():
+    """Le mois en cours est incomplet : le comparer à la moyenne fabriquerait un
+    effondrement artificiel en début de mois."""
+    from datetime import datetime
+    mois_courant = datetime.now().month
+    res = await facts.build_dg_facts(FauxCRM(), facts.Composition(["rythme_mensuel"]))
+    if mois_courant > 1:
+        assert res["facts"]["mensuel_dernier_mois"] < mois_courant
 
 
 @pytest.mark.asyncio

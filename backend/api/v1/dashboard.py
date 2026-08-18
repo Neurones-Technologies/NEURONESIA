@@ -8,7 +8,7 @@ l'exposition JSON. Chaque endpoint est gated par vue via require_views()
 simple masquage de menu.
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -525,4 +525,95 @@ async def next_actions(request: Request, limit: int = Query(default=10, le=50)):
             "Classement par montant engagé décroissant, sur les signaux déjà calculés par les modules "
             "Portefeuille, Montée en valeur et Trésorerie — aucune nouvelle heuristique de scoring."
         ),
+    }
+
+
+# ---------- Vue Pilotage de l'activité (cockpit DG) ----------
+
+# Étapes qui ferment une opportunité — même reconnaissance par mot-clé que
+# modules/uc_briefing/facts.py : `stade` est du texte libre Odoo qui mélange
+# deux nomenclatures (« 6-Gagné » / « Won »).
+_STADES_FERMES = ("gagn", "won", "perdu", "lost", "annul", "cancel", "suspendu")
+
+
+def _echeances_ouvertes(opportunities: list[dict], jours: int) -> dict:
+    """Opportunités encore ouvertes dont la clôture tombe dans la fenêtre.
+
+    `deadline` est renseignée aussi sur les affaires gagnées, perdues et
+    annulées : sans le filtre d'étape, on compterait des affaires closes.
+    """
+    aujourd_hui = datetime.now().date()
+    limite = aujourd_hui + timedelta(days=jours)
+    proches = []
+    for opp in opportunities:
+        brut = opp.get("deadline")
+        stade = (opp.get("stade") or "").lower()
+        if not brut or any(mot in stade for mot in _STADES_FERMES):
+            continue
+        try:
+            echeance = datetime.fromisoformat(str(brut)).date()
+        except ValueError:
+            continue
+        if aujourd_hui <= echeance <= limite:
+            proches.append((echeance, opp))
+    proches.sort(key=lambda p: p[0])
+    return {
+        "fenetre_jours": jours,
+        "nb": len(proches),
+        "montant_xof": sum(o.get("revenu_attendu_xof") or 0 for _, o in proches),
+        "prochaines": [
+            {
+                "opportunite": o.get("opportunite"),
+                "client": o.get("client"),
+                "deadline": e.isoformat(),
+                "revenu_attendu_xof": o.get("revenu_attendu_xof"),
+            }
+            for e, o in proches[:5]
+        ],
+    }
+
+
+@router.get("/pilotage", dependencies=[Depends(require_views("dashboard"))])
+async def pilotage(request: Request, year: int | None = Query(default=None)):
+    """Vue 360 de l'onglet DG « Pilotage de l'activité » : un appel pour
+    l'onglet entier (doctrine des cockpits par persona, cf.
+    modules/uc_commercial/router.py — un onglet qui affiche dix blocs paie un
+    appel, pas dix).
+
+    Mêmes agrégats que les éléments « vue 360 » du débrief DG
+    (modules/uc_briefing/facts.py, blocs 10-19) : l'onglet montre en permanence
+    ce que le débrief raconte à la demande — jamais deux calculs différents
+    pour le même indicateur.
+    """
+    crm = _crm(request)
+    y = year or datetime.now().year
+    # Séquentiel et non gather : voir la mesure détaillée sur /kpis.
+    ca_annuel = []
+    for a in range(y - 4, y + 1):
+        stats = await crm.get_year_stats(a)
+        ca_annuel.append({
+            "annee": a, "ca_xof": stats["revenue_xof"], "nb_commandes": stats["orders_count"],
+        })
+    marge = await crm.get_margin_stats(year=y)
+    atterrissage = await crm.get_quarterly_forecast()
+    win_rate = await crm.get_win_rate()
+    lost = await crm.get_lost_deals(limit=5)
+    opportunites = await crm.list_opportunities(limit=500)
+    encaissement = await crm.get_invoice_collection_stats()
+    commerciaux = await crm.get_revenue_by_salesperson(year=y)
+    secteurs = await crm.get_revenue_by_sector(year=y, limit=10)
+    mensuel = await crm.get_monthly_revenue(y)
+    leads = await crm.get_hot_leads(limit=5)
+    return {
+        "annee": y,
+        "ca_annuel": ca_annuel,
+        "marge": marge,
+        "atterrissage": atterrissage,
+        "transformation": {"win_rate": win_rate, "pertes": lost},
+        "echeances": _echeances_ouvertes(opportunites, jours=60),
+        "encaissement": encaissement,
+        "commerciaux": commerciaux,
+        "secteurs": secteurs,
+        "mensuel": mensuel,
+        "leads_chauds": leads,
     }

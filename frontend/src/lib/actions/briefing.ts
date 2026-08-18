@@ -51,8 +51,14 @@ export async function saveDebriefAction(
   const consigne = String(formData.get("consigne") ?? "").trim();
   const consigneMax = Number(formData.get("consigne_max") ?? 400);
 
-  if (elements.length === 0) {
-    return ko("Cochez au moins un élément — un débrief vide n'afficherait rien.", "elements");
+  // Rien de coché est accepté si une consigne est posée : mode « consigne
+  // pilote », où le débrief est rédigé à partir des seules consignes. Le
+  // backend refait le même contrôle sur la consigne nettoyée des balises.
+  if (elements.length === 0 && !consigne) {
+    return ko(
+      "Cochez au moins un élément, ou rédigez une consigne : sans l'un ni l'autre, le débrief n'aurait rien à raconter.",
+      "elements"
+    );
   }
   if (consigne.length > consigneMax) {
     return ko(`Consigne trop longue : ${consigneMax} caractères maximum.`, "consigne");
@@ -72,7 +78,9 @@ export async function saveDebriefAction(
   // sans cette phrase, on enregistre, on va voir sa Vision, on n'y trouve aucun
   // changement — et on en conclut que le réglage ne marche pas.
   return ok(
-    "Composition enregistrée. Elle s'appliquera au prochain débrief — « Régénérer » l'applique tout de suite."
+    elements.length === 0
+      ? "Mode consigne enregistré : le débrief sera rédigé uniquement à partir de vos consignes, en piochant dans les données réelles du profil. « Régénérer » l'applique tout de suite."
+      : "Composition enregistrée. Elle s'appliquera au prochain débrief — « Régénérer » l'applique tout de suite."
   );
 }
 

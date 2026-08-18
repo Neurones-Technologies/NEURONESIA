@@ -50,12 +50,19 @@ class Composition:
     et laisserait `facts` complet alors que le cockpit le lit (DgVision lit
     `facts.ca_ytd_xof`) — d'où un titre nourri d'un chiffre dont plus aucune
     puce ne parle.
-    """
-    __slots__ = ("_ids", "consigne")
 
-    def __init__(self, ids: list[str] | None = None, consigne: str = ""):
+    `pilote` — mode « consigne pilote » (rien de coché, consigne posée) : la
+    consigne choisit le CONTENU du briefing et non plus seulement le ton. Le
+    drapeau ne change RIEN au gating — l'appelant passe alors `ids=None` pour
+    ouvrir tout le pool de faits — il ne sert qu'au choix du bloc de prompt en
+    aval (cf. narratif._CONSIGNE_PILOTE_BLOC).
+    """
+    __slots__ = ("_ids", "consigne", "pilote")
+
+    def __init__(self, ids: list[str] | None = None, consigne: str = "", pilote: bool = False):
         self._ids = None if ids is None else set(ids)
         self.consigne = consigne
+        self.pilote = pilote
 
     def actif(self, element_id: str) -> bool:
         return self._ids is None or element_id in self._ids
@@ -89,7 +96,39 @@ _DG_SOURCES: dict[str, tuple[str, ...]] = {
     "arbitrage": ("file_arbitrage",),
     "retention": ("retention_clients",),
     "fournisseurs": ("engagement_fournisseurs",),
+    # Vue 360 — `margins` (toutes années) et `marge_exercice` (année en cours)
+    # sont deux sources distinctes : la trésorerie se lit sur le stock complet,
+    # la marge de l'exercice sur l'exercice seul.
+    "pluriannuel": ("ca_pluriannuel",),
+    "marge_exercice": ("marge_exercice",),
+    "forecast": ("prevision_atterrissage",),
+    "win_rate": ("taux_transformation",),
+    "lost": ("taux_transformation",),
+    "opportunites": ("echeances_affaires",),
+    "collecte": ("delai_encaissement",),
+    "par_commercial": ("performance_commerciaux",),
+    "secteurs": ("mix_sectoriel",),
+    "mensuel": ("rythme_mensuel",),
+    "hot_leads": ("affaires_imminentes",),
 }
+
+_MOIS = ("", "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+         "août", "septembre", "octobre", "novembre", "décembre")
+
+
+async def _ca_pluriannuel(crm, annee: int, nb: int = 5) -> list[dict]:
+    """CA commandé des `nb` derniers exercices, du plus ancien au plus récent.
+
+    Séquentiel et non `gather` : sur le miroir SQLite, le parallélisme est
+    mesuré plus lent que l'enchaînement (cf. api/v1/dashboard.py), et un
+    exercice en échec fait échouer toute la série — une série incomplète
+    mentirait, une année absente se lisant comme une année sans ventes.
+    """
+    serie = []
+    for a in range(annee - nb + 1, annee + 1):
+        stats = await crm.get_year_stats(a)
+        serie.append({"annee": a, "ca_xof": stats["revenue_xof"], "nb_commandes": stats["orders_count"]})
+    return serie
 
 
 async def _resoudre(sources: dict, besoins: dict[str, tuple[str, ...]], c: Composition) -> dict:
@@ -163,6 +202,17 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             "arbitrage": (lambda: arbitrage_service.compute_file(crm, exclude_internal=True), None),
             "retention": (lambda: crm.get_client_retention(year=y), None),
             "fournisseurs": (lambda: crm.get_supplier_intelligence(limit=5), None),
+            "pluriannuel": (lambda: _ca_pluriannuel(crm, y), []),
+            "marge_exercice": (lambda: crm.get_margin_stats(year=y), None),
+            "forecast": (lambda: crm.get_quarterly_forecast(), None),
+            "win_rate": (lambda: crm.get_win_rate(), None),
+            "lost": (lambda: crm.get_lost_deals(limit=5), None),
+            "opportunites": (lambda: crm.list_opportunities(limit=500), []),
+            "collecte": (lambda: crm.get_invoice_collection_stats(), None),
+            "par_commercial": (lambda: crm.get_revenue_by_salesperson(year=y), []),
+            "secteurs": (lambda: crm.get_revenue_by_sector(year=y, limit=10), []),
+            "mensuel": (lambda: crm.get_monthly_revenue(y), []),
+            "hot_leads": (lambda: crm.get_hot_leads(limit=5), []),
         },
         _DG_SOURCES,
         c,
@@ -385,6 +435,201 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
                 + (f" ({top_f['taux_dependance_pct']:.0f}% des achats)."
                    if top_f.get("taux_dependance_pct") is not None else ".")
             )
+
+    # ── Blocs 10-19 : vue 360 du pilotage, tous décochés par défaut ──────────
+    # Servent le débrief ET l'onglet cockpit « Pilotage de l'activité ».
+
+    # 10 — trajectoire pluriannuelle  [élément : ca_pluriannuel]
+    pluriannuel = src["pluriannuel"]
+    if c.actif("ca_pluriannuel") and pluriannuel:
+        meilleure = max(pluriannuel, key=lambda a: a["ca_xof"])
+        part_meilleure = (
+            pluriannuel[-1]["ca_xof"] / meilleure["ca_xof"] * 100 if meilleure["ca_xof"] else None
+        )
+        facts.update({
+            "pluriannuel_series": pluriannuel,
+            "pluriannuel_meilleure_annee": meilleure["annee"],
+            "pluriannuel_meilleure_ca_xof": meilleure["ca_xof"],
+            "pluriannuel_part_meilleure_pct": round(part_meilleure, 1) if part_meilleure is not None else None,
+        })
+        serie = ", ".join(f"{a['annee']} : {_m(a['ca_xof'])}" for a in pluriannuel)
+        bullets.append(
+            f"CA commandé des {len(pluriannuel)} derniers exercices (M FCFA) — {serie} ; "
+            f"meilleure année {meilleure['annee']}"
+            + (f", l'exercice en cours (encore incomplet) en est à {part_meilleure:.0f}%."
+               if part_meilleure is not None and meilleure["annee"] != y else ".")
+        )
+
+    # 11 — marge de l'exercice  [élément : marge_exercice]
+    # Source distincte de `margins` : ici l'exercice seul, là le stock complet.
+    marge = src["marge_exercice"]
+    if c.actif("marge_exercice") and marge and marge.get("nb_dossiers"):
+        facts.update({
+            "marge_annee": y,
+            "marge_nb_dossiers": marge["nb_dossiers"],
+            "marge_provisoire_xof": marge["marge_provisoire_total"],
+            "marge_definitive_xof": marge["marge_definitive_total"],
+            "marge_provisoire_moy_pct": marge["perc_marge_provisoire_moyen"],
+            "marge_definitive_moy_pct": marge["perc_marge_definitive_moyen"],
+        })
+        bullets.append(
+            f"Marge {y} : {_m(marge['marge_provisoire_total'])} M FCFA provisoires sur "
+            f"{marge['nb_dossiers']} dossiers ({marge['perc_marge_provisoire_moyen']:.1f}% en moyenne), "
+            f"{_m(marge['marge_definitive_total'])} M FCFA définitifs constatés "
+            f"({marge['perc_marge_definitive_moyen']:.1f}%)."
+        )
+
+    # 12 — prévision d'atterrissage  [élément : prevision_atterrissage]
+    forecast = src["forecast"]
+    projection = (forecast or {}).get("projection_fin_trimestre", {})
+    if c.actif("prevision_atterrissage") and projection.get("realiste_xof") is not None:
+        facts.update({
+            "atterrissage_trimestre": forecast.get("trimestre"),
+            "atterrissage_realise_xof": forecast.get("realise_a_ce_jour_xof"),
+            "atterrissage_realiste_xof": projection.get("realiste_xof"),
+            "atterrissage_pessimiste_xof": projection.get("pessimiste_xof"),
+            "atterrissage_optimiste_xof": projection.get("optimiste_xof"),
+        })
+        texte = f"Atterrissage {forecast.get('trimestre')} : "
+        if forecast.get("realise_a_ce_jour_xof") is not None:
+            texte += f"{_m(forecast['realise_a_ce_jour_xof'])} M FCFA déjà commandés, "
+        texte += f"projection de fin de trimestre à {_m(projection['realiste_xof'])} M FCFA en scénario réaliste"
+        if projection.get("pessimiste_xof") is not None and projection.get("optimiste_xof") is not None:
+            texte += f" (fourchette {_m(projection['pessimiste_xof'])} à {_m(projection['optimiste_xof'])})"
+        bullets.append(texte + ".")
+
+    # 13 — taux de transformation  [élément : taux_transformation]
+    win_rate, lost = src["win_rate"], src["lost"]
+    if c.actif("taux_transformation") and win_rate:
+        facts.update({
+            "transformation_taux_nb_pct": win_rate["taux_nb_pct"],
+            "transformation_taux_valeur_pct": win_rate["taux_valeur_pct"],
+        })
+        texte = (
+            f"Transformation commerciale : {win_rate['taux_nb_pct']}% d'affaires gagnées en nombre, "
+            f"{win_rate['taux_valeur_pct']}% en valeur"
+        )
+        perdant = lost["by_client"][0] if lost and lost.get("by_client") else None
+        if perdant:
+            facts.update({
+                "transformation_nb_perdus": lost["nb_total"],
+                "transformation_top_perdant": perdant,
+            })
+            texte += (
+                f" ; {lost['nb_total']} affaires perdues, {perdant['client']} en concentre le plus "
+                f"({_m(perdant['montant_xof'])} M FCFA sur {perdant['nb']})"
+            )
+        bullets.append(texte + ".")
+
+    # 14 — affaires à échéance sous 60 jours  [élément : echeances_affaires]
+    # Même helper que le DC : la table `contracts` étant vide, ce sont les
+    # opportunités ouvertes qui portent la notion d'échéance.
+    if c.actif("echeances_affaires"):
+        _echeances(facts, bullets, src["opportunites"], jours=60)
+
+    # 15 — délai d'encaissement  [élément : delai_encaissement]
+    collecte = src["collecte"]
+    if c.actif("delai_encaissement") and collecte and "error" not in collecte:
+        delai_reel = collecte.get("delai_moyen_recouvrement_reel_jours")
+        facts.update({
+            "encaissement_delai_reel_jours": delai_reel,
+            "encaissement_retard_impayes_jours": collecte.get("retard_moyen_impayes_jours"),
+            "encaissement_taux_recouvrement_pct": collecte.get("taux_recouvrement_pct"),
+            "encaissement_en_attente_xof": collecte.get("montant_en_attente_xof"),
+            "encaissement_nb_souffrance": collecte.get("nb_impayes_en_souffrance"),
+        })
+        tete = (
+            f"Encaissement : délai réel moyen de {delai_reel} j entre facture et paiement"
+            if delai_reel is not None
+            # L'absence de délai réel est une info de qualité de données, pas un zéro.
+            else "Encaissement : délai réel non mesurable (dates de paiement non synchronisées)"
+        )
+        bullets.append(
+            tete + f" ; {collecte.get('taux_recouvrement_pct', 0)}% des factures recouvrées, "
+            f"{_m(collecte.get('montant_en_attente_xof'))} M FCFA en attente sur "
+            f"{collecte.get('nb_impayes_en_souffrance', 0)} factures en souffrance "
+            f"(retard moyen {collecte.get('retard_moyen_impayes_jours', 0)} j)."
+        )
+
+    # 16 — réalisé par commercial  [élément : performance_commerciaux]
+    # Même helper que le DC : la table d'objectifs étant vide, la puce répartit
+    # le réalisé et le dit.
+    if c.actif("performance_commerciaux"):
+        _couverture_objectifs(facts, bullets, src["par_commercial"], y)
+
+    # 17 — mix sectoriel  [élément : mix_sectoriel]
+    secteurs = src["secteurs"]
+    if c.actif("mix_sectoriel") and secteurs:
+        total_secteurs = sum(s["ca_total_xof"] for s in secteurs)
+        tete_secteur = secteurs[0]
+        part_secteur = (
+            tete_secteur["ca_total_xof"] / total_secteurs * 100 if total_secteurs else None
+        )
+        facts.update({
+            "secteurs_annee": y,
+            "secteurs_nb": len(secteurs),
+            "secteurs_ca_total_xof": total_secteurs,
+            "secteurs_top": tete_secteur["secteur"],
+            "secteurs_top_ca_xof": tete_secteur["ca_total_xof"],
+            "secteurs_top_part_pct": round(part_secteur, 1) if part_secteur is not None else None,
+        })
+        # « Non renseigné » en tête n'est pas un secteur dominant, c'est un
+        # défaut de qualification : la puce le dit plutôt que de l'affirmer.
+        if tete_secteur["secteur"] == "Non renseigné":
+            bullets.append(
+                f"Mix sectoriel {y} : le premier poste est « Non renseigné »"
+                + (f" ({part_secteur:.0f}% des {_m(total_secteurs)} M FCFA commandés)"
+                   if part_secteur is not None else "")
+                + " — la qualification sectorielle des clients reste à faire avant toute lecture."
+            )
+        else:
+            bullets.append(
+                f"Mix sectoriel {y} : {tete_secteur['secteur']} en tête à "
+                f"{_m(tete_secteur['ca_total_xof'])} M FCFA"
+                + (f" ({part_secteur:.0f}% des {_m(total_secteurs)} M FCFA commandés)"
+                   if part_secteur is not None else "")
+                + f", sur {len(secteurs)} secteurs suivis."
+            )
+
+    # 18 — rythme mensuel  [élément : rythme_mensuel]
+    mensuel = src["mensuel"]
+    if c.actif("rythme_mensuel") and mensuel:
+        # Le mois en cours est incomplet : il n'entre dans la comparaison que
+        # s'il est le seul disponible (janvier), et la moyenne reste alors la
+        # sienne — jamais un « effondrement » calculé contre lui-même.
+        complets = [m for m in mensuel if m["mois"] < arret.month] or mensuel
+        moyenne = sum(m["ca_xof"] for m in complets) / len(complets)
+        dernier = complets[-1]
+        part_mois = (dernier["ca_xof"] / moyenne * 100) if moyenne else None
+        facts.update({
+            "mensuel_annee": y,
+            "mensuel_series": mensuel,
+            "mensuel_moyenne_xof": round(moyenne),
+            "mensuel_dernier_mois": dernier["mois"],
+            "mensuel_dernier_ca_xof": dernier["ca_xof"],
+            "mensuel_dernier_vs_moyenne_pct": round(part_mois, 1) if part_mois is not None else None,
+        })
+        bullets.append(
+            f"Rythme mensuel {y} : {_MOIS[dernier['mois']]} à {_m(dernier['ca_xof'])} M FCFA contre "
+            f"une moyenne de {_m(moyenne)} M FCFA sur les mois écoulés"
+            + (f" ({part_mois:.0f}% de la moyenne)." if part_mois is not None else ".")
+        )
+
+    # 19 — affaires imminentes  [élément : affaires_imminentes]
+    hot = src["hot_leads"]
+    if c.actif("affaires_imminentes") and hot:
+        total_pondere = sum(l.get("score_pondere_xof") or 0 for l in hot)
+        tete_lead = hot[0]
+        facts.update({
+            "imminentes_nb": len(hot),
+            "imminentes_pondere_xof": total_pondere,
+            "imminentes_top": tete_lead,
+        })
+        bullets.append(
+            f"{len(hot)} affaires chaudes au pipeline pour {_m(total_pondere)} M FCFA pondérés — "
+            f"la première : {tete_lead['opportunite']} ({tete_lead['client']}, "
+            f"{_m(tete_lead['score_pondere_xof'])} M FCFA pondérés)."
+        )
 
     # L'action du jour n'est PAS un élément décochable : elle est la 5e ligne
     # contractuelle du résumé (cf. narratif._SYSTEM_RESUME et _fallback_resume).
