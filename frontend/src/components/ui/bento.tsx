@@ -193,18 +193,6 @@ export function StatTile({
   // dessous : « -1712 M FCFA » en encre neutre se lisait comme un montant
   // ordinaire. La règle ne vaut que pour le vrai signe moins d'un nombre.
   const negatif = !signeNeutre && /^-\s*\d/.test(value.trim());
-  // Surlignage des 3 plus FORTES barres — un marqueur de niveau, pas de
-  // récence : l'axe donne déjà l'ordre chronologique, tandis que les pics ne
-  // se repèrent pas seuls quand les hauteurs sont proches. Les barres à zéro
-  // ne sont jamais surlignées, même s'il y a moins de trois valeurs.
-  const sparkTop = new Set(
-    (spark ?? [])
-      .map((h, i) => [h, i] as const)
-      .filter(([h]) => h > 0)
-      .sort((a, b) => b[0] - a[0])
-      .slice(0, 3)
-      .map(([, i]) => i)
-  );
   const body = (
     <>
       <div className="tile-h">
@@ -221,13 +209,12 @@ export function StatTile({
       {spark && spark.length > 0 && (
         <div className="spark" aria-hidden="true">
           {/* L'infobulle vit sur la COLONNE (pleine hauteur), pas sur la barre :
-              un mois à 4 % de hauteur serait impossible à survoler. */}
+              un mois à 4 % de hauteur serait impossible à survoler. Toutes les
+              barres portent la teinte accent : la hauteur suffit à hiérarchiser,
+              un surlignage partiel se lisait comme un signal à décoder. */}
           {spark.map((h, i) => (
             <span key={i} className="spark-c" title={sparkLabels?.[i]}>
-              <i
-                className={sparkTop.has(i) ? "on" : ""}
-                style={{ height: `${Math.max(4, h)}%` }}
-              />
+              <i className="on" style={{ height: `${Math.max(4, h)}%` }} />
             </span>
           ))}
         </div>
