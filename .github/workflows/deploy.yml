@@ -114,7 +114,6 @@ jobs:
             IMAGE_TAG="$IMAGE_TAG" docker compose pull backend frontend
             IMAGE_TAG="$IMAGE_TAG" docker compose up -d
             echo "$IMAGE_TAG" > .deployed_tag
-            docker image prune -f
 
             # Le backend charge son modèle d'embeddings au démarrage — c'est
             # pourquoi docker-compose lui accorde start_period: 60s. Un `sleep 15`
@@ -147,3 +146,13 @@ jobs:
               fi
               sleep 2
             done
+
+            # Nettoyage après validation seulement : `docker image prune -f` ne
+            # touche pas les images taguées, donc chaque SHA déployé restait sur
+            # le disque (~3 GB par version de backend). On supprime les anciens
+            # tags des deux images, puis les couches orphelines.
+            docker images --format '{{.Repository}}:{{.Tag}}' \
+              | grep -E '^ghcr\.io/neurones-technologies/neurones-ia-(backend|frontend):' \
+              | grep -v ":$IMAGE_TAG$" \
+              | xargs -r docker rmi || true
+            docker image prune -f

@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { ProfileKey } from "@/lib/types";
 import { DC_SECTIONS, DcSectionParams } from "./dc";
 import { DF_SECTIONS } from "./df";
+import { DG_SECTIONS } from "./dg";
 
 /** Registres de sections des profils en navigation PAR ROUTE (cf.
  * `VISION_NAV_MODE` dans lib/data/sections.ts).
@@ -23,4 +24,5 @@ export type SectionRegistry = Record<string, (params: SectionParams) => ReactNod
 export const SECTION_REGISTRIES: Partial<Record<ProfileKey, SectionRegistry>> = {
   dc: DC_SECTIONS,
   df: DF_SECTIONS,
+  dg: DG_SECTIONS,
 };
