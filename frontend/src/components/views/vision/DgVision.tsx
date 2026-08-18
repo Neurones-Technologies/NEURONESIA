@@ -499,8 +499,8 @@ export async function DgVision() {
       <Section id="risques" title="Dépendances et risques" subtitle="Ce qui fragilise l'entreprise">
         <Bento>
           <Tile
-            span={7}
-            title="Où se concentre le risque client"
+            span={6}
+            title="Top 5 des clients à risque"
             kick="part du CA commandé"
             aide="Le poids de chacun de vos plus gros clients. Sert à voir de qui votre activité dépend réellement."
           >
@@ -543,63 +543,14 @@ export async function DgVision() {
             </FootNote> */}
           </Tile>
 
-          <Tile
-            span={5}
-            title="Paliers de concentration"
-            kick="cumul du CA"
-            aide="Combien de clients faut-il additionner pour atteindre la moitié, puis les trois quarts de votre chiffre. Peu de clients pour beaucoup de chiffre signale une dépendance forte."
-          >
-            <Bars
-              rows={[
-                ...(top1Pct !== null && top1
-                  ? [
-                      {
-                        name: `Top 1 · ${top1.client}`,
-                        sub: "premier compte du portefeuille",
-                        value: `${formatPct(top1Pct, 0)} %`,
-                        pct: top1Pct,
-                        variant: top1Pct > 20 ? ("r" as const) : ("w" as const),
-                      },
-                    ]
-                  : []),
-                ...(top5Pct !== null
-                  ? [
-                      {
-                        name: "Top 5 cumulé",
-                        sub: "seuil interne de vigilance : 50 %",
-                        value: `${formatPct(top5Pct, 0)} %`,
-                        pct: top5Pct,
-                        variant: top5Pct > 50 ? ("r" as const) : ("w" as const),
-                      },
-                    ]
-                  : []),
-                ...(top10Pct !== null
-                  ? [
-                      {
-                        name: "Top 10 cumulé",
-                        sub: "reste du portefeuille au-delà",
-                        value: `${formatPct(top10Pct, 0)} %`,
-                        pct: top10Pct,
-                        variant: "w" as const,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-            {/* <FootNote>
-              La dépendance fournisseur et le poids de la sous-traitance ne sont pas accessibles depuis ce profil — cf.
-              Direction des opérations.
-            </FootNote> */}
-          </Tile>
-
-          {/* Les deux tuiles ci-dessus classent des COMPTES ; celle-ci descend à la
+          {/* La tuile ci-dessus classe des COMPTES ; celle-ci descend à la
               commande. Un compte modéré peut porter une affaire unique dont la
               perte se verrait à elle seule dans l'exercice — le classement par
               client ne la montre pas. */}
           {topOrders && topOrders.length > 0 && (
             <Tile
-              span={12}
-              title="Les plus grosses commandes de l'exercice"
+              span={6}
+              title="Top 5 des plus grosses commandes de l'exercice"
               kick={`${year} · par montant signé`}
               aide="Les affaires les plus importantes prises une par une, et non regroupées par client. Une seule commande peut peser autant qu'un compte entier."
             >
@@ -743,7 +694,7 @@ export async function DgVision() {
             {commerciauxActifs.length > 0 && (
               <Tile
                 span={6}
-                title="CA par commercial"
+                title="Top 5 des commerciaux par CA"
                 kick={`${pilotage.annee} · réalisé`}
                 aide="La répartition du CA commandé de l'exercice entre commerciaux. Aucun objectif n'étant saisi en base, c'est une répartition du réalisé, pas un taux d'atteinte."
               >
