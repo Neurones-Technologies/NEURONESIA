@@ -15,10 +15,11 @@ import { ScreenLede } from "@/components/ui/screen-lede";
  * « Point sur les créances : DSO. Point sur les dettes : DPO. Suivi des mauvais
  * clients (retard de paiement). »
  *
- * L'écran est construit autour d'une asymétrie qu'il ne faut pas cacher : les
- * créances sont mesurées ligne à ligne, les dettes ne le sont pas du tout — aucune
- * facture fournisseur n'est synchronisée. Le DPO est donc affiché avec sa marque
- * de provenance et, à côté, ce qui est réellement mesurable (les achats engagés).
+ * Créances et dettes sont toutes deux mesurées ligne à ligne : les factures
+ * fournisseurs sont synchronisées (table `supplier_invoices`) et le DPO est en
+ * régime réel. Chaque bloc garde néanmoins sa marque de provenance : sur une
+ * base pas encore synchronisée, le DPO retombe sur un gabarit annoncé comme
+ * tel, avec à côté ce qui reste mesurable (les achats engagés).
  *
  * Sur les créances, deux lectures du DSO sont servies séparément : le délai
  * constaté sur les factures réglées, et l'encours rapporté au chiffre d'affaires.
@@ -149,15 +150,15 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             ],
           }}
         />
-        {/* Le DPO recule d'un plan tant qu'aucune facture fournisseur n'est
-            synchronisée : la valeur affichée est posée, pas mesurée. Le rang suit
-            la source — le jour où les dettes arrivent, l'indicateur reprend sa
-            place sans modification d'écran. */}
+        {/* Le rang suit la source : mesuré sur les factures fournisseurs
+            synchronisées, le DPO tient son rang ; sur une base pas encore
+            synchronisée, la valeur posée recule d'un plan — sans modification
+            d'écran dans un sens comme dans l'autre. */}
         <StatTile
           span={3}
           rang={dpo.source === "reel" ? "secondaire" : "contexte"}
           label="DPO"
-          aide="Le délai que vous mettez à payer vos fournisseurs. Aucune facture fournisseur n'étant raccordée au cockpit, ce chiffre est une hypothèse, pas une mesure."
+          aide="Le délai que vous mettez à payer vos fournisseurs, mesuré sur les factures fournisseurs synchronisées et leurs règlements."
           value={formatPct(dpo.dpo_jours, 0)}
           unit="jours"
           reading={dpo.source === "reel" ? "mesuré" : "gabarit · dettes non synchronisées"}
@@ -351,7 +352,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           span={4}
           title="Dette fournisseurs par ancienneté"
           kick={sourceKick(dpo.source, `${formatMFcfa(dpo.dette_xof)} M FCFA`)}
-          aide="Ce que vous devez à vos fournisseurs. Les factures fournisseurs n'étant pas raccordées, ce bloc montre la forme de l'indicateur sans en mesurer le contenu."
+          aide="Ce que vous devez à vos fournisseurs, rangé par ancienneté du retard — mesuré sur les factures fournisseurs synchronisées depuis Odoo."
         >
           <Bars
             rows={dpo.tranches.map((t) => ({

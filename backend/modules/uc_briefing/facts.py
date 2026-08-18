@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, timedelta
 
 from modules.uc_arbitrage import service as arbitrage_service
+from modules.uc_daf import situation as daf_situation
 from modules.uc_forecast.aggregation import build_pipeline_forecast
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,7 @@ _DG_SOURCES: dict[str, tuple[str, ...]] = {
     "secteurs": ("mix_sectoriel",),
     "mensuel": ("rythme_mensuel",),
     "hot_leads": ("affaires_imminentes",),
+    "situation_factures": ("factures_echues",),
 }
 
 _MOIS = ("", "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
@@ -213,6 +215,9 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             "secteurs": (lambda: crm.get_revenue_by_sector(year=y, limit=10), []),
             "mensuel": (lambda: crm.get_monthly_revenue(y), []),
             "hot_leads": (lambda: crm.get_hot_leads(limit=5), []),
+            # Comme la file d'arbitrage : un module voisin, pas une méthode du
+            # CRM — mêmes chiffres que l'écran Relation commerciale du DAF.
+            "situation_factures": (lambda: daf_situation.situation_factures(), None),
         },
         _DG_SOURCES,
         c,
@@ -630,6 +635,41 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             f"la première : {tete_lead['opportunite']} ({tete_lead['client']}, "
             f"{_m(tete_lead['score_pondere_xof'])} M FCFA pondérés)."
         )
+
+    # 20 — factures échues, clients ET fournisseurs  [élément : factures_echues]
+    # Chiffres de uc_daf (amount_residual, hors annulées) — les mêmes que
+    # l'écran Relation commerciale. `fournisseur` peut être None (aucune
+    # facture synchronisée) : la puce le dit au lieu d'afficher un zéro.
+    situation = src["situation_factures"]
+    if c.actif("factures_echues") and situation:
+        client_sit = situation["client"]
+        fournisseur_sit = situation.get("fournisseur")
+        facts.update({
+            "factures_echues_clients_nb": client_sit["nb_echues"],
+            "factures_echues_clients_xof": client_sit["montant_echu_xof"],
+            "factures_echues_clients_90j_xof": client_sit["montant_contentieux_xof"],
+        })
+        tete_facture = (
+            f"Factures échues : {client_sit['nb_echues']} factures clients non réglées pour "
+            f"{_m(client_sit['montant_echu_xof'])} M FCFA, dont "
+            f"{_m(client_sit['montant_contentieux_xof'])} M au-delà de 90 jours"
+        )
+        if fournisseur_sit:
+            facts.update({
+                "factures_echues_fournisseurs_nb": fournisseur_sit["nb_echues"],
+                "factures_echues_fournisseurs_xof": fournisseur_sit["dette_echue_xof"],
+            })
+            bullets.append(
+                tete_facture + f" ; côté fournisseurs, {fournisseur_sit['nb_echues']} factures "
+                f"échues pour {_m(fournisseur_sit['dette_echue_xof'])} M FCFA dus — un stock de "
+                "cette taille se traite en plan d'assainissement (provision, échéancier négocié), "
+                "pas en relances au fil de l'eau."
+            )
+        else:
+            bullets.append(
+                tete_facture + " ; côté fournisseurs, aucune facture n'est synchronisée : "
+                "la dette échue n'est pas mesurable."
+            )
 
     # L'action du jour n'est PAS un élément décochable : elle est la 5e ligne
     # contractuelle du résumé (cf. narratif._SYSTEM_RESUME et _fallback_resume).

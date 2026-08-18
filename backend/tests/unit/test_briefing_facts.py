@@ -176,6 +176,29 @@ def _stub_arbitrage(monkeypatch):
     monkeypatch.setattr(facts.arbitrage_service, "compute_file", _arbitrage_neutre)
 
 
+SITUATION_NEUTRE = {
+    "as_of": "2026-08-18",
+    "client": {"nb_echues": 859, "montant_echu_xof": 9_650_000_000,
+               "montant_contentieux_xof": 9_000_000_000},
+    "fournisseur": {"nb_echues": 3658, "dette_echue_xof": 19_260_000_000},
+}
+
+
+@pytest.fixture(autouse=True)
+def _stub_situation(monkeypatch):
+    """La situation des factures vient de uc_daf, pas du CRM — même traitement
+    que la file d'arbitrage. Le compteur prouve qu'une source non réclamée
+    n'est jamais interrogée."""
+    appels = []
+
+    async def _situation_neutre():
+        appels.append("situation_factures")
+        return SITUATION_NEUTRE
+
+    monkeypatch.setattr(facts.daf_situation, "situation_factures", _situation_neutre)
+    return appels
+
+
 # ── Non-régression ────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -191,9 +214,10 @@ async def test_sans_composition_produit_le_briefing_historique():
 async def test_defauts_reproduisent_les_sept_blocs_dorigine():
     res = await facts.build_dg_facts(FauxCRM(), facts.Composition(DEFAUTS["dg"]))
     assert len(res["bullets"]) == 7
-    # Les deux éléments ajoutés après coup restent hors du briefing par défaut.
+    # Les éléments ajoutés après coup restent hors du briefing par défaut.
     assert "retention_taux_pct" not in res["facts"]
     assert "fournisseurs_top_nom" not in res["facts"]
+    assert "factures_echues_clients_nb" not in res["facts"]
 
 
 # ── Gating ────────────────────────────────────────────────────────────────────
@@ -324,6 +348,39 @@ async def test_rythme_mensuel_ignore_le_mois_en_cours():
     res = await facts.build_dg_facts(FauxCRM(), facts.Composition(["rythme_mensuel"]))
     if mois_courant > 1:
         assert res["facts"]["mensuel_dernier_mois"] < mois_courant
+
+
+@pytest.mark.asyncio
+async def test_factures_echues_produit_puce_et_faits(_stub_situation):
+    res = await facts.build_dg_facts(FauxCRM(), facts.Composition(["factures_echues"]))
+    assert len(res["bullets"]) == 1
+    assert "859 factures clients" in res["bullets"][0]
+    assert "3658 factures échues" in res["bullets"][0]
+    for cle in ("factures_echues_clients_nb", "factures_echues_clients_xof",
+                "factures_echues_clients_90j_xof", "factures_echues_fournisseurs_nb",
+                "factures_echues_fournisseurs_xof"):
+        assert cle in res["facts"], cle
+    assert _stub_situation == ["situation_factures"]
+
+
+@pytest.mark.asyncio
+async def test_factures_echues_sans_fournisseur_le_dit(monkeypatch):
+    """Aucune facture fournisseur synchronisée : la puce le dit, plutôt que
+    d'afficher un zéro qui se lirait comme « aucune dette »."""
+    async def _sans_fournisseur():
+        return {**SITUATION_NEUTRE, "fournisseur": None}
+
+    monkeypatch.setattr(facts.daf_situation, "situation_factures", _sans_fournisseur)
+    res = await facts.build_dg_facts(FauxCRM(), facts.Composition(["factures_echues"]))
+    assert "n'est pas mesurable" in res["bullets"][0]
+    assert "factures_echues_fournisseurs_nb" not in res["facts"]
+    assert "factures_echues_clients_nb" in res["facts"]
+
+
+@pytest.mark.asyncio
+async def test_factures_echues_non_reclamees_jamais_calculees(_stub_situation):
+    await facts.build_dg_facts(FauxCRM(), facts.Composition(["ca_ytd"]))
+    assert _stub_situation == []
 
 
 @pytest.mark.asyncio
