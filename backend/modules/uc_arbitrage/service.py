@@ -120,10 +120,21 @@ async def compute_file(crm, exclude_internal: bool = False) -> dict:
     # au moment où un mandataire tranche, et l'écran doit voir sa décision
     # apparaître tout de suite. Les deux lectures sont indépendantes, donc
     # simultanées.
-    candidates, open_decisions = await asyncio.gather(
+    #
+    # `return_exceptions=True` puis relance : sans lui, le premier échec fait
+    # sortir du gather en abandonnant l'autre lecture en plein vol — sa session
+    # DB n'est jamais refermée et la coroutine orpheline explose au ramassage,
+    # potentiellement dans un tout autre contexte (c'est ainsi qu'un test du
+    # briefing faisait échouer la fixture d'un test voisin).
+    resultats = await asyncio.gather(
         compute_candidates(crm, exclude_internal=exclude_internal),
         store.list_decisions(status="en_cours"),
+        return_exceptions=True,
     )
+    erreurs = [r for r in resultats if isinstance(r, BaseException)]
+    if erreurs:
+        raise erreurs[0]
+    candidates, open_decisions = resultats
 
     now = datetime.utcnow()
     dossiers_ouverts = len(candidates) + len(open_decisions)
