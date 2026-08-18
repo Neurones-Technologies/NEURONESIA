@@ -48,20 +48,24 @@ export const VISION_GROUPS: Partial<Record<ProfileKey, readonly SectionGroup[]>>
  *
  * Deux modes de navigation cohabitent, selon `VISION_NAV_MODE` :
  *
- * - `"scroll"` (DG) : une seule page, les `id` correspondent aux `<Section id=…>`
+ * - `"scroll"` (DO, AM) : une seule page, les `id` correspondent aux `<Section id=…>`
  *   de la vue et le menu fait son scroll-spy dessus. L'ordre du menu doit alors
  *   suivre l'ordre du document, sinon le surlignage saute.
- * - `"route"` (DC, DF) : une page par section, les `id` sont des segments d'URL
+ * - `"route"` (DG, DC, DF) : une page par section, les `id` sont des segments d'URL
  *   (`/dc/vision/pipeline`). Le menu rend des liens ; l'ordre est libre. Chaque
  *   `id` doit avoir son entrée dans le registre de son profil (cf.
  *   components/views/vision/registry.ts). */
 export const VISION_SECTIONS: Partial<Record<ProfileKey, readonly SectionNavItem[]>> = {
+  // DG en mode "route" : chaque id est un segment d'URL (/dg/vision/<id>) et
+  // doit avoir son entrée dans le registre DG_SECTIONS (views/vision/dg).
+  // « tableau-de-bord » reste en tête : c'est l'écran d'ouverture, qui porte
+  // le briefing du jour.
+  // « Dépendances et risques » n'est plus un onglet : ses deux tuiles vivent
+  // dans le Tableau de bord (cf. dg/DgTableauDeBord). Menu et registre doivent
+  // rester alignés — un id sans page tomberait en 404.
   dg: [
     { id: "tableau-de-bord", label: "Tableau de bord" },
     { id: "trajectoire", label: "Trajectoire financière" },
-    { id: "risques", label: "Dépendances et risques" },
-    // L'ordre du menu DOIT suivre l'ordre du document (scroll-spy) : ces
-    // entrées correspondent aux dernières <Section> de DgVision, dans l'ordre.
     { id: "pilotage", label: "Pilotage de l'activité" },
     { id: "factures", label: "Factures" },
   ],
@@ -210,6 +214,7 @@ export type VisionNavMode = "scroll" | "route";
 export const VISION_NAV_MODE: Partial<Record<ProfileKey, VisionNavMode>> = {
   dc: "route",
   df: "route",
+  dg: "route",
 };
 
 export function visionNavMode(profile: ProfileKey): VisionNavMode {

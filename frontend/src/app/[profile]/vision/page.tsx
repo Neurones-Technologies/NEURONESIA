@@ -2,21 +2,18 @@ import { notFound, redirect } from "next/navigation";
 import { View } from "@/components/shell/AppShell";
 import { PROFILE_KEYS, ProfileKey } from "@/lib/types";
 import { defaultVisionSection, visionNavMode } from "@/lib/data/sections";
-import { DgVision } from "@/components/views/vision/DgVision";
 import { DoVision } from "@/components/views/vision/DoVision";
 import { AmVision } from "@/components/views/vision/AmVision";
 
 function renderVision(key: ProfileKey) {
   switch (key) {
-    case "dg":
-      return <DgVision />;
     case "do":
       return <DoVision />;
     case "am":
       return <AmVision />;
-    // `dc` et `df` sont en mode "route" : jamais rendus ici, redirigés ci-dessous.
-    // La vue financière historique est devenue la première section du DAF
-    // (`/df/vision/encours`, cf. views/vision/df/index.tsx).
+    // `dg`, `dc` et `df` sont en mode "route" : jamais rendus ici, redirigés
+    // ci-dessous. L'ancienne page unique du DG a été découpée en cinq pages
+    // (cf. views/vision/dg/index.tsx).
     default:
       notFound();
   }
