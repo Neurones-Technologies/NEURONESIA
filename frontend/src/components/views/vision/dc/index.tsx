@@ -27,6 +27,10 @@ export interface DcSectionParams {
   periode?: string;
   annee?: string;
   vue?: string;
+  /** Périmètre géographique (`?pays=ci|bf|gn`, cf. lib/data/pays.ts). Lu par le
+   * cockpit DG (le type est mutualisé via `SectionParams`) ; les pages DC
+   * l'ignorent tant que leur miroir ne porte que la Côte d'Ivoire. */
+  pays?: string;
 }
 
 function periodeDe(params: DcSectionParams, defaut: Periode): Periode {

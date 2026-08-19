@@ -1165,6 +1165,14 @@ h1.vt{
    empilées (elles vivent dans deux arbres distincts — la page rend les onglets,
    l'écran rend sa cadence) mais cessent de repousser le premier chiffre. */
 .vue-nav+.dc-seg-w{margin-top:-2px}
+/* Ligne d'en-tête de page : les onglets de vue à gauche, le sélecteur de pays
+   poussé à l'extrémité droite. Sur les pages à vue unique (pas d'onglets), le
+   sélecteur garde la droite grâce au margin-left:auto. En étroit, la ligne se
+   replie et le sélecteur passe dessous. */
+.dc-nav-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin-bottom:14px}
+.dc-nav-row .vue-nav{margin-bottom:0}
+.dc-nav-row .dc-seg{margin-bottom:0}
+.dc-nav-row>.dc-seg-w{margin-left:auto}
 .vue-nav>a{
   display:flex;align-items:center;border-radius:999px;padding:6px 15px;
   font-family:var(--sans);font-size:12.5px;color:var(--t3);text-decoration:none;

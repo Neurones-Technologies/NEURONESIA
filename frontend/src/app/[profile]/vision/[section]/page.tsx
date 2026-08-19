@@ -44,6 +44,8 @@ export default async function VisionSectionPage({
       const q = new URLSearchParams({ vue: section });
       const periode = premier(query.periode);
       const annee = premier(query.annee);
+      const pays = premier(query.pays);
+      if (pays) q.set("pays", pays);
       if (periode) q.set("periode", periode);
       if (annee) q.set("annee", annee);
       redirect(`/dc/vision/${page}?${q}`);
@@ -61,6 +63,7 @@ export default async function VisionSectionPage({
         periode: premier(query.periode),
         annee: premier(query.annee),
         vue: premier(query.vue),
+        pays: premier(query.pays),
       })}
     </View>
   );
