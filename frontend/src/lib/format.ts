@@ -28,6 +28,28 @@ export function formatDate(iso: string | null | undefined): string {
   }
 }
 
+/** Date ET heure — pour ce qui se lit à la minute plutôt qu'au jour : le journal
+ * d'administration, où deux actions du même jour doivent s'ordonner à l'œil.
+ *
+ * Les horodatages du backend sont écrits en UTC dans des colonnes sans fuseau,
+ * donc relus sans suffixe (`2026-08-24T10:12:00`). Le navigateur les interprète
+ * alors comme locaux : sans conséquence sur le fuseau de déploiement (Abidjan,
+ * UTC+0), à savoir si l'application est un jour servie ailleurs. */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function signed(value: number): string {
   return value >= 0 ? `+${formatNumber(value)}` : formatNumber(value);
 }

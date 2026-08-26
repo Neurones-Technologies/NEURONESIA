@@ -52,6 +52,21 @@ const RAIL_ITEMS: { key: SectionKey; label: string; href: (p: ProfileKey) => str
     adminOnly: true,
   },
   {
+    key: "admin",
+    label: "Comptes",
+    href: (p) => `/${p}/admin`,
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="9" cy="8" r="3.4" />
+        <path d="M2.8 20c0-3.4 2.8-5.6 6.2-5.6s6.2 2.2 6.2 5.6M17 4.6l3.6 1.6v3.6c0 2.6-1.6 4.4-3.6 5.2-2-.8-3.6-2.6-3.6-5.2V6.2z" />
+      </svg>
+    ),
+    // Comptes, droits et journal d'administration : la seule entrée du rail qui
+    // peut retirer l'accès à quelqu'un d'autre. Masquée aux non-admins, et
+    // refusée côté page ET côté endpoint — le masquage seul ne protège rien.
+    adminOnly: true,
+  },
+  {
     key: "params",
     label: "Réglages",
     href: (p) => `/${p}/params`,

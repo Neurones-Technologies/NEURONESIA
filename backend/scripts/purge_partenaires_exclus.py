@@ -60,6 +60,11 @@ def _requete(sql: str):
 # étant des VARCHAR) et `:noms` sont liés dans `_purger`.
 _CIBLES: list[tuple[str, str, str]] = [
     ("invoices",           "client_id IN :ids",     "factures clients"),
+    # AVANT `sale_orders` : les lignes portent leur propre `client_id` dénormalisé,
+    # donc supprimer la commande ne les emporte pas (aucune contrainte FK en base).
+    # Omettre cette table laissait l'entité exclue peser dans `sale_order_lines`,
+    # c'est-à-dire dans la SEULE table que les analyses par produit interrogent.
+    ("sale_order_lines",   "client_id IN :ids",     "lignes de commande"),
     ("sale_orders",        "client_id IN :ids",     "bons de commande"),
     ("purchase_orders",    "client_id IN :ids",     "achats"),
     ("supplier_invoices",  "supplier_id IN :ids",   "factures fournisseurs"),
