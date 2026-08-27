@@ -459,6 +459,12 @@ async def reconstituer(depuis: date, jusqu_a: date | None = None) -> dict[str, i
 # s'écarte de l'horizon demandé.
 _HORIZONS = {"j1": (1, 3), "semaine": (7, 7), "mois": (30, 20)}
 
+# Comment chaque horizon se dit. Table séparée de `_HORIZONS` mais tenue en
+# regard : le suffixe de puce et la ligne de cadence les lisent tous les deux,
+# et un horizon ajouté sans son libellé lèverait un KeyError à la rédaction
+# plutôt qu'au chargement.
+_LIBELLES_HORIZON = {"j1": "vs hier", "semaine": "sur 7 j", "mois": "sur 30 j"}
+
 
 def _comparable(ind: Indicateur, reference: date, compare: date) -> bool:
     """Un cumul « depuis le 1er janvier » retombe à zéro le 1er janvier :
@@ -573,6 +579,36 @@ async def delta(cles: list[str], as_of: date | None = None) -> dict[str, dict]:
     return resultat
 
 
+def _mouvement(bloc: dict, horizon: str) -> str:
+    """Mouvement nu d'un horizon : « ▲ 85 M FCFA vs hier », « stable sur 7 j »,
+    ou "" quand la comparaison n'est pas mesurable.
+
+    Extrait de `formater` quand la ligne de cadence (cf. `ligne_cadence`) est
+    venue dire le MÊME écart ailleurs dans le briefing. Deux rédactions du même
+    mouvement finiraient par diverger — un arrondi ici, un symbole là — et le
+    lecteur qui voit la puce et la ligne côte à côte lirait deux vérités pour un
+    seul chiffre.
+    """
+    ecart = bloc.get(horizon)
+    if ecart is None:
+        return ""
+    attendu = _HORIZONS[horizon][0]
+    reels = bloc.get(f"{horizon}_jours")
+    if reels is not None and reels != attendu:
+        libelle = f"depuis le {_jj_mm(bloc.get(f'{horizon}_depuis'))}"
+    else:
+        libelle = _LIBELLES_HORIZON[horizon]
+
+    if bloc.get("unite") == "nb":
+        if not ecart:
+            return f"stable {libelle}"
+        return f"{'▲' if ecart > 0 else '▼'} {abs(int(ecart))} {libelle}"
+    millions = round(abs(ecart) / 1_000_000)
+    if not millions:
+        return f"stable {libelle}"
+    return f"{'▲' if ecart > 0 else '▼'} {millions} M FCFA {libelle}"
+
+
 def formater(bloc: dict, horizon: str = "j1") -> str:
     """Suffixe de puce : « (▲ 85 M FCFA vs hier) », ou le silence.
 
@@ -585,24 +621,45 @@ def formater(bloc: dict, horizon: str = "j1") -> str:
     « vs hier ». Une comparaison silencieusement décalée est pire que pas de
     comparaison du tout : elle est invérifiable par le lecteur.
     """
-    ecart = bloc.get(horizon)
-    if ecart is None:
-        return ""
-    attendu = _HORIZONS[horizon][0]
-    reels = bloc.get(f"{horizon}_jours")
-    if reels is not None and reels != attendu:
-        libelle = f"depuis le {_jj_mm(bloc.get(f'{horizon}_depuis'))}"
-    else:
-        libelle = {"j1": "vs hier", "semaine": "sur 7 j", "mois": "sur 30 j"}[horizon]
+    mouvement = _mouvement(bloc, horizon)
+    return f" ({mouvement})" if mouvement else ""
 
-    if bloc.get("unite") == "nb":
-        if not ecart:
-            return f" (stable {libelle})"
-        return f" ({'▲' if ecart > 0 else '▼'} {abs(int(ecart))} {libelle})"
-    millions = round(abs(ecart) / 1_000_000)
-    if not millions:
-        return f" (stable {libelle})"
-    return f" ({'▲' if ecart > 0 else '▼'} {millions} M FCFA {libelle})"
+
+def _valeur_lisible(bloc: dict) -> str:
+    """Valeur du jour d'un indicateur, dans son unité."""
+    valeur = bloc.get("valeur")
+    unite = bloc.get("unite")
+    if unite == "nb":
+        return f"{int(valeur)}"
+    if unite == "pct":
+        return f"{valeur:.1f} %"
+    if unite == "jours":
+        return f"{round(valeur)} j"
+    return f"{round(valeur / 1_000_000):,}".replace(",", " ") + " M FCFA"
+
+
+def ligne_cadence(bloc: dict | None, libelle: str) -> str:
+    """Ligne de cadence d'un indicateur : sa valeur du jour, puis son mouvement
+    sur chacun des trois horizons — « CA commandé : 6 128 M FCFA — stable vs
+    hier, stable sur 7 j, ▲ 17 M FCFA sur 30 j. »
+
+    C'est la même donnée que le suffixe de puce, mais lue autrement : la puce
+    répond « où en est-on », la ligne répond « à quel rythme ça bouge ». Un
+    directeur qui lit « 6 128 M » sans son rythme ne sait pas si le chiffre est
+    acquis ou s'il court encore.
+
+    LES HORIZONS ABSENTS SONT TUS, PAS COMBLÉS. Un stock historisé depuis cinq
+    jours n'a pas de point à trente jours : la ligne dit alors ce qu'elle sait
+    et se tait sur le reste. Aucun horizon mesurable — l'historisation n'a pas
+    encore tourné deux nuits — et la ligne entière disparaît plutôt que
+    d'annoncer un mouvement nul qui n'a pas été mesuré.
+    """
+    if not bloc or bloc.get("valeur") is None:
+        return ""
+    mouvements = [m for m in (_mouvement(bloc, h) for h in _HORIZONS) if m]
+    if not mouvements:
+        return ""
+    return f"{libelle} : {_valeur_lisible(bloc)} — {', '.join(mouvements)}."
 
 
 def _jj_mm(iso: str | None) -> str:

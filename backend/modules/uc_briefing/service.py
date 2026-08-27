@@ -58,11 +58,24 @@ async def _build_section(role: str, crm, llm, composition: facts.Composition | N
         build_daily_analysis(llm, role, built["bullets"],
                              consigne=consigne, pilote=pilote, blocs=blocs),
     )
+    # 6e ligne du résumé : le rythme du CA commandé (cf.
+    # facts._cadence_ca_commande). Ajoutée APRÈS la rédaction, jamais soumise au
+    # modèle : les cinq premières lignes sont un texte, celle-ci est une mesure.
+    # La passer au rédacteur la ferait paraphraser — et un « le CA progresse
+    # légèrement » à la place de « ▲ 17 M FCFA sur 30 j » perd le seul contenu
+    # que la ligne porte.
+    #
+    # Concaténée dans `resume` plutôt que rendue par une clé à part : le contrat
+    # lu par les cockpits (facts / bullets / resume / action / analysis) reste
+    # le même, et les cinq vues qui affichent `resume` gagnent la ligne sans
+    # changer d'une virgule. Les rôles dont le briefing ne suit pas le CA
+    # commandé (DAF, DO, commercial) rendent "" et gardent cinq lignes.
+    cadence = built.get("cadence")
     return {
         "facts": built["facts"],
         "bullets": built["bullets"],
         "action": action,
-        "resume": resume,
+        "resume": [*resume, cadence] if cadence else resume,
         "analysis": analysis,
     }
 

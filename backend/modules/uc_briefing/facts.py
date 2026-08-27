@@ -100,6 +100,26 @@ async def _deltas(cles: list[str], arret: datetime | None = None) -> dict:
         return {}
 
 
+def _cadence_ca_commande(deltas: dict | None) -> str:
+    """Ligne de cadence du CA commandé — la 6e ligne du résumé (cf.
+    uc_briefing.service).
+
+    Les cinq premières lignes sont RÉDIGÉES : un modèle les tire des puces et
+    les met en forme. Celle-ci est MESURÉE et posée telle quelle, pour la même
+    raison qui a fait sortir l'ordre de lecture du modèle (cf. `Puces`) — un
+    rythme est un chiffre, et un chiffre reformulé chaque nuit par un rédacteur
+    est un chiffre qu'on ne peut plus vérifier.
+
+    Sur `ca_commande_ytd` et non sur `ca_commande_mois` : c'est le cumul que
+    porte déjà la tête de cockpit (`facts.ca_ytd_xof`), et la ligne doit donner
+    le rythme DU chiffre affiché, pas d'un cousin.
+
+    Rend "" quand aucun horizon n'est mesurable — le résumé retombe alors à ses
+    cinq lignes, sans trou ni ligne vide.
+    """
+    return indicateurs.ligne_cadence((deltas or {}).get("ca_commande_ytd"), "CA commandé")
+
+
 class Puces:
     """Puces d'un briefing, restituées dans l'ORDRE DE LECTURE et non dans
     l'ordre du code.
@@ -909,7 +929,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
     )
 
     return {"facts": facts, "bullets": puces.liste(), "blocs": puces.par_bloc(),
-            "action": action}
+            "action": action, "cadence": _cadence_ca_commande(deltas)}
 
 
 # Étapes qui ferment une opportunité. `stade` est du texte libre venu d'Odoo et
@@ -1471,7 +1491,8 @@ async def build_dir_commercial_facts(crm, composition: Composition | None = None
     if c.actif("questions_sans_reponse"):
         _puce_couverture(facts, puces, role)
 
-    return {"facts": facts, "bullets": puces.liste(), "blocs": puces.par_bloc()}
+    return {"facts": facts, "bullets": puces.liste(), "blocs": puces.par_bloc(),
+            "cadence": _cadence_ca_commande(deltas)}
 
 
 def _puce_ca_facture(facts: dict, puces: Puces, deltas: dict) -> None:

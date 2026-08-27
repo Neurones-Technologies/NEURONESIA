@@ -292,6 +292,50 @@ def test_formater_date_une_comparaison_decalee():
     assert indicateurs.formater(bloc, "semaine") == " (▲ 4 M FCFA depuis le 13/08)"
 
 
+# ── Ligne de cadence (6e ligne du résumé) ────────────────────────────────────
+
+def test_ligne_cadence_dit_les_trois_horizons():
+    bloc = {"unite": "xof", "valeur": 6_128_000_000,
+            "j1": 0, "j1_jours": 1, "semaine": -12_000_000, "semaine_jours": 7,
+            "mois": 17_000_000, "mois_jours": 30}
+    assert indicateurs.ligne_cadence(bloc, "CA commandé") == (
+        "CA commandé : 6 128 M FCFA — stable vs hier, ▼ 12 M FCFA sur 7 j, "
+        "▲ 17 M FCFA sur 30 j."
+    )
+
+
+def test_ligne_cadence_tait_les_horizons_absents():
+    """Un stock historisé depuis cinq jours n'a pas de point à trente jours. La
+    ligne dit ce qu'elle sait — elle ne comble pas le trou par un « stable »,
+    qui se lirait comme une mesure."""
+    bloc = {"unite": "xof", "valeur": 900_000_000,
+            "j1": 5_000_000, "j1_jours": 1, "semaine": None, "mois": None}
+    assert indicateurs.ligne_cadence(bloc, "Pipe actif") == (
+        "Pipe actif : 900 M FCFA — ▲ 5 M FCFA vs hier."
+    )
+
+
+@pytest.mark.parametrize("bloc", [
+    None,                                                     # indicateur absent
+    {"unite": "xof", "valeur": None},                         # valeur du jour introuvable
+    {"unite": "xof", "valeur": 10, "j1": None, "semaine": None, "mois": None},
+])
+def test_ligne_cadence_disparait_quand_rien_nest_mesurable(bloc):
+    """Le résumé retombe à ses cinq lignes plutôt que d'en porter une sixième
+    qui n'annonce aucun mouvement — une ligne muette se lit comme « rien n'a
+    bougé », ce qui est une affirmation, pas une absence."""
+    assert indicateurs.ligne_cadence(bloc, "CA commandé") == ""
+
+
+def test_ligne_cadence_et_puce_disent_le_meme_mouvement():
+    """Les deux passent par `_mouvement` : le jour où l'un des deux arrondit
+    autrement, le lecteur voit deux chiffres pour un seul écart."""
+    bloc = {"unite": "xof", "valeur": 6_128_000_000, "j1": 85_000_000, "j1_jours": 1}
+    suffixe = indicateurs.formater(bloc, "j1")
+    assert suffixe == " (▲ 85 M FCFA vs hier)"
+    assert suffixe.strip()[1:-1] in indicateurs.ligne_cadence(bloc, "CA commandé")
+
+
 def test_catalogue_est_coherent():
     """Tout indicateur adossé à un snapshot doit déclarer sa table, sans quoi le
     garde-fou de `calculer` ne s'applique pas et le stock rend 0 en silence."""
