@@ -50,45 +50,74 @@ ROLE_FOCUS = {
     ),
 }
 
+# Le briefing long. La structure suit celle de la trame quotidienne : le chiffre
+# et son mouvement, puis les exceptions, puis ce qu'on fait aujourd'hui. Elle a
+# remplacé un plan libre en trois temps (« le fait le plus significatif », « un
+# second fait qui le nuance », « une recommandation ») qui laissait au modèle le
+# soin de décider ce qui était significatif — c'est-à-dire l'essentiel.
 _SYSTEM_TEMPLATE = (
-    "Tu es l'assistant de direction d'une ESN ivoirienne (S2I). Tu rédiges le briefing quotidien pour "
-    "{role_label}, dont le pilotage porte sur {role_focus}. Tu écris à partir de faits déjà calculés et "
-    "vérifiés — jamais inventés, jamais recalculés — mais ton travail est de les RELIER entre eux et de "
-    "dire ce qu'ils signifient pour CE rôle précis, pas de les paraphraser.\n\n"
-    "Structure attendue, sans titres ni markdown :\n"
-    "1. Le fait le plus significatif du jour pour ce rôle, et pourquoi il l'est (l'enjeu chiffré, ce qui "
-    "se passe si on ne fait rien).\n"
-    "2. Un second fait qui change la lecture du premier (confirme, nuance ou contredit) — c'est ce lien "
-    "entre deux faits qui constitue l'analyse, pas la liste des faits.\n"
-    "3. Une recommandation concrète et datée pour aujourd'hui : quoi faire, et si possible par qui.\n"
-    "Ton direct, factuel, sans emphase artificielle. Chaque phrase doit contenir soit un chiffre soit une "
-    "action — jamais une phrase de transition vide. Nomme les comptes concernés quand les faits les "
-    "nomment : un briefing de direction qui parle d'« exposition totale » sans dire à qui elle est due "
-    "ne permet aucune décision."
+    "Tu es l'assistant de direction d'une entreprise ivoirienne d'intégration informatique "
+    "(S2I). Tu rédiges le briefing quotidien pour {role_label}, dont le pilotage porte sur "
+    "{role_focus}. Tu écris à partir de faits déjà calculés et vérifiés — jamais inventés, "
+    "jamais recalculés — mais ton travail est de les RELIER et de dire ce qu'ils signifient "
+    "pour CE rôle précis, pas de les paraphraser.\n\n"
+    "Les faits te sont donnés RANGÉS EN TROIS BLOCS, dans l'ordre de lecture voulu. Cet ordre "
+    "n'est pas indicatif : il vient des questions que ce rôle se pose chaque matin, et tu ne "
+    "le réorganises pas.\n\n"
+    "Structure attendue, sans titres ni markdown, un paragraphe par bloc :\n"
+    "1. LES CHIFFRES — où en est-on, et surtout ce qui a bougé. Une variation citée sans son "
+    "point de comparaison ne vaut rien : reprends toujours celui qui accompagne le fait.\n"
+    "2. LES EXCEPTIONS — ce qui sort de l'ordinaire et pourquoi c'est un problème maintenant. "
+    "Nomme les comptes, les dossiers et les dates que les faits nomment.\n"
+    "3. LES DÉCISIONS DU JOUR — au plus trois, concrètes, datées, et chacune rattachée à un "
+    "fait cité plus haut. Si les faits n'en portent aucune, dis-le au lieu d'en inventer.\n\n"
+    "QUATRE PHRASES AU PLUS PAR PARAGRAPHE. Le plan en trois blocs, laissé sans borne, a "
+    "produit une analyse coupée au milieu d'une phrase pour les cinq rôles : une analyse "
+    "tronquée ne se lit pas, et rien dans la page ne signale au lecteur qu'elle est "
+    "incomplète.\n\n"
+    "Ton direct, factuel, sans emphase artificielle. Chaque phrase contient soit un chiffre "
+    "soit une action — jamais une phrase de transition vide. Quand un fait porte une réserve "
+    "(« les avoirs ne sont pas déduits », « le retard est sous-estimé »), tu la reprends : un "
+    "chiffre publié sans sa réserve est plus dangereux qu'un chiffre absent."
 )
 
 
 # Résumé de tête de cockpit : 5 lignes, une idée par ligne. C'est ce que le
 # lecteur voit avant tout le reste ; l'analyse complète reste disponible plus
 # bas dans la vue, donc ici on cherche la densité, pas l'exhaustivité.
+#
+# CE MODÈLE NE CHOISIT PLUS CE QU'IL RACONTE. La consigne d'origine — « exactement
+# 5 lignes, de ce qui engage le plus à ce qui engage le moins » — lui demandait de
+# classer lui-même une liste de faits dont rien ne disait l'importance relative.
+# Résultat observé sur le cockpit commercial : trois des cinq lignes portaient sur
+# des agrégats hors trame (le lead le plus chaud, la concentration des pertes)
+# pendant que « combien j'ai commandé hier » et « qu'est-ce qui dort » restaient
+# à quai. La hiérarchie vit désormais dans le catalogue (uc_briefing.preferences),
+# les faits arrivent déjà classés, et le modèle les REFORMULE dans l'ordre reçu.
 _SYSTEM_RESUME = (
-    "Tu es l'assistant de direction d'une ESN ivoirienne (S2I). Tu résumes la situation du jour pour "
-    "{role_label}, dont le pilotage porte sur {role_focus}.\n\n"
+    "Tu es l'assistant de direction d'une entreprise ivoirienne d'intégration informatique "
+    "(S2I). Tu résumes la situation du jour pour {role_label}, dont le pilotage porte sur "
+    "{role_focus}.\n\n"
+    "Les faits te sont donnés DÉJÀ CLASSÉS par ordre d'importance pour ce rôle. Tu ne "
+    "choisis pas lesquels retenir et tu ne changes pas leur ordre : tu les reformules.\n\n"
     "Contraintes STRICTES :\n"
-    "- EXACTEMENT 5 lignes, séparées par un retour à la ligne.\n"
+    "- UNE LIGNE PAR FAIT FOURNI, dans l'ordre où ils arrivent, sans en écarter aucun et "
+    "sans en ajouter.\n"
     "- Une seule idée par ligne, une phrase complète, 20 mots maximum.\n"
-    "- Chaque ligne contient un chiffre issu des faits fournis, ou une action à mener. Jamais de phrase "
-    "de transition, jamais de généralité.\n"
-    "- Pas de puce, pas de tiret, pas de numéro en début de ligne, pas de markdown, pas de titre.\n"
-    "- N'invente aucun chiffre : utilise uniquement ceux des faits fournis, sans les recalculer.\n"
-    "- Quand un fait nomme un compte, une date ou un nombre de jours de silence, reprends-les tels quels : "
-    "un compte nommé et daté vaut mieux qu'un total anonyme. Ne cite jamais un agrégat sous forme anonyme "
-    "quand les faits en donnent le nom.\n"
-    "- Un pourcentage ne se cite qu'accompagné de son point de comparaison fourni dans les faits (seuil, "
-    "période, ou valeur N-1). Un pourcentage nu est interdit.\n"
-    "- Ordre : de ce qui engage le plus à ce qui engage le moins. La 5e ligne est l'action du jour — si "
-    "une action est fournie ci-dessous, c'est celle-là, reformulée en 20 mots maximum, jamais une autre."
+    "- Chaque ligne contient un chiffre issu du fait correspondant, ou l'action qu'il porte. "
+    "Jamais de phrase de transition, jamais de généralité.\n"
+    "- Pas de puce, pas de tiret, pas de numéro en début de ligne, pas de markdown, pas de "
+    "titre.\n"
+    "- N'invente aucun chiffre : utilise uniquement ceux du fait que tu reformules, sans les "
+    "recalculer.\n"
+    "- Quand un fait nomme un compte, une date ou un nombre de jours, reprends-les tels "
+    "quels : un compte nommé et daté vaut mieux qu'un total anonyme.\n"
+    "- Un pourcentage ne se cite qu'accompagné de son point de comparaison fourni dans le "
+    "fait (seuil, période, ou valeur N-1). Un pourcentage nu est interdit.\n"
+    "- Une variation (« vs hier », « depuis le 13/08 ») se reprend avec sa date : une "
+    "comparaison sans son point de départ est invérifiable."
 )
+
 
 _MAX_RESUME_LIGNES = 5
 
@@ -157,6 +186,25 @@ def _avec_consigne(system: str, consigne: str, pilote: bool = False) -> str:
     return system + bloc.format(consigne=propre)
 
 
+def _sans_phrase_coupee(texte: str) -> str:
+    """Retire une dernière phrase laissée en suspens par un budget de tokens
+    épuisé.
+
+    Le budget peut toujours être atteint — un mois chargé, un rôle à dix faits.
+    Publier « …le top 5 pèse 45% des 6 128 M FCFA commandés contre un seuil »
+    est pire que publier une phrase de moins : le lecteur ne peut pas savoir si
+    la donnée manque ou si l'analyse s'est arrêtée là.
+
+    Ne touche rien quand le texte finit proprement, et rend le texte entier
+    plutôt que du vide s'il ne porte aucune ponctuation finale — mieux vaut une
+    analyse suspendue qu'un panneau vide.
+    """
+    if not texte or texte[-1] in ".!?\u2026\u00bb":
+        return texte
+    coupe = max(texte.rfind(". "), texte.rfind("! "), texte.rfind("? "))
+    return texte[:coupe + 1].rstrip() if coupe > 0 else texte
+
+
 def _fallback_analysis(bullets: list[str]) -> str:
     """Repli déterministe : les faits bruts, sans mise en récit (IA hors ligne)."""
     return " ".join(bullets)
@@ -183,12 +231,80 @@ def _fallback_resume(bullets: list[str], action: str | None = None) -> list[str]
     return lignes[:_MAX_RESUME_LIGNES]
 
 
+# Combien de lignes du résumé chaque bloc obtient. C'est la forme de la trame
+# — le chiffre, l'exception, la décision — ramenée aux cinq lignes que porte la
+# tête de cockpit.
+#
+# Un simple « les N premiers » paraissait suffisant, l'ordre du catalogue étant
+# déjà le bon. Mesuré sur la direction générale : les quatre lignes retenues
+# étaient QUATRE CHIFFRES, et pas une seule des trois alertes — dont un compte
+# à 2 823 M FCFA impayés depuis 2 688 jours. Un résumé de direction sans son
+# risque du jour n'est pas un résumé, c'est un relevé.
+_QUOTAS_RESUME = {"chiffre": 3, "alerte": 1, "action": 1}
+
+# Blocs éligibles au résumé de tête. `couverture` et `complement` en sont
+# EXCLUS : la ligne des questions sans réponse et les agrégats hors trame
+# restent dans les puces et dans l'analyse longue, jamais dans les cinq lignes
+# que lit une direction avant tout le reste.
+_ORDRE_RESUME = ("chiffre", "alerte", "action")
+
+# Ordre d'attribution des places qui restent une fois les quotas servis.
+# L'exception passe avant le chiffre : un quatrième montant ajoute de la
+# précision, une seconde exception ajoute une décision. Un tourniquet
+# strictement calé sur l'ordre des blocs rendait au contraire un quatrième
+# chiffre avant la deuxième alerte.
+_RELIQUAT_RESUME = ("alerte", "action", "chiffre")
+
+
+def _faits_a_resumer(bullets: list[str], action: str | None = None,
+                     blocs: dict[str, list[str]] | None = None) -> list[str]:
+    """Les faits qui composeront le résumé, DANS L'ORDRE, choisis ici et jamais
+    par le modèle.
+
+    Sans découpage par bloc (briefing figé avant leur ajout), on retombe sur les
+    premiers faits de la liste classée — le comportement d'avant, jamais une
+    erreur.
+
+    Le rab d'un bloc vide profite aux suivants : un rôle sans décision arbitrée
+    obtient une exception de plus, plutôt qu'un résumé de quatre lignes.
+    """
+    plafond = _MAX_RESUME_LIGNES - 1 if action else _MAX_RESUME_LIGNES
+    propres = [b.strip() for b in bullets if b.strip()]
+    if not blocs:
+        return propres[:plafond]
+
+    # `action` déjà arbitrée : elle occupera la dernière ligne, le bloc du même
+    # nom n'a plus à en fournir une.
+    quotas = dict(_QUOTAS_RESUME)
+    if action:
+        quotas["action"] = 0
+
+    disponibles = {
+        cle: [b.strip() for b in blocs.get(cle, []) if b.strip()] for cle in _ORDRE_RESUME
+    }
+    retenus: list[str] = []
+    for cle in _ORDRE_RESUME:
+        part = quotas.get(cle, 0)
+        retenus.extend(disponibles[cle][:part])
+        disponibles[cle] = disponibles[cle][part:]
+
+    for cle in _RELIQUAT_RESUME:
+        while disponibles[cle] and len(retenus) < plafond:
+            retenus.append(disponibles[cle].pop(0))
+    return retenus[:plafond]
+
+
 async def build_brief_resume(
     llm, role: str, bullets: list[str], action: str | None = None, consigne: str = "",
-    pilote: bool = False,
+    pilote: bool = False, blocs: dict[str, list[str]] | None = None,
 ) -> list[str]:
     """Résumé en 5 lignes affiché en tête de cockpit. Repli sur les faits bruts
     si l'IA échoue — jamais de panneau vide.
+
+    La SÉLECTION est faite ici, pas par le modèle : `_faits_a_resumer` prend les
+    premiers faits de la liste déjà classée. Le modèle ne reçoit que ceux-là et
+    les reformule un par un. Seul le mode « consigne pilote » lui rend le choix
+    — c'est précisément ce que le destinataire demande en n'ayant rien coché.
 
     Le repli ignore délibérément `consigne` : si le LLM tombe, on perd le ton
     demandé mais jamais l'exactitude des faits.
@@ -203,10 +319,17 @@ async def build_brief_resume(
         system = _avec_consigne(
             _SYSTEM_RESUME.format(role_label=role_label, role_focus=role_focus), consigne, pilote
         )
-        user = "Faits du jour :\n- " + "\n- ".join(bullets)
+        # En mode pilote, la consigne remplace la sélection : le modèle doit voir
+        # tout le pool pour y répondre (cf. _CONSIGNE_PILOTE_BLOC).
+        retenus = bullets if pilote else _faits_a_resumer(bullets, action, blocs)
+        user = "Faits du jour, dans l'ordre :\n- " + "\n- ".join(retenus)
         if action:
-            user += f"\n\nAction du jour déjà arbitrée (à reformuler en 20 mots max, jamais à remplacer) : {action}"
-        user += "\n\nRédige les 5 lignes."
+            user += (
+                f"\n\nDécision du jour déjà arbitrée, à placer en DERNIÈRE ligne et à "
+                f"reformuler en 20 mots maximum, jamais à remplacer : {action}"
+            )
+        attendu = len(retenus) + (1 if action else 0)
+        user += f"\n\nRédige exactement {attendu} ligne(s), une par fait, dans cet ordre."
         text = await llm.generate(system=system, user=user, max_tokens=400, temperature=0.4)
         lignes = [_clean_ligne(l) for l in (text or "").splitlines()]
         lignes = [l for l in lignes if l]
@@ -216,8 +339,36 @@ async def build_brief_resume(
         return _fallback_resume(bullets, action)
 
 
+_TITRES_BLOCS = {
+    "chiffre": "LES CHIFFRES ET LEUR MOUVEMENT",
+    "alerte": "LES EXCEPTIONS",
+    "action": "LES DÉCISIONS À PRENDRE",
+    "couverture": "CE QUE LES DONNÉES NE PERMETTENT PAS DE DIRE",
+    "complement": "COMPLÉMENTS",
+}
+
+
+def _faits_groupes(bullets: list[str], blocs: dict[str, list[str]] | None) -> str:
+    """Faits présentés au modèle, rangés sous leur bloc.
+
+    Sans ce découpage, le rédacteur reçoit une liste plate et traite un impayé
+    échu depuis 1 413 jours comme un constat de plus. Le bloc lui dit ce que le
+    fait EST : un chiffre à situer, une exception à expliquer, ou une décision à
+    porter.
+    """
+    if not blocs:
+        return "Faits du jour :\n- " + "\n- ".join(bullets)
+    morceaux = []
+    for cle, titre in _TITRES_BLOCS.items():
+        lignes = blocs.get(cle)
+        if lignes:
+            morceaux.append(titre + " :\n- " + "\n- ".join(lignes))
+    return "\n\n".join(morceaux) if morceaux else "Faits du jour :\n- " + "\n- ".join(bullets)
+
+
 async def build_daily_analysis(
-    llm, role: str, bullets: list[str], consigne: str = "", pilote: bool = False
+    llm, role: str, bullets: list[str], consigne: str = "", pilote: bool = False,
+    blocs: dict[str, list[str]] | None = None,
 ) -> str:
     if not bullets:
         return "Pas assez de données pour un briefing aujourd'hui."
@@ -234,9 +385,12 @@ async def build_daily_analysis(
         system = _avec_consigne(
             _SYSTEM_TEMPLATE.format(role_label=role_label, role_focus=role_focus), consigne, pilote
         )
-        user = "Faits du jour :\n- " + "\n- ".join(bullets) + "\n\nRédige le briefing."
-        text = await llm.generate(system=system, user=user, max_tokens=750, temperature=0.55)
-        return (text or "").strip() or _fallback_analysis(repli)
+        user = _faits_groupes(bullets, blocs) + "\n\nRédige le briefing."
+        # 750 tokens suffisaient au plan libre d'origine ; le plan en trois blocs
+        # les dépassait pour les cinq rôles. La borne de quatre phrases par
+        # paragraphe rend la longueur prévisible, ce budget absorbe l'écart.
+        text = await llm.generate(system=system, user=user, max_tokens=1200, temperature=0.55)
+        return _sans_phrase_coupee((text or "").strip()) or _fallback_analysis(repli)
     except Exception as exc:
         logger.warning("Briefing IA échoué pour le rôle '%s' (repli faits bruts) : %s", role, exc)
         return _fallback_analysis(repli)

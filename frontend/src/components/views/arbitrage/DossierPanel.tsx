@@ -1,6 +1,5 @@
 import { getArbitrageDossier } from "@/lib/api/arbitrage";
 import type { ArbitrageDossier, PayeurProfile } from "@/lib/api/arbitrage";
-import { roleToProfile } from "@/lib/auth/roles";
 import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { Clickable } from "@/components/ui/detail";
@@ -118,7 +117,17 @@ export async function DossierPanel({
     );
   }
 
-  const hasMandate = isAdmin || roleToProfile(dossier.mandat_role) === profile;
+  // Trancher relève de la seule Direction générale. Le mandat (`mandat_role`)
+  // continue de dire quelle direction instruit le dossier — il est affiché en
+  // tête, journalisé avec la décision et sert à ordonner la file — mais il
+  // n'ouvre plus le droit d'engager l'entreprise : au-dessus comme en dessous du
+  // seuil d'enjeu, c'est la DG qui arrête l'option retenue. Les autres profils
+  // gardent le dossier entier en lecture et peuvent y verser du contexte terrain
+  // (étape 05), qui n'a jamais demandé de mandat.
+  //
+  // Même règle côté serveur (`router._require_decision_authority`) : ce test-ci
+  // n'évite qu'un aller-retour, il n'autorise rien à lui seul.
+  const peutTrancher = isAdmin || profile === "dg";
   const enjeuM = mFcfa(dossier.enjeu_xof);
   const ratio = (dossier.profil_payeur.cout_report_ratio_semaine * 100).toFixed(1);
 
@@ -279,14 +288,14 @@ export async function DossierPanel({
           n="06"
           title="Trancher"
           sub={
-            hasMandate
+            peutTrancher
               ? "le cockpit classe les options, il ne décide pas : l'écart à la recommandation est journalisé, jamais empêché"
-              : `cette décision relève du mandat de ${roleLabel(dossier.mandat_role)}`
+              : "cette décision revient à la Direction générale — le dossier s'instruit ici, il se tranche là"
           }
         />
         <DecisionsLiees dossier={dossier} />
 
-        {hasMandate && recommended ? (
+        {peutTrancher && recommended ? (
           <DecisionCockpit
             options={options}
             recommandee={`${recommended.code} · ${recommended.titre}`}
@@ -309,11 +318,11 @@ export async function DossierPanel({
             <OptionsLecture options={options} />
             <Note>
               {recommended
-                ? `Cette décision relève du mandat de ${roleLabel(dossier.mandat_role)} — dossier visible pour information, non actionnable depuis ce profil.`
+                ? `Seule la Direction générale tranche un arbitrage — dossier visible pour information, non actionnable depuis ce profil. Il est instruit sous le mandat de ${roleLabel(dossier.mandat_role)} : c'est cette direction qui le porte en comité, la décision d'engager restant à la DG.`
                 : "Ce dossier ne porte aucune option exploitable : rien n'y est actionnable pour le moment."}{" "}
-              Le serveur refuse toute journalisation et toute clôture de revue hors mandat, quel que soit
-              l&apos;écran d&apos;où elles sont tentées. Vous pouvez en revanche apporter le contexte terrain
-              ci-dessus : cela ne demande aucun mandat.
+              Le serveur refuse toute journalisation et toute clôture de revue à un profil autre que la
+              Direction générale, quel que soit l&apos;écran d&apos;où elles sont tentées. Vous pouvez en
+              revanche apporter le contexte terrain ci-dessus : cela ne demande aucun mandat.
             </Note>
           </>
         )}

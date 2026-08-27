@@ -37,9 +37,13 @@ import {
  * survit au rechargement, là où l'écran n'instruisait auparavant que le premier
  * dossier du périmètre, sans aucun moyen d'en ouvrir un autre.
  *
- * Le mandat (`mandat_role`) est la seule autorité qui peut engager OU refermer un
- * dossier : vérifié ici pour l'affichage, et côté backend (`create_decision` et
- * `update_decision`) pour l'exécution. Chaque chiffre affiché porte sa nature
+ * Trancher relève de la seule Direction générale : le cockpit de décision n'est
+ * rendu que chez elle (cf. `DossierPanel.peutTrancher`) et le backend applique la
+ * même règle à l'exécution (`create_decision` et `update_decision`, cf.
+ * `router._require_decision_authority`). Le mandat (`mandat_role`) reste affiché
+ * et journalisé — il dit quelle direction instruit le dossier et le porte en
+ * comité, et il délimite le périmètre de chaque profil dans la file — mais il
+ * n'ouvre plus le droit d'engager. Chaque chiffre affiché porte sa nature
  * (mesuré / observé / inféré) pour qu'une déduction ne se lise pas comme un fait. */
 
 function queueItem(c: ArbitrageCandidate, rang: number, relevant: boolean, seuilM: number): QueueItem {

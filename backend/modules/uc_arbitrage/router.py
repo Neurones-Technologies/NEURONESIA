@@ -30,18 +30,28 @@ def _role(current_user) -> str:
     return current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
 
 
-def _require_mandate(current_user, mandat_role: str | None) -> None:
-    """Le mandat (`dg` | `dir_financier`, cf. aggregation._mandat) est la seule
-    autorité qui peut engager OU refermer un dossier. L'admin n'est jamais bloqué,
-    comme partout ailleurs dans l'app. Un mandat vide (décisions antérieures à ce
-    module, cf. le GO/NO-BID d'avant-vente) ne bloque personne : on ne verrouille
-    pas rétroactivement des lignes qui n'ont jamais porté de mandat."""
+def _require_decision_authority(current_user) -> None:
+    """Trancher un dossier — ou refermer sa revue — relève de la seule Direction
+    générale. L'admin n'est jamais bloqué, comme partout ailleurs dans l'app.
+
+    Le mandat (`mandat_role`, cf. aggregation._mandat) portait auparavant ce droit :
+    sous le seuil d'enjeu DG, il désigne la direction citée par le dossier
+    (`dir_financier`, `dir_commercial`, `commercial`), qui pouvait donc engager
+    l'entreprise. Il reste calculé, affiché en tête de dossier, journalisé avec la
+    décision et utilisé pour ordonner la file — il dit quelle direction INSTRUIT le
+    dossier et le porte en comité — mais il n'ouvre plus la journalisation : quel
+    que soit le montant, la décision d'engager remonte à la DG. L'écran suit la
+    même règle (`DossierPanel.peutTrancher`) et n'affiche le cockpit de décision
+    que chez elle.
+
+    Conséquence assumée sur les décisions antérieures à ce module (GO/NO-BID
+    d'avant-vente, mandat vide) : leur revue se clôt désormais depuis la DG ou un
+    compte admin, plus depuis le profil qui les avait créées."""
     role = _role(current_user)
-    mandat = (mandat_role or "").strip()
-    if role != "admin" and mandat and role != mandat:
+    if role not in ("admin", "dg"):
         raise HTTPException(
             status_code=403,
-            detail=f"Cette décision relève du mandat « {mandat} », pas du vôtre.",
+            detail="Seule la Direction générale tranche un arbitrage ou clôt sa revue.",
         )
 
 
@@ -239,7 +249,7 @@ async def create_decision(payload: dict, current_user: CurrentUser):
             detail="Un report ou une escalade doit porter son motif — sinon la revue ne peut pas le juger.",
         )
 
-    _require_mandate(current_user, payload.get("mandat_role"))
+    _require_decision_authority(current_user)
     payload = {**payload, "status": status}
     return await store.create_decision(payload, created_by=current_user.email)
 
@@ -253,13 +263,14 @@ async def list_decisions(status: str | None = None, subject_ref: str | None = No
 
 @router.patch("/decisions/{decision_id}")
 async def update_decision(decision_id: int, patch: dict, current_user: CurrentUser):
-    # Même contrôle de mandat que create_decision : sans lui, n'importe quel profil
-    # pouvait clôturer la revue d'une décision hors de son ressort — et comme c'est la
-    # revue qui alimente le score de fiabilité, cela rendait ce score non probant.
+    # Même contrôle que create_decision : sans lui, n'importe quel profil pouvait
+    # clôturer la revue d'une décision qu'il n'avait pas le droit de prendre — et
+    # comme c'est la revue qui alimente le score de fiabilité, cela rendait ce score
+    # non probant. La décision est relue par l'autorité qui l'a prise, donc la DG.
     existing = await store.get_decision(decision_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Décision introuvable")
-    _require_mandate(current_user, existing.get("mandat_role"))
+    _require_decision_authority(current_user)
 
     decision = await store.update_decision(decision_id, patch)
     if decision is None:

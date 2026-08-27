@@ -89,6 +89,21 @@ def build_scheduler(
         max_instances=1,
     )
 
+    # 1h15 — APRÈS le snapshot d'objets de 1h00, jamais avant : les indicateurs de
+    # stock (pipe, backlog) se reconstituent depuis `pipeline_snapshots` et
+    # `backlog_snapshots`. Lancé en premier, ce job laisserait un trou d'une
+    # journée dans les seules séries qui ne sont pas recalculables après coup.
+    scheduler.add_job(
+        _indicator_snapshot_job,
+        trigger=CronTrigger(hour=1, minute=15),
+        id="indicator_snapshot",
+        name="Historisation des indicateurs du briefing (socle des deltas)",
+        replace_existing=True,
+        misfire_grace_time=600,
+        coalesce=True,
+        max_instances=1,
+    )
+
     # 6h00 : après plusieurs sync Odoo de la nuit et du petit matin, donc sur des
     # chiffres frais, et avant l'arrivée des utilisateurs — ils trouvent les
     # narrations déjà écrites au lieu d'un squelette de 10 à 20 s.
@@ -123,7 +138,7 @@ def build_scheduler(
         "Scheduler configuré : sync Odoo toutes les %d min (coalesce, max 1), scan GED à 2h00, "
         "purge quarantaine à 3h30 (rétention %d j), purge rédactions d'arbitrage à 3h45 "
         "(rétention %d j), briefing quotidien à 0h00, snapshot pipeline/backlog à 1h00, "
-        "analyses IA du cockpit à 6h00",
+        "historisation des indicateurs à 1h15, analyses IA du cockpit à 6h00",
         sync_interval, settings.quarantine_retention_days, narration_store.RETENTION_JOURS,
     )
     return scheduler
@@ -195,3 +210,8 @@ async def _arbitrage_narration_purge_job():
 async def _pipeline_snapshot_job():
     from jobs.pipeline_snapshot_job import run_pipeline_snapshot
     await run_pipeline_snapshot()
+
+
+async def _indicator_snapshot_job():
+    from jobs.indicator_snapshot_job import run_indicator_snapshot
+    await run_indicator_snapshot()

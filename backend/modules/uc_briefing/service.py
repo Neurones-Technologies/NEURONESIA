@@ -11,7 +11,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from modules.uc_briefing import facts, preferences, store
+from modules.uc_briefing import facts, preferences, seuils as seuils_mod, store
 from modules.uc_briefing.narratif import build_brief_resume, build_daily_analysis
 
 logger = logging.getLogger(__name__)
@@ -47,9 +47,16 @@ async def _build_section(role: str, crm, llm, composition: facts.Composition | N
     # Résumé (tête de cockpit) et analyse (lecture longue) portent sur les mêmes
     # faits mais ne servent pas le même usage : générés en parallèle, ce job
     # tournant de nuit, sa latence n'est pas vue par l'utilisateur.
+    # `blocs` accompagne les puces jusqu'à la rédaction mais N'ENTRE PAS dans la
+    # section stockée : il ne porte rien que `bullets` n'ait déjà, et le contrat
+    # lu par les cockpits (facts / bullets / resume / action / analysis) n'a
+    # aucune raison de s'élargir pour un besoin interne au prompt.
+    blocs = built.get("blocs")
     resume, analysis = await asyncio.gather(
-        build_brief_resume(llm, role, built["bullets"], action, consigne=consigne, pilote=pilote),
-        build_daily_analysis(llm, role, built["bullets"], consigne=consigne, pilote=pilote),
+        build_brief_resume(llm, role, built["bullets"], action,
+                           consigne=consigne, pilote=pilote, blocs=blocs),
+        build_daily_analysis(llm, role, built["bullets"],
+                             consigne=consigne, pilote=pilote, blocs=blocs),
     )
     return {
         "facts": built["facts"],
@@ -60,7 +67,8 @@ async def _build_section(role: str, crm, llm, composition: facts.Composition | N
     }
 
 
-def _composition_depuis(document: dict | None) -> facts.Composition:
+def _composition_depuis(document: dict | None,
+                       seuils: dict[str, float] | None = None) -> facts.Composition:
     """Traduit un document de préférences en composition exploitable par facts.
 
     Rien de coché + consigne posée = mode « consigne pilote » : tout le
@@ -76,8 +84,8 @@ def _composition_depuis(document: dict | None) -> facts.Composition:
     elements = doc.get("elements")
     consigne = doc.get("consigne", "")
     if elements == [] and consigne.strip():
-        return facts.Composition(None, consigne, pilote=True)
-    return facts.Composition(elements, consigne)
+        return facts.Composition(None, consigne, pilote=True, seuils=seuils)
+    return facts.Composition(elements, consigne, seuils=seuils)
 
 
 async def generate(crm, llm, triggered_by: str = "schedule") -> dict:
@@ -85,7 +93,14 @@ async def generate(crm, llm, triggered_by: str = "schedule") -> dict:
     # Un seul SELECT pour les cinq rôles, avant le gather : un `load` par section
     # ferait cinq requêtes dans un contexte où les erreurs sont avalées.
     documents = await preferences.load_all()
-    compositions = {role: _composition_depuis(documents.get(role)) for role in ROLES}
+    # Un seul SELECT pour les seuils des cinq rôles, au même titre que les
+    # préférences : les builders les lisent au fil du calcul et ne doivent pas
+    # toucher la base eux-mêmes (cf. facts.Composition.seuil).
+    tous_seuils = await seuils_mod.charger_tous()
+    compositions = {
+        role: _composition_depuis(documents.get(role), tous_seuils.get(role))
+        for role in ROLES
+    }
     results = await asyncio.gather(
         *(_build_section(role, crm, llm, compositions[role]) for role in ROLES),
         return_exceptions=True,
@@ -138,7 +153,9 @@ async def generate_role(role: str, crm, llm, triggered_by: str = "manual") -> di
         raise ValueError(f"Rôle inconnu : {role}")
 
     async with _lock_for(role):
-        composition = _composition_depuis(await preferences.load(role))
+        composition = _composition_depuis(
+            await preferences.load(role), await seuils_mod.charger(role)
+        )
         section = await _build_section(role, crm, llm, composition)
         section["generated_at"] = datetime.now(timezone.utc).isoformat()
         section["triggered_by"] = triggered_by

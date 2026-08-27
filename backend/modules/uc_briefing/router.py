@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api.v1.dependencies import CurrentUser
-from modules.uc_briefing import preferences, service, store
+from modules.uc_briefing import indicateurs, preferences, service, seuils, store
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ def _require_role_scope(current_user, role: str) -> None:
 
     La matrice module × rôle dit qui accède à l'ÉCRAN, jamais sur quel PÉRIMÈTRE
     on peut écrire — sans ce contrôle, un directeur commercial autorisé sur la
-    vue « briefing » réécrirait le débrief de la direction générale. Même esprit
-    que uc_arbitrage.router._require_mandate, admin exempté comme partout.
+    vue « briefing » réécrirait le débrief de la direction générale. Admin exempté
+    comme partout, cf. uc_arbitrage.router._require_decision_authority.
     """
     if role not in service.ROLES:
         raise HTTPException(status_code=404, detail=f"Rôle inconnu : {role}")
@@ -195,3 +195,108 @@ async def refresh_briefing(request: Request, current_user: CurrentUser, role: st
         "generated_at": section.get("generated_at"),
         "nb_puces": len(section.get("bullets", [])),
     }
+
+
+# ── Seuils d'alerte, réglables par rôle ──────────────────────────────────────
+
+@router.get("/seuils")
+async def get_briefing_seuils(current_user: CurrentUser, role: str | None = None) -> dict:
+    """Catalogue des seuils ET valeurs courantes du rôle.
+
+    Comme pour les préférences, le catalogue voyage AVEC les valeurs : le
+    frontend ne détient pas de copie des libellés, qui divergerait à la première
+    évolution, et n'a aucune règle de défaut à réimplémenter.
+    """
+    cible = role or _role_of(current_user)
+    _require_role_scope(current_user, cible)
+    return {"role": cible, "seuils": await seuils.catalogue_pour(cible)}
+
+
+class BriefingSeuilsBody(BaseModel):
+    role: str | None = None
+    valeurs: dict[str, float] = Field(default_factory=dict)
+
+
+@router.put("/seuils")
+async def put_briefing_seuils(body: BriefingSeuilsBody, current_user: CurrentUser) -> dict:
+    """Règle les seuils d'un rôle.
+
+    Les valeurs hors bornes sont RENDUES dans `refusees` plutôt que rognées en
+    silence : un réglage rogné paraît pris en compte et ne l'est pas. La réponse
+    n'est pas un 400 pour autant — une valeur sur trois refusée ne doit pas
+    annuler les deux autres, et l'écran a de quoi le dire.
+
+    N'entraîne aucune régénération, même doctrine que PUT /preferences :
+    appliquer est un acte explicite (POST /refresh).
+    """
+    cible = body.role or _role_of(current_user)
+    _require_role_scope(current_user, cible)
+    if not body.valeurs:
+        raise HTTPException(status_code=400, detail="Aucun seuil transmis.")
+
+    res = await seuils.enregistrer(cible, body.valeurs, updated_by=current_user.email)
+    logger.info(
+        "Seuils du débrief '%s' réglés par %s : %d retenu(s), %d refusé(s)",
+        cible, current_user.email, len(res["retenues"]), len(res["refusees"]),
+    )
+    return {
+        "role": cible,
+        "retenues": res["retenues"],
+        "refusees": res["refusees"],
+        "seuils": await seuils.catalogue_pour(cible),
+    }
+
+
+@router.delete("/seuils")
+async def delete_briefing_seuils(current_user: CurrentUser, role: str | None = None) -> dict:
+    """Rend au rôle les seuils par défaut du code."""
+    cible = role or _role_of(current_user)
+    _require_role_scope(current_user, cible)
+    await seuils.reinitialiser(cible)
+    logger.info("Seuils du débrief '%s' réinitialisés par %s", cible, current_user.email)
+    return {"role": cible, "seuils": await seuils.catalogue_pour(cible)}
+
+
+# ── Historisation des indicateurs ────────────────────────────────────────────
+
+@router.get("/indicateurs")
+async def get_briefing_indicateurs(current_user: CurrentUser) -> dict:
+    """Valeur du jour et variations, pour tous les indicateurs suivis.
+
+    Sert l'écran de pilotage et le diagnostic : sans cette vue, une rupture du
+    job de nuit se manifeste par des suffixes de variation qui disparaissent
+    silencieusement des puces, sans que personne sache pourquoi.
+    """
+    return {
+        "indicateurs": await indicateurs.delta(list(indicateurs.CATALOGUE)),
+        "couverture": await indicateurs.couverture(),
+    }
+
+
+@router.post("/indicateurs/reconstituer")
+async def post_reconstituer_indicateurs(current_user: CurrentUser, jours: int = 400) -> dict:
+    """Rejoue la reconstitution sur les `jours` derniers jours.
+
+    Réservé à l'admin : la reconstitution parcourt la fenêtre jour par jour et
+    dure une minute pour 400 jours. Elle n'écrase jamais une journée MESURÉE,
+    seulement les reconstitutions antérieures — c'est ce qui permet de la
+    rejouer après correction d'une requête.
+    """
+    if _role_of(current_user) != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="La reconstitution de l'historique est réservée à l'administrateur.",
+        )
+    if not 1 <= jours <= 1500:
+        raise HTTPException(status_code=400, detail="Fenêtre attendue entre 1 et 1500 jours.")
+
+    from datetime import date, timedelta
+    from jobs.indicator_snapshot_job import run_indicator_backfill
+
+    depuis = date.today() - timedelta(days=jours)
+    compte = await run_indicator_backfill(depuis)
+    logger.info(
+        "Reconstitution des indicateurs demandée par %s sur %d jours : %s",
+        current_user.email, jours, compte,
+    )
+    return {"depuis": depuis.isoformat(), **compte}

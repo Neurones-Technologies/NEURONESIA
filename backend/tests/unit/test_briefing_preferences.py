@@ -9,12 +9,25 @@ import pytest
 from modules.uc_briefing import facts, preferences
 from modules.uc_briefing.preferences import CATALOGUE, DEFAUTS
 from modules.uc_briefing.service import _FACTS_BUILDERS
-from tests.unit.test_briefing_facts import FauxCRM, _arbitrage_neutre
+from tests.unit.test_briefing_facts import (
+    SITUATION_NEUTRE, FauxCRM, _arbitrage_neutre, poser_doublures,
+)
 
 
 @pytest.fixture(autouse=True)
-def _stub_arbitrage(monkeypatch):
+def _stub_sources(monkeypatch):
+    """Mêmes doublures que `test_briefing_facts`, importées et non recopiées.
+
+    Le test de gating ci-dessous construit les faits des cinq rôles : sans
+    doublure, il interroge le miroir de production et son verdict dépend des
+    données du jour au lieu du câblage.
+    """
     monkeypatch.setattr(facts.arbitrage_service, "compute_file", _arbitrage_neutre)
+
+    async def _situation():
+        return SITUATION_NEUTRE
+    monkeypatch.setattr(facts.daf_situation, "situation_factures", _situation)
+    poser_doublures(monkeypatch)
 
 
 def test_identifiants_uniques_et_non_vides():

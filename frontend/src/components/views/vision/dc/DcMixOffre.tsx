@@ -99,8 +99,11 @@ export async function DcMixOffreTuiles() {
           <div className="tile-h">
             <h3>Famille dominante</h3>
           </div>
-          <div>
-            <span className="stat-v num">{offerMix.dominante.label ?? "—"}</span>
+          {/* Mêmes classes que `StatTile` — `stat-l` pour la ligne valeur + unité,
+              `stat-v--txt` pour le corps réduit d'un libellé : sans elles, un nom
+              de famille un peu long sortait du cadre au corps des chiffres. */}
+          <div className="stat-l">
+            <span className="stat-v num stat-v--txt">{offerMix.dominante.label ?? "—"}</span>
             <span className="stat-u">{formatPct(offerMix.dominante.part_montant_pct, 0)} % du pipe qualifié</span>
           </div>
           <div className={`stat-d${couvertureFaible ? " wat" : ""}`}>

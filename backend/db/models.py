@@ -852,6 +852,77 @@ class BacklogSnapshotModel(Base):
     reste_a_encaisser: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class IndicatorSnapshotModel(Base):
+    """Valeur d'UN indicateur à UNE date — le socle du « delta plutôt que l'état ».
+
+    Distincte de PipelineSnapshotModel / BacklogSnapshotModel, qui historisent des
+    OBJETS (une ligne par opportunité, une ligne par dossier). Historiser des objets
+    ne suffit pas à dire « 1,2 Md (+85 M vs hier) » : il faudrait rejouer chaque nuit
+    l'agrégation de tous les rôles sur tout l'historique. Ici une ligne porte une
+    valeur déjà agrégée, et le delta est une soustraction.
+
+    `nature` commande ce que le backfill peut faire, et c'est la distinction
+    structurante de tout ce module :
+      - 'flux'  : cumul de faits DATÉS (commandes prises, factures émises,
+                  encaissements). La valeur au 12/06 est recalculable aujourd'hui,
+                  puisque `date_order` / `invoice_date` / `payment_date` portent la
+                  date. L'historique est donc disponible IMMÉDIATEMENT, sans
+                  attendre trente nuits de snapshots.
+      - 'stock' : état à un instant (pipe ouvert, backlog, impayés). Rien dans le
+                  miroir ne dit ce qu'il valait mardi — sauf reconstitution depuis
+                  les snapshots d'objets ou depuis les dates de règlement.
+
+    `origine` dit au lecteur ce que vaut la ligne, et interdit de faire passer une
+    reconstitution pour une mesure :
+      - 'mesure'      : calculée le jour dit, sur l'état du jour.
+      - 'reconstitue' : recalculée après coup. Exacte pour un flux ; approchée pour
+                        un stock (cf. `indicateurs.py` pour l'hypothèse de chaque
+                        reconstitution).
+
+    Une valeur absente n'est JAMAIS un zéro : `indicateurs.delta` renvoie
+    `disponible=False` plutôt que d'inventer une variation contre du vide.
+    """
+    __tablename__ = "indicator_snapshots"
+    __table_args__ = (
+        Index("ix_indicator_snapshots_date_cle", "snapshot_date", "cle", unique=True),
+        Index("ix_indicator_snapshots_cle_date", "cle", "snapshot_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, index=True)
+    cle: Mapped[str] = mapped_column(String(60), index=True)
+    valeur: Mapped[float] = mapped_column(Float, default=0.0)
+    unite: Mapped[str] = mapped_column(String(10), default="xof")   # xof / nb / pct / jours
+    nature: Mapped[str] = mapped_column(String(10), default="flux")  # flux / stock
+    origine: Mapped[str] = mapped_column(String(15), default="mesure")  # mesure / reconstitue
+    calcule_le: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BriefingSeuilModel(Base):
+    """Seuil d'alerte, par rôle et par clé — ce qui permet au même moteur de faits
+    de servir quatre briefings différents.
+
+    Les seuils vivaient en dur dans `facts.py` (50 % de concentration, 80 % de
+    matérialisation) : le DG et le DAF ne peuvent pas s'alerter au même endroit sur
+    la même donnée, et personne ne pouvait déplacer un seuil sans un déploiement.
+
+    Portée par RÔLE et non par utilisateur, exactement comme BriefingPreferenceModel :
+    le briefing lui-même est généré par rôle, un seuil par personne imposerait autant
+    de générations que de comptes. `updated_by` est la contrepartie obligatoire du
+    réglage partagé.
+
+    Table vide = les défauts du code s'appliquent (cf. `uc_briefing.seuils.DEFAUTS`),
+    même doctrine que ModulePermissionModel : rien à migrer, rien à initialiser.
+    """
+    __tablename__ = "briefing_seuils"
+
+    role: Mapped[str] = mapped_column(String(50), primary_key=True)
+    cle: Mapped[str] = mapped_column(String(60), primary_key=True)
+    valeur: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_by: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class DecisionModel(Base):
     """Registre de décisions du module Arbitrages (UC Arbitrage).
 

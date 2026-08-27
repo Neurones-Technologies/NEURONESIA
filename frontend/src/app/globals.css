@@ -1686,16 +1686,25 @@ button.cell:disabled{cursor:default;opacity:.55}
 /* `min-width:0` : enfant d'un flex, la valeur refusait de rétrécir sous sa
    largeur de contenu et DÉBORDAIT du cadre au lieu de se replier. */
 .stat-v{font-family:var(--disp);font-weight:300;font-size:clamp(26px,2.5vw,44px);letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums lining-nums;min-width:0}
-/* valeur TEXTUELLE (nom d'axe, libellé) : corps réduit et repli sur deux
-   lignes autorisé — au corps des chiffres, « Infrastructure et datacenter »
-   sortait du cadre. Posée automatiquement par StatTile. */
-.stat-v--txt{font-size:clamp(19px,1.7vw,26px);line-height:1.18;letter-spacing:-.02em;overflow-wrap:anywhere}
-.kpi-row .stat-v--txt,.kpi-row>.stat--p .stat-v--txt{font-size:20px;line-height:1.2}
+/* Valeur TEXTUELLE (nom d'axe, libellé), posée automatiquement par StatTile :
+   corps réduit et repli sur plusieurs lignes autorisé.
+   `white-space:normal` annule le `nowrap` de `.num`, que StatTile pose sur
+   TOUTE valeur — chiffre ou texte. Sans lui, « Infrastructure et datacenter »
+   refusait de se replier et sortait par la droite de la tuile ; le corps réduit
+   seul ne suffisait pas, un libellé plus long débordait à son tour. */
+.stat-v--txt{
+  font-size:clamp(19px,1.7vw,26px);line-height:1.18;letter-spacing:-.02em;
+  white-space:normal;overflow-wrap:anywhere;hyphens:auto
+}
 /* Ligne chiffre + unité : `baseline` garde l'unité assise sur le chiffre, et le
    `wrap` l'envoie à la ligne plutôt que de la faire déborder sur une tuile
    étroite. */
 .stat-l{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 2px;min-width:0}
-.stat-u{font-family:var(--mono);font-size:11px;color:var(--t3);margin-left:6px;letter-spacing:.06em;white-space:nowrap}
+/* L'« unité » porte souvent une phrase (« % du pipe qualifié », « % — supposé,
+   non mesuré ») et non un suffixe de trois lettres : en `nowrap` elle débordait
+   de la tuile. En repli normal, « M FCFA » reste sur une ligne — il n'y a de
+   coupure que là où il y aurait eu débordement. */
+.stat-u{font-family:var(--mono);font-size:11px;color:var(--t3);margin-left:6px;letter-spacing:.06em;overflow-wrap:anywhere}
 .stat-d{font-family:var(--mono);font-size:11.5px;margin-top:12px;display:flex;align-items:center;gap:7px}
 .pos{color:var(--signal)}.neg{color:var(--alert)}.wat{color:var(--watch)}
 
@@ -1724,6 +1733,13 @@ button.cell:disabled{cursor:default;opacity:.55}
 }
 .kpi-row>.stat--p .stat-v{font-size:clamp(30px,2.9vw,38px)}
 .stat--c .stat-v{font-size:clamp(18px,1.5vw,22px);color:var(--t2)}
+/* Corps réduit de la valeur textuelle, APRÈS les tailles de rang ci-dessus :
+   `.kpi-row>.stat--p .stat-v` et `.kpi-row>.stat--p .stat-v--txt` ont la même
+   spécificité, c'est donc l'ordre qui tranche. Placés plus haut, ces corps
+   étaient repris par le rang et « Infrastructure et datacenter » se rendait à
+   38 px dans un bandeau de tuiles à 152 px. */
+.kpi-row .stat-v--txt,.kpi-row>.stat--p .stat-v--txt{font-size:20px;line-height:1.2}
+.stat--c .stat-v--txt{font-size:clamp(15px,1.25vw,17px);line-height:1.25}
 .stat--c .tile-h h3{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--t3)}
 /* Fond papier plutôt que transparent : la tuile reste une tuile (le bandeau
    garderait sinon un trou), mais elle recule d'un plan. */

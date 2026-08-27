@@ -305,7 +305,11 @@ class LocalCRMAdapter(CRMRepository):
             return [
                 {
                     "ref": o.name,
-                    "client": c.name if c else "—",
+                    # `sale_orders.client_name` est dénormalisé et renseigné même
+                    # quand le tiers n'existe pas dans `clients` : sans ce repli,
+                    # la puce « dernière commande entrée » affiche un tiret à la
+                    # place du client, ce qui la rend inutilisable.
+                    "client": (c.name if c else None) or o.client_name or "—",
                     "montant_xof": o.amount,
                     "date": o.date_order.strftime("%d/%m/%Y") if o.date_order else "—",
                     "état": o.state,
@@ -763,9 +767,31 @@ class LocalCRMAdapter(CRMRepository):
             return None
 
     async def get_pipeline_stats(self) -> dict:
+        """Pipeline OUVERT — affaires ni gagnées, ni perdues, ni annulées.
+
+        Le filtre d'étape a été ajouté après coup : la version d'origine sommait
+        les 9 475 opportunités de la table, gagnées et perdues comprises, et
+        annonçait 410 693 M FCFA de « pipeline ouvert » là où les affaires
+        réellement ouvertes en pèsent 131 936 — un facteur 37. Le champ `stage`
+        vient d'Odoo en texte libre et mélange trois nomenclatures (« 6-Gagné » /
+        « Won » / « Gagné »), d'où la reconnaissance par mot-clé.
+
+        `par_stade` reste volontairement NON filtré : c'est une ventilation par
+        étape, où voir le poids du gagné et du perdu est légitime.
+
+        ATTENTION — `ca_potentiel_brut_xof` inclut les affaires dont la date de
+        clôture est déjà passée, soit 82 % du montant (anomalie A4). Pour la part
+        encore dans les temps, lire `uc_briefing.indicateurs` (`pipe_actif_brut`),
+        qui porte la même donnée coupée sur l'échéance.
+        """
         from sqlalchemy import text
+        from modules.uc_briefing.indicateurs import _PIPE_OUVERT
         async with AsyncSessionLocal() as session:
-            sql_total = "SELECT COUNT(*), SUM(expected_revenue), SUM(expected_revenue * probability / 100) FROM opportunities"
+            sql_total = (
+                "SELECT COUNT(*), SUM(expected_revenue), "
+                "SUM(expected_revenue * probability / 100) "
+                f"FROM opportunities WHERE {_PIPE_OUVERT}"
+            )
             r = (await session.execute(text(sql_total))).fetchone()
             total_nb = r[0] or 0
             total_brut = round(r[1] or 0)
