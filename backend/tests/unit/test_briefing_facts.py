@@ -8,8 +8,9 @@ action du jour citant un dossier dont plus aucune puce ne parle.
 """
 import pytest
 
-from modules.uc_briefing import facts
+from modules.uc_briefing import facts, preferences
 from modules.uc_briefing.preferences import CATALOGUE, DEFAUTS
+from modules.uc_briefing.service import _FACTS_BUILDERS
 
 
 class FauxCRM:
@@ -211,13 +212,49 @@ async def test_sans_composition_produit_le_briefing_historique():
 
 
 @pytest.mark.asyncio
-async def test_defauts_reproduisent_les_sept_blocs_dorigine():
+async def test_defauts_ne_contiennent_que_des_reponses_a_une_question():
+    """Le cœur de la refonte du catalogue.
+
+    Les défauts étaient auparavant l'inventaire de ce que le CRM savait
+    agréger : les six éléments cochés du directeur commercial ne répondaient à
+    AUCUNE question de la trame, et son briefing par défaut était donc
+    intégralement hors sujet sans que rien ne le signale.
+    """
+    for role, elements in CATALOGUE.items():
+        for element in elements:
+            if element.defaut:
+                assert element.question or element.bloc == "couverture", (
+                    f"« {element.id} » ({role}) est coché par défaut sans répondre "
+                    "à aucune question de la trame"
+                )
+            else:
+                assert element.bloc == "complement", (
+                    f"« {element.id} » ({role}) est décoché mais n'est pas rangé "
+                    "en complément"
+                )
+
+
+@pytest.mark.asyncio
+async def test_defauts_du_dg_produisent_une_puce_par_element():
     res = await facts.build_dg_facts(FauxCRM(), facts.Composition(DEFAUTS["dg"]))
-    assert len(res["bullets"]) == 7
-    # Les éléments ajoutés après coup restent hors du briefing par défaut.
+    assert len(res["bullets"]) == len(DEFAUTS["dg"])
+    # Les compléments restent hors du briefing par défaut.
     assert "retention_taux_pct" not in res["facts"]
     assert "fournisseurs_top_nom" not in res["facts"]
     assert "factures_echues_clients_nb" not in res["facts"]
+
+
+@pytest.mark.asyncio
+async def test_le_cockpit_garde_les_faits_dont_il_depend():
+    """`DgTableauDeBord` lit `facts.ca_ytd_xof` et `facts.date_arret`.
+
+    Réordonner le catalogue et déplacer les défauts ne doit pas les faire
+    disparaître — l'écran retomberait sur le direct et afficherait un chiffre
+    différent de celui des puces, pour le même indicateur et le même jour.
+    """
+    res = await facts.build_dg_facts(FauxCRM(), facts.Composition(DEFAUTS["dg"]))
+    assert "ca_ytd_xof" in res["facts"]
+    assert res["facts"]["date_arret"]
 
 
 # ── Gating ────────────────────────────────────────────────────────────────────
@@ -263,7 +300,11 @@ async def test_source_en_panne_nemporte_que_son_fait():
     """`_safe` doit survivre au gather conditionnel."""
     crm = FauxCRM(get_margin_stats=RuntimeError("miroir indisponible"))
 
-    async def _panne():
+    # `year=` est passé par le bloc « marge de l'exercice », désormais coché par
+    # défaut : une doublure à signature trop étroite lèverait un TypeError avant
+    # le gather et laisserait les autres coroutines non attendues, ce qui teste
+    # tout autre chose qu'une source en panne.
+    async def _panne(year=None):
         raise RuntimeError("miroir indisponible")
 
     crm.get_margin_stats = _panne
@@ -398,3 +439,494 @@ async def test_echeances_ne_retient_que_les_opportunites_ouvertes():
     ], jours=3650)
     assert facts_["echeances_nb"] == 1
     assert "Ouverte" in bullets[0]
+
+
+# ── Sources hors CRM du briefing évolutif ────────────────────────────────────
+# `analyses`, `evenements` et `indicateurs` lisent la base DIRECTEMENT, comme
+# `daf_situation` et `arbitrage_service` au-dessus — ils ne passent pas par le
+# faux CRM. Sans ces doublures, ces tests interrogent le miroir de production :
+# ils passent sur le poste du développeur et échouent partout ailleurs, et les
+# assertions de comptage de puces ne mesurent plus le gating mais l'état des
+# données du jour. Vérifié en déplaçant le fichier de base : sans stub, le test
+# de non-régression tombe.
+
+MOUVEMENTS_NEUTRES = {
+    "depuis": "2026-08-20", "jusqu_a": "2026-08-27", "total_evenements": 3,
+    "commandes_entrees": {"nb": 2, "montant_xof": 300_000_000,
+                          "top": [{"ref": "FP/2026/1", "tiers": "CIE",
+                                   "montant_xof": 200_000_000, "date": "2026-08-21"}]},
+    "factures_emises": {"nb": 1, "montant_xof": 80_000_000, "top": []},
+    "factures_reglees": {"nb": 0, "montant_xof": 0, "top": []},
+    "achats_engages": {"nb": 0, "montant_xof": 0, "top": []},
+    "opportunites_retouchees": {"nb": 0, "montant_xof": 0, "top": []},
+    "changements_etape": {"mesurable": True, "nb": 1, "montant_xof": 50_000_000,
+                          "nb_entrees_pipe": 0, "montant_entrees_xof": 0,
+                          "depuis_snapshot": "2026-08-20", "jusqu_a_snapshot": "2026-08-27",
+                          "top": [{"opportunite": "TMA", "client": "SGCI",
+                                   "revenu_attendu_xof": 50_000_000,
+                                   "de": "1-Qualification", "vers": "4-Négociation"}]},
+}
+
+HYGIENE_NEUTRE = {
+    "seuil_jours": 15,
+    "a_relancer": {"nb": 3, "montant_xof": 900_000_000,
+                   "top": [{"opportunite": "Refresh WAN", "client": "MOOV", "stade": "2-Montage",
+                            "revenu_attendu_xof": 500_000_000, "jours_silence": 40,
+                            "deadline": "2026-12-31"}]},
+    "a_assainir": {"nb": 3015, "montant_xof": 107_881_000_000, "top": []},
+    "sans_echeance": {"nb": 225, "montant_xof": 13_089_000_000, "top": []},
+    "reserve": "mesure l'absence de modification",
+}
+
+# Les cinq tranches PARTITIONNENT l'encours ; le contentieux est un
+# sous-ensemble transversal, à part. La doublure reproduit cette structure — une
+# doublure qui dérive de la vraie fonction ne teste plus rien, et c'est
+# exactement ce qu'a rattrapé le passage de `contentieux` hors des tranches.
+BALANCE_NEUTRE = {
+    "mesurable": True, "as_of": "2026-08-27",
+    "tranches": {
+        "a_echoir": {"nb": 3, "montant_xof": 78_000_000},
+        "j0_30": {"nb": 15, "montant_xof": 335_000_000},
+        "j30_60": {"nb": 26, "montant_xof": 368_000_000},
+        "j60_90": {"nb": 28, "montant_xof": 532_000_000},
+        "j90_plus": {"nb": 775, "montant_xof": 9_862_000_000},
+    },
+    "nb_total": 847, "montant_total_xof": 11_175_000_000,
+    "contentieux": {"seuil_jours": 90, "nb": 775,
+                    "montant_xof": 9_862_000_000, "part_pct": 88.3},
+    "intragroupe": {"nb": 1, "montant_xof": 0},
+    "reserve": "43 % des factures portent une échéance égale à leur date d'émission",
+}
+
+RELANCES_NEUTRES = {
+    "mesurable": True, "retard_min_jours": 30, "nb_clients": 289,
+    "montant_xof": 10_762_000_000,
+    "top": [{"client": "BAD", "nb_factures": 24, "montant_xof": 2_304_000_000,
+             "retard_max_jours": 1413, "intragroupe": False}],
+}
+
+DSO_NEUTRE = {
+    "mesurable": True, "fenetre_mois": 12, "dso_jours": 112.3, "nb_factures": 179,
+    "dso_precedent_jours": 70.3, "nb_factures_precedent": 214, "ecart_jours": 42.0,
+    "robuste": True,
+}
+
+DERIVE_NEUTRE = {
+    "mesurable": True, "seuil_consommation_pct": 90, "nb": 654,
+    "depense_engagee_xof": 13_416_000_000,
+    "top": [{"ref": "DC/2024/0046", "client": "SGCI", "consommation_pct": 126.0,
+             "marge_prevue_pct": 17.8, "marge_constatee_pct": 6.0,
+             "ca_provisoire_xof": 0, "depense_provisoire_xof": 0,
+             "ca_definitif_xof": 0, "depense_definitive_xof": 0}],
+    "reserve": "la dérive se mesure sur la dépense du dossier",
+}
+
+SOUS_TRAITANCE_NEUTRE = {
+    "mesurable": True, "nb_dossiers": 972, "engagement_xof": 17_133_000_000,
+    "couverture_pct": 71.3, "nb_achats_orphelins": 613, "nb_engagement_depasse_ca": 60,
+    "top": [{"ref": "DC/2024/0232", "client": "BAD", "nb_achats": 12,
+             "engagement_xof": 663_000_000, "ca_reference_xof": 1_810_000_000,
+             "base_ca": "définitif", "marge_provisoire_pct": 12.0,
+             "poids_sur_ca_pct": 36.6, "engagement_depasse_ca": False}],
+    "reserve": "le rattachement achat → dossier repose sur `dossier_id`",
+}
+
+VISIBILITE_NEUTRE = {
+    "mesurable": True, "backlog_xof": 9_175_000_000,
+    "facture_mensuel_moyen_xof": 414_000_000, "nb_factures_fenetre": 61,
+    "fenetre_mois": 3, "mois_visibilite": 22.2,
+}
+
+BTB_NEUTRE = {
+    "mesurable": True, "fenetre_mois": 12, "commande_xof": 10_263_000_000,
+    "facture_xof": 8_422_000_000, "ratio": 1.22,
+    "reserve": "commandé et facturé sont tous deux TTC",
+}
+
+
+# Valeurs par indicateur, choisies pour que chaque puce soit reconnaissable et
+# que les deltas ne soient jamais nuls — un delta à zéro s'écrit « stable » et
+# masquerait une puce qui ne sait pas se suffixer.
+_VALEURS_INDICATEURS = {
+    "ca_commande_mois": 500_000_000, "ca_commande_ytd": 6_128_000_000,
+    "nb_commandes_ytd": 263, "nb_opportunites_ouvertes": 3969,
+    "ca_facture_mois": 300_000_000, "ca_facture_ytd": 3_358_000_000,
+    "encaissements_mois": 120_000_000, "encaissements_ytd": 1_466_000_000,
+    "backlog": 9_175_000_000, "reste_a_encaisser": 9_134_000_000,
+    "impayes_echus": 10_909_000_000, "impayes_echus_90j": 9_546_000_000,
+    "pipe_brut": 131_936_000_000, "pipe_actif_brut": 10_965_000_000,
+    "pipe_actif_pondere": 2_907_000_000, "achats_engages_ytd": 3_159_000_000,
+}
+
+
+async def _delta_neutre(cles, as_of=None):
+    """Historisation en état de marche : une valeur et trois variations par clé.
+
+    La doublure d'origine rendait `{}`, ce qui décrivait une installation où le
+    job de nuit n'a jamais tourné — un cas réel, mais pas le cas nominal. Deux
+    éléments du catalogue sont FAITS d'indicateurs (le CA commandé du directeur
+    commercial, le CA facturé de la DAF) : avec un dictionnaire vide, ils ne
+    produisaient aucune puce et paraissaient non branchés au test de gating,
+    alors qu'ils se comportaient correctement.
+    """
+    return {
+        cle: {
+            "cle": cle, "libelle": cle, "unite": "nb" if cle.startswith("nb_") else "xof",
+            "nature": "flux", "valeur": _VALEURS_INDICATEURS.get(cle, 1_000_000_000),
+            "reserve": "",
+            "j1": 5_000_000, "j1_depuis": "2026-08-26", "j1_jours": 1,
+            "semaine": 20_000_000, "semaine_depuis": "2026-08-20", "semaine_jours": 7,
+            "mois": 80_000_000, "mois_depuis": "2026-07-28", "mois_jours": 30,
+        }
+        for cle in cles
+    }
+
+
+def poser_doublures(monkeypatch) -> dict:
+    """Installe les doublures et rend les fonctions D'ORIGINE.
+
+    Extrait de la fixture pour être réutilisable par `test_briefing_preferences`,
+    dont le test de gating construit les faits de chaque rôle et tombe sinon sur
+    la base de production. Les fixtures `autouse` sont propres à leur module :
+    sans cette fonction, chaque fichier de test recopierait les doublures et
+    elles divergeraient l'une après l'autre.
+    """
+    originales = {
+        "balance_agee": facts.analyses.balance_agee,
+        "relances_du_jour": facts.analyses.relances_du_jour,
+        "dso_glissant": facts.analyses.dso_glissant,
+        "mouvements": facts.evenements.mouvements,
+        "hygiene_pipe": facts.evenements.hygiene_pipe,
+    }
+
+    async def _rendre(valeur):
+        return valeur
+
+    monkeypatch.setattr(facts.evenements, "mouvements",
+                        lambda *a, **k: _rendre(MOUVEMENTS_NEUTRES))
+    monkeypatch.setattr(facts.evenements, "hygiene_pipe",
+                        lambda *a, **k: _rendre(HYGIENE_NEUTRE))
+    monkeypatch.setattr(facts.analyses, "balance_agee",
+                        lambda *a, **k: _rendre(BALANCE_NEUTRE))
+    monkeypatch.setattr(facts.analyses, "relances_du_jour",
+                        lambda *a, **k: _rendre(RELANCES_NEUTRES))
+    monkeypatch.setattr(facts.analyses, "dso_glissant",
+                        lambda *a, **k: _rendre(DSO_NEUTRE))
+    monkeypatch.setattr(facts.analyses, "derive_budgetaire",
+                        lambda *a, **k: _rendre(DERIVE_NEUTRE))
+    monkeypatch.setattr(facts.analyses, "sous_traitance_par_dossier",
+                        lambda *a, **k: _rendre(SOUS_TRAITANCE_NEUTRE))
+    monkeypatch.setattr(facts.analyses, "visibilite_carnet",
+                        lambda *a, **k: _rendre(VISIBILITE_NEUTRE))
+    monkeypatch.setattr(facts.analyses, "book_to_bill",
+                        lambda *a, **k: _rendre(BTB_NEUTRE))
+
+    monkeypatch.setattr(facts.indicateurs, "delta", _delta_neutre)
+    return originales
+
+
+@pytest.fixture(autouse=True)
+def _stub_sources_evolutives(monkeypatch):
+    """Rend hermétiques les sources qui lisent la base sans passer par le CRM."""
+    return poser_doublures(monkeypatch)
+
+
+# ── Non-régression du briefing évolutif ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_delta_absent_degrade_les_suffixes_sans_vider_le_briefing(monkeypatch):
+    """Sans historisation, les puces perdent leur variation, pas leur contenu.
+
+    Deux éléments font exception et disparaissent : le CA commandé et le CA
+    facturé sont FAITS d'indicateurs. Une puce annonçant « 0 M FCFA commandés »
+    parce que rien n'a été historisé vaudrait moins que son absence — c'est un
+    silence délibéré, pas une perte.
+    """
+    async def _aucun(cles, as_of=None):
+        return {}
+    monkeypatch.setattr(facts.indicateurs, "delta", _aucun)
+
+    res = await facts.build_dir_financier_facts(FauxCRM())
+    attendu = len(CATALOGUE["dir_financier"]) - 1      # ca_facture_periode se tait
+    assert len(res["bullets"]) == attendu
+    assert res["bullets"]
+    assert not any("vs hier" in b for b in res["bullets"])
+
+
+@pytest.mark.asyncio
+async def test_delta_en_panne_ne_fait_pas_echouer_le_briefing(monkeypatch):
+    """Une historisation qui lève doit coûter les suffixes, pas la section."""
+    async def _explose(cles, as_of=None):
+        raise RuntimeError("indicator_snapshots inaccessible")
+    monkeypatch.setattr(facts.indicateurs, "delta", _explose)
+
+    res = await facts.build_dir_financier_facts(FauxCRM())
+    assert len(res["bullets"]) == len(CATALOGUE["dir_financier"]) - 1
+
+
+@pytest.mark.asyncio
+async def test_delta_present_suffixe_la_puce(monkeypatch):
+    async def _delta(cles, as_of=None):
+        return {"impayes_echus": {
+            "cle": "impayes_echus", "libelle": "Impayés", "unite": "xof",
+            "nature": "stock", "valeur": 10_000_000_000, "reserve": "",
+            "j1": 250_000_000, "j1_depuis": "2026-08-26", "j1_jours": 1,
+            "semaine": None, "semaine_depuis": None, "semaine_jours": None,
+            "mois": None, "mois_depuis": None, "mois_jours": None,
+        }}
+    monkeypatch.setattr(facts.indicateurs, "delta", _delta)
+
+    res = await facts.build_dir_financier_facts(
+        FauxCRM(), facts.Composition(["exposition_impayes"])
+    )
+    # L'exposition est citée à l'horizon « semaine », non renseigné ici : la
+    # puce doit donc rester nue plutôt que d'emprunter le delta d'un autre
+    # horizon. C'est le comportement qui empêche « +250 M vs hier » de
+    # s'afficher sous l'étiquette « sur 7 j ».
+    assert len(res["bullets"]) == 1
+    assert "M FCFA" in res["bullets"][0]
+
+
+@pytest.mark.asyncio
+async def test_seuil_regle_change_la_puce():
+    """Le seuil n'est plus en dur : le déplacer déplace le texte."""
+    strict = await facts.build_dg_facts(
+        FauxCRM(), facts.Composition(["concentration"], seuils={"concentration_top5_pct": 10})
+    )
+    laxiste = await facts.build_dg_facts(
+        FauxCRM(), facts.Composition(["concentration"], seuils={"concentration_top5_pct": 99})
+    )
+    assert "seuil de vigilance 10%" in strict["bullets"][0]
+    assert "seuil de vigilance 99%" in laxiste["bullets"][0]
+    assert strict["facts"]["concentration_seuil_pct"] == 10
+
+
+@pytest.mark.asyncio
+async def test_seuil_absent_retombe_sur_le_catalogue():
+    """Une composition sans seuils reproduit exactement les valeurs d'avant."""
+    res = await facts.build_dg_facts(FauxCRM(), facts.Composition(["taux_materialisation"]))
+    assert res["facts"]["seuil_materialisation_pct"] == 80
+
+
+def test_taux_de_marge_calcule_sur_les_totaux():
+    """Jamais la moyenne des pourcentages.
+
+    `perc_marge_*_moyen` est un AVG() non pondéré de pourcentages par dossier :
+    91 dossiers à dénominateur minuscule y tiraient la moyenne provisoire à
+    -745 %, et le briefing affichait « marge provisoire moyenne -745,31 % ».
+    Le taux se recalcule sur les totaux, qui ne peuvent pas diverger ainsi.
+    """
+    margins = {
+        "ca_provisoire_total": 1_000_000_000, "marge_provisoire_total": 200_000_000,
+        "ca_definitif_total": 800_000_000, "marge_definitive_total": 240_000_000,
+        "perc_marge_provisoire_moyen": -745.31, "perc_marge_definitive_moyen": -413.6,
+    }
+    assert facts._taux_marge(margins, "provisoire") == 20.0
+    assert facts._taux_marge(margins, "definitif") == 30.0
+
+
+def test_taux_de_marge_suit_le_nom_reel_des_colonnes():
+    """`get_margin_stats` n'accorde pas ses clés symétriquement :
+    `ca_definitif_total` mais `marge_definitive_total`. Composer les noms par
+    interpolation rendait 0,0 % en silence — sans lever, sans avertir."""
+    assert facts._taux_marge(
+        {"ca_definitif_total": 100, "marge_definitive_total": 45}, "definitif"
+    ) == 45.0
+
+
+def test_taux_de_marge_sans_ca_ne_rend_pas_zero():
+    """Aucun CA constaté n'est pas une marge nulle : la puce doit pouvoir dire
+    « non mesurable » plutôt qu'afficher 0 %."""
+    assert facts._taux_marge(
+        {"ca_definitif_total": 0, "marge_definitive_total": 0}, "definitif"
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_puce_marge_do_nutilise_pas_la_moyenne_de_pourcentages():
+    res = await facts.build_dir_operations_facts(FauxCRM(), facts.Composition(["volume_marges"]))
+    puce = res["bullets"][0]
+    # 2 000 / 10 000 et 3 000 / 9 000 sur les totaux du faux CRM.
+    assert "20.0%" in puce and "33.3%" in puce
+    assert res["facts"]["marge_provisoire_moyenne_pct"] == 20.0
+
+
+@pytest.mark.asyncio
+async def test_mouvements_sans_rien_le_dit_au_lieu_de_se_taire(monkeypatch):
+    """Une puce absente se lit comme une donnée manquante ; une journée calme
+    est une information et doit s'écrire."""
+    async def _rien(*a, **k):
+        return {"depuis": "2026-08-20", "jusqu_a": "2026-08-27", "total_evenements": 0,
+                "commandes_entrees": {"nb": 0, "montant_xof": 0, "top": []},
+                "factures_emises": {"nb": 0, "montant_xof": 0, "top": []},
+                "factures_reglees": {"nb": 0, "montant_xof": 0, "top": []},
+                "achats_engages": {"nb": 0, "montant_xof": 0, "top": []},
+                "opportunites_retouchees": {"nb": 0, "montant_xof": 0, "top": []},
+                "changements_etape": {"mesurable": False, "raison": "pas de snapshot"}}
+    monkeypatch.setattr(facts.evenements, "mouvements", _rien)
+
+    res = await facts.build_dir_commercial_facts(
+        FauxCRM(), facts.Composition(["mouvements_recents"])
+    )
+    assert len(res["bullets"]) == 1
+    assert "Aucun mouvement" in res["bullets"][0]
+
+
+@pytest.mark.asyncio
+async def test_toute_categorie_comptee_peut_se_dire(monkeypatch):
+    """Une catégorie qui entre dans `total_evenements` sans jamais s'afficher
+    produit une puce vide (« Depuis le 20/08 : . ») — le défaut exact rencontré
+    sur les achats engagés et les retouches d'opportunité."""
+    for categorie in ("commandes_entrees", "factures_emises", "factures_reglees",
+                      "achats_engages", "opportunites_retouchees"):
+        vide = {"nb": 0, "montant_xof": 0, "top": []}
+        mvt = {"depuis": "2026-08-20", "jusqu_a": "2026-08-27", "total_evenements": 1,
+               "changements_etape": {"mesurable": True, "nb": 0, "top": []},
+               **{c: dict(vide) for c in ("commandes_entrees", "factures_emises",
+                                          "factures_reglees", "achats_engages",
+                                          "opportunites_retouchees")}}
+        mvt[categorie] = {"nb": 1, "montant_xof": 5_000_000,
+                          "top": [{"ref": "X", "tiers": "CIE", "montant_xof": 5_000_000,
+                                   "date": "2026-08-21", "opportunite": "X", "client": "CIE",
+                                   "revenu_attendu_xof": 5_000_000, "stade": "1"}]}
+
+        async def _un(*a, _m=mvt, **k):
+            return _m
+        monkeypatch.setattr(facts.evenements, "mouvements", _un)
+
+        res = await facts.build_dir_commercial_facts(
+            FauxCRM(), facts.Composition(["mouvements_recents"])
+        )
+        puce = res["bullets"][0]
+        assert not puce.endswith(" : ."), f"puce vide pour {categorie} : {puce!r}"
+
+
+@pytest.mark.asyncio
+async def test_hygiene_pipe_publie_les_deux_tas():
+    """Le nombre « à relancer » et le stock « à assainir » vont ensemble : le
+    premier seul laisserait croire que le pipeline publié ailleurs est sincère."""
+    res = await facts.build_dir_commercial_facts(
+        FauxCRM(), facts.Composition(["hygiene_pipe"])
+    )
+    puce = res["bullets"][0]
+    assert "3 affaire(s)" in puce
+    assert "3015" in puce and "échéance déjà dépassée" in puce
+    assert res["facts"]["hygiene_a_assainir_nb"] == 3015
+
+
+def test_doublure_balance_suit_la_vraie_structure(_stub_sources_evolutives):
+    """Une doublure qui dérive de la fonction qu'elle remplace ne teste plus
+    rien : elle fait passer les tests pendant que la vraie puce lève un
+    KeyError en production — le défaut exact rencontré au passage de
+    `contentieux` hors des tranches.
+
+    On exécute la VRAIE fonction sur une base vide et on compare les clés :
+    comparer le texte de la source ne verrait que la doublure, l'attribut du
+    module étant déjà remplacé à ce stade.
+    """
+    import asyncio
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import StaticPool
+    from db.database import Base
+    from modules.uc_briefing import analyses
+
+    vraie = _stub_sources_evolutives["balance_agee"]
+
+    async def _reelle():
+        engine = create_async_engine(
+            "sqlite+aiosqlite://", connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        original = analyses.AsyncSessionLocal
+        analyses.AsyncSessionLocal = factory
+        try:
+            return await vraie()
+        finally:
+            analyses.AsyncSessionLocal = original
+            await engine.dispose()
+
+    reelle = asyncio.run(_reelle())
+    assert set(BALANCE_NEUTRE) == set(reelle)
+    assert set(BALANCE_NEUTRE["tranches"]) == set(reelle["tranches"])
+    assert set(BALANCE_NEUTRE["contentieux"]) == set(reelle["contentieux"])
+
+
+# ── Ordre de lecture ─────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role, builder", list(_FACTS_BUILDERS.items()))
+async def test_les_puces_sortent_dans_lordre_du_catalogue(role, builder):
+    """Le chiffre, puis l'exception, puis l'action — jamais l'ordre du code.
+
+    Sans ce verrou, la hiérarchie du briefing n'existe nulle part et c'est le
+    LLM qui, faute de mieux, choisit les cinq lignes affichées en tête de
+    cockpit : un modèle de langage décide alors chaque matin de ce que lit une
+    direction. Le test compare l'ordre obtenu à l'ordre du catalogue, bloc par
+    bloc.
+    """
+    tous = [e.id for e in CATALOGUE[role]]
+    res = await builder(FauxCRM(), facts.Composition(tous))
+    textes = res["bullets"]
+
+    # Reconstruit le rang de chaque puce en la régénérant élément par élément :
+    # une puce n'est pas étiquetée dans la sortie, mais chaque élément produit
+    # un texte reconnaissable.
+    rangs = []
+    for element in tous:
+        seul = await builder(FauxCRM(), facts.Composition([element]))
+        for texte in seul["bullets"]:
+            if texte in textes:
+                rangs.append((textes.index(texte), preferences.rang(role, element)))
+
+    ordre_obtenu = [rang for _, rang in sorted(rangs)]
+    assert ordre_obtenu == sorted(ordre_obtenu), (
+        f"les puces de « {role} » ne sortent pas dans l'ordre du catalogue"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role, builder", list(_FACTS_BUILDERS.items()))
+async def test_le_bloc_chiffre_ouvre_le_briefing(role, builder):
+    """La trame ouvre sur le chiffre et son mouvement, jamais sur une alerte."""
+    tous = [e.id for e in CATALOGUE[role]]
+    res = await builder(FauxCRM(), facts.Composition(tous))
+    premiere = res["bullets"][0]
+
+    chiffres = [e.id for e in CATALOGUE[role] if e.bloc == "chiffre"]
+    textes_chiffres = set()
+    for element in chiffres:
+        seul = await builder(FauxCRM(), facts.Composition([element]))
+        textes_chiffres.update(seul["bullets"])
+    assert premiere in textes_chiffres
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", list(CATALOGUE))
+async def test_la_couverture_ferme_le_briefing(role):
+    """La ligne des questions sans réponse est utile, jamais prioritaire sur un
+    fait : elle passe après tout sauf les compléments."""
+    builder = _FACTS_BUILDERS[role]
+    res = await builder(FauxCRM(), facts.Composition(DEFAUTS[role]))
+    assert "restent sans réponse aujourd'hui" in res["bullets"][-1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", list(CATALOGUE))
+async def test_chaque_question_de_la_trame_est_servie(role):
+    """Toute question déclarée au catalogue produit réellement une puce.
+
+    Une question qui figure dans un libellé sans qu'aucun fait ne la porte est
+    exactement le défaut que la refonte corrige — et il est invisible depuis
+    l'écran de réglages.
+    """
+    builder = _FACTS_BUILDERS[role]
+    for element in CATALOGUE[role]:
+        if not element.question:
+            continue
+        res = await builder(FauxCRM(), facts.Composition([element.id]))
+        assert res["bullets"], (
+            f"« {element.question} » ({role}, {element.id}) ne produit aucune puce"
+        )

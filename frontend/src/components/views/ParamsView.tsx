@@ -1,30 +1,17 @@
+import Link from "next/link";
+
 import { getBriefingPreferences } from "@/lib/api/briefing";
 import { getArbitrageConditions } from "@/lib/api/arbitrage";
 import { getMirrorCoverageSafe } from "@/lib/api/donnees";
 import { getMe } from "@/lib/api/me";
 import { engineFiability, ENGINES } from "@/lib/data/donnees";
+import { ALL_MODULES, moduleLabel } from "@/lib/data/modules";
 import { profileToRole, ROLE_LABELS } from "@/lib/auth/roles";
 import { formatDate } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { Note, Tag } from "@/components/ui/primitives";
 import { DebriefForm } from "@/components/views/params/DebriefForm";
 import { ConditionsArbitrage } from "@/components/views/params/ConditionsArbitrage";
-
-const VIEW_LABELS: Record<string, string> = {
-  briefing: "Briefing quotidien",
-  dashboard: "Tableau de bord",
-  forecast: "Forecast pondéré",
-  tresorerie: "Trésorerie / impayés",
-  performance: "Performance & pertes",
-  crosssell: "Montée en valeur (cross-sell)",
-  portefeuille: "Portefeuille clients",
-  couts: "Coûts & marges",
-  clients: "Clients",
-  partenaires: "Fournisseurs / partenaires",
-  arbitrage: "Arbitrages",
-};
-
-const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
 /** Vue Réglages — connectée au backend réel : identité et périmètre depuis
  * `/v1/auth/me` (matrice module × rôle appliquée côté serveur, pas un
@@ -58,7 +45,7 @@ export async function ParamsView({ profile }: { profile: ProfileKey }) {
     getArbitrageConditions(),
   ]);
   const isAdmin = me.allowed_views === null;
-  const allowed = new Set(me.allowed_views ?? ALL_VIEWS);
+  const allowed = new Set(me.allowed_views ?? ALL_MODULES);
 
   return (
     <>
@@ -95,7 +82,7 @@ export async function ParamsView({ profile }: { profile: ProfileKey }) {
               <div className="fld-s">
                 {isAdmin
                   ? "Administrateur — accès à tous les modules, sans restriction."
-                  : `${allowed.size} module(s) autorisé(s) sur ${ALL_VIEWS.length}.`}
+                  : `${allowed.size} module(s) autorisé(s) sur ${ALL_MODULES.length}.`}
               </div>
             </div>
             <span className="ro">lecture seule</span>
@@ -149,16 +136,27 @@ export async function ParamsView({ profile }: { profile: ProfileKey }) {
         <div className="pblk-h">
           <h3>Disponibilité des modules</h3>
           <p>
-            Matrice module × rôle appliquée côté serveur sur chaque endpoint (pas un simple masquage d&apos;écran) —
-            modifiable depuis l&apos;écran Administration.
+            Matrice module × rôle appliquée côté serveur sur chaque endpoint (pas un simple masquage d&apos;écran).
+            {isAdmin ? (
+              <>
+                {" "}
+                Elle se modifie depuis l&apos;écran{" "}
+                <Link className="linkish" href={`/${profile}/admin`}>
+                  Comptes
+                </Link>
+                , rôle par rôle.
+              </>
+            ) : (
+              " Elle se modifie depuis l'écran Comptes, réservé aux administrateurs."
+            )}
           </p>
         </div>
         <div className="pblk-b">
           <div className="rows">
-            {ALL_VIEWS.map((view) => (
+            {ALL_MODULES.map((view) => (
               <div className="row" key={view}>
                 <div>
-                  <div className="row-n">{VIEW_LABELS[view]}</div>
+                  <div className="row-n">{moduleLabel(view)}</div>
                 </div>
                 <Tag variant={isAdmin || allowed.has(view) ? "s" : "n"}>
                   {isAdmin || allowed.has(view) ? "disponible" : "non autorisé"}

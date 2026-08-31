@@ -89,7 +89,14 @@ class SaleOrderModel(Base):
     client_id: Mapped[str] = mapped_column(String, index=True)
     client_name: Mapped[str] = mapped_column(String(255), index=True)
     name: Mapped[str] = mapped_column(String(100), index=True)   # ex: FP/2026/12977
+    # amount = amount_total Odoo, converti en XOF : montant TTC de la commande ENTIÈRE,
+    # tous constructeurs et prestations confondus. Ne JAMAIS l'utiliser pour chiffrer un
+    # produit ou une marque : c'est le rôle de sale_order_lines (cf. SaleOrderLineModel).
     amount: Mapped[float] = mapped_column(Float, default=0.0)
+    # amount_untaxed = base HT, seule comparable à la somme des lignes (elles aussi HT).
+    # Sans elle, comparer `amount` à Σ(lignes) fait apparaître un écart de 18 % (TVA CI)
+    # qui a déjà été pris pour une erreur de synchro.
+    amount_untaxed: Mapped[float] = mapped_column(Float, default=0.0)
     currency: Mapped[str] = mapped_column(String(10), default="XOF")
     date_order: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     state: Mapped[str] = mapped_column(String(50), default="sale")  # draft/sale/done/cancel
@@ -97,6 +104,106 @@ class SaleOrderModel(Base):
     dossier_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     order_lines: Mapped[list] = mapped_column(JSON, default=list)
     invoice_ids: Mapped[list] = mapped_column(JSON, default=list)  # IDs Odoo des account.move liées (sale.order.invoice_ids)
+    # Marge portée par Odoo (champs du module sale_margin ou équivalents maison, résolus
+    # à la synchro par sondage de fields_get — cf. OdooAdapter._probe_fields). 0.0 quand
+    # l'instance Odoo ne les porte pas : distinguer « marge nulle » de « marge inconnue »
+    # se fait sur purchase_total, qui vaut 0 dans les deux cas — donc toujours croiser
+    # avec dossiers.marge_definitive pour une analyse de rentabilité sérieuse.
+    purchase_total: Mapped[float] = mapped_column(Float, default=0.0)   # « Total Achats »
+    approach_costs: Mapped[float] = mapped_column(Float, default=0.0)   # « Total Frais Approche »
+    provision: Mapped[float] = mapped_column(Float, default=0.0)        # « Provision »
+    margin_amount: Mapped[float] = mapped_column(Float, default=0.0)    # « Marge Totale »
+    margin_pct: Mapped[float] = mapped_column(Float, default=0.0)       # « Marge Global » (%)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SaleOrderLineModel(Base):
+    """Ligne de commande client, une ligne = un enregistrement (sale.order.line).
+
+    Doublon assumé de `sale_orders.order_lines` (JSON), qui reste alimenté pour les
+    consommateurs historiques. La table relationnelle existe parce que le blob JSON
+    rendait FAUX tout chiffrage par produit :
+
+    - `WHERE order_lines LIKE '%cisco%'` matche le blob ENTIER, donc remonte la
+      commande complète dès que le mot apparaît dans n'importe quelle ligne — y
+      compris une ligne de service. Mesuré sur le miroir : deux des cinq plus
+      grosses « commandes Cisco 2022 » n'avaient aucune ligne Cisco.
+    - même avec `json_each`, agréger revenait à sommer `sale_orders.amount`, soit
+      100 % de la commande imputés à un constructeur qui n'en représentait qu'une
+      part (82 % sur FP/2024/9840, 5 % sur FP/2024/10750).
+
+    Ici `SUM(subtotal_xof) WHERE …` est exact par construction, sans prorata.
+
+    `display_type` distingue les vraies lignes des titres de section et des notes
+    (27 % des lignes du miroir) : toujours filtrer `display_type IS NULL` pour un
+    agrégat de chiffre d'affaires.
+
+    `fx_status` dit ce que vaut `subtotal_xof` — cf. le champ pour le détail.
+    """
+    __tablename__ = "sale_order_lines"
+    __table_args__ = (
+        Index("ix_sale_order_lines_order", "order_id"),
+        Index("ix_sale_order_lines_product", "product_name"),
+        Index("ix_sale_order_lines_code", "product_code"),
+        Index("ix_sale_order_lines_date", "date_order"),
+    )
+
+    # id Odoo de la sale.order.line : clé STABLE d'une synchro à l'autre, ce que le
+    # blob JSON ne portait pas (aucun moyen de suivre la modification d'une ligne).
+    line_id: Mapped[str] = mapped_column(String, primary_key=True)
+    odoo_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    order_id: Mapped[str] = mapped_column(String, ForeignKey("sale_orders.order_id"))
+    # Dénormalisations volontaires : elles évitent une jointure sur sale_orders dans
+    # toutes les requêtes d'analyse produit (le cas d'usage dominant de cette table),
+    # y compris celles écrites par le LLM via executer_analyse_sql.
+    order_name: Mapped[str] = mapped_column(String(100), default="", index=True)
+    client_id: Mapped[str] = mapped_column(String, default="", index=True)
+    client_name: Mapped[str] = mapped_column(String(255), default="", index=True)
+    date_order: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    state: Mapped[str] = mapped_column(String(50), default="sale", index=True)
+    salesperson_name: Mapped[str] = mapped_column(String(255), default="")
+
+    product_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # default_code Odoo. Vide sur la quasi-totalité du catalogue actuel — c'est le
+    # verrou qui a imposé de déduire le constructeur du libellé (cf. `vendor`).
+    product_code: Mapped[str] = mapped_column(String(120), default="")
+    product_name: Mapped[str] = mapped_column(String(500), default="")
+    product_category: Mapped[str] = mapped_column(String(255), default="")
+    # Constructeur DÉDUIT du libellé par core/services/constructeurs.py, matérialisé
+    # ici plutôt que recalculé à la lecture pour deux raisons :
+    #   - un agrégat par marque devient un GROUP BY indexé, sans 32 règles à
+    #     réévaluer sur 19 644 lignes à chaque question ;
+    #   - c'est la colonne que le text-to-SQL peut filtrer (`WHERE vendor='fortinet'`)
+    #     au lieu d'improviser un LIKE. Un `LIKE '%fortinet%'` ne voit que 18 % du
+    #     chiffre Fortinet réel : les renouvellements FC-10-* n'écrivent jamais la
+    #     marque. C'est l'erreur que cette colonne existe pour rendre impossible.
+    # "" = le référentiel a tourné sans pouvoir trancher (prestation, frais, libellé
+    # purement fonctionnel). JAMAIS une marque par défaut : à exclure de toute part
+    # de marché et à publier comme taux de couverture.
+    vendor: Mapped[str] = mapped_column(String(60), default="", index=True)
+    # NULL = vraie ligne de produit. 'line_section' / 'line_note' = mise en forme du
+    # devis, à exclure de tout agrégat.
+    display_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+
+    qty: Mapped[float] = mapped_column(Float, default=0.0)
+    qty_delivered: Mapped[float] = mapped_column(Float, default=0.0)
+    qty_invoiced: Mapped[float] = mapped_column(Float, default=0.0)
+    # Montants HT convertis en XOF (price_subtotal / price_unit × taux inverse).
+    unit_price_xof: Mapped[float] = mapped_column(Float, default=0.0)
+    subtotal_xof: Mapped[float] = mapped_column(Float, default=0.0)
+    # Valeurs brutes dans la devise de la commande, conservées pour l'audit : sans
+    # elles, impossible de rejouer une conversion ni de repérer un taux aberrant.
+    unit_price_src: Mapped[float] = mapped_column(Float, default=0.0)
+    subtotal_src: Mapped[float] = mapped_column(Float, default=0.0)
+    currency_src: Mapped[str] = mapped_column(String(10), default="XOF")
+    # 'exact'   : taux Odoo appliqué (ou commande déjà en XOF) → agrégeable sans réserve.
+    # 'derived' : taux DÉDUIT de la commande (amount_total / Σ lignes) lors du backfill
+    #             local, faute de taux hors ligne. Σ(subtotal_xof) retombe alors sur le
+    #             TTC de la commande, soit jusqu'à +18 % pour une commande taxée. Corrigé
+    #             en 'exact' à la première synchro Odoo qui repasse sur la commande.
+    fx_status: Mapped[str] = mapped_column(String(10), default="exact", index=True)
+    # Coût d'achat de la ligne (sale_margin), 0.0 si l'instance ne le porte pas.
+    purchase_price_xof: Mapped[float] = mapped_column(Float, default=0.0)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -195,6 +302,45 @@ class ModulePermissionModel(Base):
     role: Mapped[str] = mapped_column(String(50))
     allowed: Mapped[bool] = mapped_column(Boolean)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AdminAuditModel(Base):
+    """Journal des actions d'administration des comptes et des droits.
+
+    Les endpoints admin d'`api/v1/auth.py` ne laissaient qu'un `logger.info` :
+    la trace vivait dans les logs du serveur, illisible depuis l'application et
+    perdue à chaque rotation. Une désactivation ou une suppression de compte
+    devait pouvoir se relire : qui, quand, sur qui, et quoi exactement.
+
+    `details` porte le DELTA de l'action, pas l'état complet : pour un PATCH, les
+    seuls champs effectivement modifiés, avec leur ancienne et leur nouvelle
+    valeur. Un mot de passe changé y figure comme un booléen — jamais la valeur,
+    même hachée.
+
+    Table en append seul : aucun endpoint ne la modifie ni ne la purge. Les
+    lignes survivent à la suppression du compte visé (`target_email` est une
+    copie, pas une clé étrangère) — c'est justement la suppression qu'il faut
+    pouvoir relire.
+    """
+    __tablename__ = "admin_audit"
+    __table_args__ = (
+        # Lecture unique du journal : les N dernières lignes, éventuellement
+        # filtrées sur un compte visé.
+        Index("ix_admin_audit_at", "at"),
+        Index("ix_admin_audit_target", "target_email", "at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Auteur de l'action — email copié, pas un id : le journal doit rester
+    # lisible même si le compte de l'auteur est supprimé plus tard.
+    actor_email: Mapped[str] = mapped_column(String(255), default="")
+    # user.create | user.update | user.delete | permission.update | permission.reset
+    action: Mapped[str] = mapped_column(String(50))
+    # Compte visé (vide pour les actions sur la matrice de droits).
+    target_email: Mapped[str] = mapped_column(String(255), default="")
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class ConversationModel(Base):
@@ -706,6 +852,77 @@ class BacklogSnapshotModel(Base):
     reste_a_encaisser: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class IndicatorSnapshotModel(Base):
+    """Valeur d'UN indicateur à UNE date — le socle du « delta plutôt que l'état ».
+
+    Distincte de PipelineSnapshotModel / BacklogSnapshotModel, qui historisent des
+    OBJETS (une ligne par opportunité, une ligne par dossier). Historiser des objets
+    ne suffit pas à dire « 1,2 Md (+85 M vs hier) » : il faudrait rejouer chaque nuit
+    l'agrégation de tous les rôles sur tout l'historique. Ici une ligne porte une
+    valeur déjà agrégée, et le delta est une soustraction.
+
+    `nature` commande ce que le backfill peut faire, et c'est la distinction
+    structurante de tout ce module :
+      - 'flux'  : cumul de faits DATÉS (commandes prises, factures émises,
+                  encaissements). La valeur au 12/06 est recalculable aujourd'hui,
+                  puisque `date_order` / `invoice_date` / `payment_date` portent la
+                  date. L'historique est donc disponible IMMÉDIATEMENT, sans
+                  attendre trente nuits de snapshots.
+      - 'stock' : état à un instant (pipe ouvert, backlog, impayés). Rien dans le
+                  miroir ne dit ce qu'il valait mardi — sauf reconstitution depuis
+                  les snapshots d'objets ou depuis les dates de règlement.
+
+    `origine` dit au lecteur ce que vaut la ligne, et interdit de faire passer une
+    reconstitution pour une mesure :
+      - 'mesure'      : calculée le jour dit, sur l'état du jour.
+      - 'reconstitue' : recalculée après coup. Exacte pour un flux ; approchée pour
+                        un stock (cf. `indicateurs.py` pour l'hypothèse de chaque
+                        reconstitution).
+
+    Une valeur absente n'est JAMAIS un zéro : `indicateurs.delta` renvoie
+    `disponible=False` plutôt que d'inventer une variation contre du vide.
+    """
+    __tablename__ = "indicator_snapshots"
+    __table_args__ = (
+        Index("ix_indicator_snapshots_date_cle", "snapshot_date", "cle", unique=True),
+        Index("ix_indicator_snapshots_cle_date", "cle", "snapshot_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, index=True)
+    cle: Mapped[str] = mapped_column(String(60), index=True)
+    valeur: Mapped[float] = mapped_column(Float, default=0.0)
+    unite: Mapped[str] = mapped_column(String(10), default="xof")   # xof / nb / pct / jours
+    nature: Mapped[str] = mapped_column(String(10), default="flux")  # flux / stock
+    origine: Mapped[str] = mapped_column(String(15), default="mesure")  # mesure / reconstitue
+    calcule_le: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BriefingSeuilModel(Base):
+    """Seuil d'alerte, par rôle et par clé — ce qui permet au même moteur de faits
+    de servir quatre briefings différents.
+
+    Les seuils vivaient en dur dans `facts.py` (50 % de concentration, 80 % de
+    matérialisation) : le DG et le DAF ne peuvent pas s'alerter au même endroit sur
+    la même donnée, et personne ne pouvait déplacer un seuil sans un déploiement.
+
+    Portée par RÔLE et non par utilisateur, exactement comme BriefingPreferenceModel :
+    le briefing lui-même est généré par rôle, un seuil par personne imposerait autant
+    de générations que de comptes. `updated_by` est la contrepartie obligatoire du
+    réglage partagé.
+
+    Table vide = les défauts du code s'appliquent (cf. `uc_briefing.seuils.DEFAUTS`),
+    même doctrine que ModulePermissionModel : rien à migrer, rien à initialiser.
+    """
+    __tablename__ = "briefing_seuils"
+
+    role: Mapped[str] = mapped_column(String(50), primary_key=True)
+    cle: Mapped[str] = mapped_column(String(60), primary_key=True)
+    valeur: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_by: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class DecisionModel(Base):
     """Registre de décisions du module Arbitrages (UC Arbitrage).
 
@@ -1110,3 +1327,43 @@ class StrategicAxisMappingModel(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_by: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class DataQualityAlertModel(Base):
+    """Anomalie détectée sur le miroir Odoo — prix aberrant, doublon, conversion douteuse.
+
+    Existe parce qu'une seule saisie erronée a suffi à inverser un classement de CA
+    sur huit ans : FP/2022/6658 porte 102 licences Cisco ISE VM à 149 707 380 XOF
+    l'unité, soit 24 fois le prix de la même référence en 2021, et pesait à elle
+    seule 90 % du « chiffre Cisco » historique. Rien dans la chaîne ne le signalait.
+
+    Ces alertes sont INFORMATIVES et ne filtrent jamais les données : c'est au
+    commercial de trancher entre erreur de saisie et affaire réellement atypique.
+    Un agrégat qui écarterait silencieusement les valeurs extrêmes serait un
+    mensonge d'un autre genre.
+
+    `alert_key` est déterministe (type + sujet) afin que la même anomalie soit
+    reconnue d'un passage à l'autre et garde sa date de première détection —
+    même raison que CommercialAlertModel, dont cette table reprend le patron.
+    """
+    __tablename__ = "data_quality_alerts"
+    __table_args__ = (Index("ix_data_quality_alerts_key", "alert_key", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alert_key: Mapped[str] = mapped_column(String(255))
+    # 'prix_aberrant' | 'commande_doublon' | 'fx_derive' | 'produit_sans_code'
+    alert_type: Mapped[str] = mapped_column(String(40), default="")
+    severity: Mapped[str] = mapped_column(String(20), default="warning")
+    table_name: Mapped[str] = mapped_column(String(60), default="")
+    subject_ref: Mapped[str] = mapped_column(String(255), default="")   # ex: FP/2022/6658
+    subject_label: Mapped[str] = mapped_column(String(500), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    # Chiffres qui ont motivé l'alerte (valeur observée, médiane, ratio…), pour que
+    # l'écran d'admin puisse justifier l'alerte sans relancer le calcul.
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+    montant_xof: Mapped[float] = mapped_column(Float, default=0.0)
+    detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dismissed_by: Mapped[str] = mapped_column(String(255), default="")
+    dismissed_reason: Mapped[str] = mapped_column(String(500), default="")

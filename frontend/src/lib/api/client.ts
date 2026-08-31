@@ -27,15 +27,36 @@ export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promis
   const token = await getSessionToken();
   const { allowForbidden, ...rest } = init;
 
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    ...rest,
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(rest.body ? { "Content-Type": "application/json" } : {}),
-      ...rest.headers,
-    },
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}${path}`, {
+      ...rest,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(rest.body ? { "Content-Type": "application/json" } : {}),
+        ...rest.headers,
+      },
+      cache: "no-store",
+    });
+  } catch (cause) {
+    // Panne au niveau connexion, AVANT toute réponse HTTP : backend éteint, ou
+    // fenêtre de redémarrage d'uvicorn --reload pendant l'édition d'un fichier
+    // backend. `fetch` lève alors un TypeError « fetch failed » dont le message
+    // ne dit NI l'URL visée NI la raison, et qui fait tomber tout le rendu
+    // serveur sur « A server error occurred » : illisible, et impossible à
+    // distinguer d'un bug applicatif. On le retraduit en ApiError 503 nommant la
+    // cible, pour que le message dise quoi relancer.
+    //
+    // Pas de retry ici : `apiFetch` sert aussi les mutations (POST/PATCH/DELETE
+    // des Server Actions), et rejouer une écriture dont on ignore si elle a été
+    // reçue côté serveur est pire que l'échec.
+    const detail = cause instanceof Error && cause.cause instanceof Error
+      ? cause.cause.message
+      : cause instanceof Error
+        ? cause.message
+        : String(cause);
+    throw new ApiError(503, `Backend injoignable sur ${BACKEND_URL} (${path}) : ${detail}`);
+  }
 
   if (res.status === 403 && allowForbidden) {
     return null as T;

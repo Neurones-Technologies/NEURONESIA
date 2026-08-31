@@ -14,9 +14,10 @@ import { ApiError, apiFetch } from "@/lib/api/client";
  * `ArbitrageActionState`, déclaré hors de ce module : un fichier `"use server"`
  * ne peut exporter que des fonctions asynchrones).
  *
- * Le contrôle de mandat reste celui du serveur (`router._require_mandate`) :
- * ce qui est fait ici ne dispense de rien, cela ne fait qu'éviter d'envoyer une
- * requête dont on sait déjà qu'elle sera refusée. */
+ * Le droit de trancher reste contrôlé par le serveur
+ * (`router._require_decision_authority` : Direction générale, ou admin) : ce qui
+ * est fait ici ne dispense de rien, cela ne fait qu'éviter d'envoyer une requête
+ * dont on sait déjà qu'elle sera refusée. */
 
 function ok(message: string): ArbitrageActionState {
   return { status: "ok", message, at: Date.now() };
@@ -27,12 +28,12 @@ function ko(message: string, field?: string): ArbitrageActionState {
 }
 
 /** Traduit une panne d'appel en phrase affichable. Le `detail` du backend est
- * déjà rédigé pour l'utilisateur (cf. `router._require_mandate`) : on le
- * préfère à un message générique. */
+ * déjà rédigé pour l'utilisateur (cf. `router._require_decision_authority`) : on
+ * le préfère à un message générique. */
 function fromError(error: unknown, fallback: string): ArbitrageActionState {
   if (error instanceof ApiError) {
     if (error.status === 403) {
-      return ko(error.detail || "Cette action relève d'un autre mandat que le vôtre.");
+      return ko(error.detail || "Cette action est réservée à la Direction générale.");
     }
     return ko(error.detail || fallback);
   }

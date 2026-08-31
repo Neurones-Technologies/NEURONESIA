@@ -305,7 +305,11 @@ class LocalCRMAdapter(CRMRepository):
             return [
                 {
                     "ref": o.name,
-                    "client": c.name if c else "—",
+                    # `sale_orders.client_name` est dénormalisé et renseigné même
+                    # quand le tiers n'existe pas dans `clients` : sans ce repli,
+                    # la puce « dernière commande entrée » affiche un tiret à la
+                    # place du client, ce qui la rend inutilisable.
+                    "client": (c.name if c else None) or o.client_name or "—",
                     "montant_xof": o.amount,
                     "date": o.date_order.strftime("%d/%m/%Y") if o.date_order else "—",
                     "état": o.state,
@@ -763,9 +767,31 @@ class LocalCRMAdapter(CRMRepository):
             return None
 
     async def get_pipeline_stats(self) -> dict:
+        """Pipeline OUVERT — affaires ni gagnées, ni perdues, ni annulées.
+
+        Le filtre d'étape a été ajouté après coup : la version d'origine sommait
+        les 9 475 opportunités de la table, gagnées et perdues comprises, et
+        annonçait 410 693 M FCFA de « pipeline ouvert » là où les affaires
+        réellement ouvertes en pèsent 131 936 — un facteur 37. Le champ `stage`
+        vient d'Odoo en texte libre et mélange trois nomenclatures (« 6-Gagné » /
+        « Won » / « Gagné »), d'où la reconnaissance par mot-clé.
+
+        `par_stade` reste volontairement NON filtré : c'est une ventilation par
+        étape, où voir le poids du gagné et du perdu est légitime.
+
+        ATTENTION — `ca_potentiel_brut_xof` inclut les affaires dont la date de
+        clôture est déjà passée, soit 82 % du montant (anomalie A4). Pour la part
+        encore dans les temps, lire `uc_briefing.indicateurs` (`pipe_actif_brut`),
+        qui porte la même donnée coupée sur l'échéance.
+        """
         from sqlalchemy import text
+        from modules.uc_briefing.indicateurs import _PIPE_OUVERT
         async with AsyncSessionLocal() as session:
-            sql_total = "SELECT COUNT(*), SUM(expected_revenue), SUM(expected_revenue * probability / 100) FROM opportunities"
+            sql_total = (
+                "SELECT COUNT(*), SUM(expected_revenue), "
+                "SUM(expected_revenue * probability / 100) "
+                f"FROM opportunities WHERE {_PIPE_OUVERT}"
+            )
             r = (await session.execute(text(sql_total))).fetchone()
             total_nb = r[0] or 0
             total_brut = round(r[1] or 0)
@@ -1075,14 +1101,19 @@ class LocalCRMAdapter(CRMRepository):
     async def get_cross_sell_opportunities(self, product_anchor: str, product_target: str | None = None, limit: int = 20) -> list[dict]:
         from sqlalchemy import text
         # Clients ayant acheté product_anchor
+        # Lecture sur sale_order_lines et non sur le JSON `sale_orders.order_lines` :
+        # une ligne = un enregistrement, donc le LIKE porte sur le libellé du PRODUIT
+        # et pas sur le blob de la commande entière. `display_type IS NULL` écarte
+        # les titres de section et les notes du devis (27 % des lignes du miroir).
         sql_anchor = """
-            SELECT DISTINCT o.client_id, o.client_name,
-                   MAX(o.date_order) as last_anchor_purchase,
-                   COUNT(*) as nb_achats_anchor
-            FROM sale_orders o, json_each(o.order_lines) j
-            WHERE lower(json_extract(j.value, '$.product')) LIKE lower(:anchor)
-              AND o.state NOT IN ('cancel', 'draft')
-            GROUP BY o.client_id, o.client_name
+            SELECT sol.client_id, sol.client_name,
+                   MAX(sol.date_order) as last_anchor_purchase,
+                   COUNT(DISTINCT sol.order_id) as nb_achats_anchor
+            FROM sale_order_lines sol
+            WHERE lower(sol.product_name) LIKE lower(:anchor)
+              AND sol.display_type IS NULL
+              AND sol.state NOT IN ('cancel', 'draft')
+            GROUP BY sol.client_id, sol.client_name
         """
         async with AsyncSessionLocal() as session:
             anchor_rows = (await session.execute(text(sql_anchor), {"anchor": f"%{product_anchor}%"})).fetchall()
@@ -1094,9 +1125,10 @@ class LocalCRMAdapter(CRMRepository):
             if product_target:
                 # Clients qui ont AUSSI acheté product_target
                 sql_target = """
-                    SELECT DISTINCT o.client_id FROM sale_orders o, json_each(o.order_lines) j
-                    WHERE lower(json_extract(j.value, '$.product')) LIKE lower(:target)
-                      AND o.state NOT IN ('cancel', 'draft')
+                    SELECT DISTINCT sol.client_id FROM sale_order_lines sol
+                    WHERE lower(sol.product_name) LIKE lower(:target)
+                      AND sol.display_type IS NULL
+                      AND sol.state NOT IN ('cancel', 'draft')
                 """
                 target_rows = (await session.execute(text(sql_target), {"target": f"%{product_target}%"})).fetchall()
                 already_bought = {r[0] for r in target_rows}
@@ -1121,21 +1153,29 @@ class LocalCRMAdapter(CRMRepository):
     async def search_orders_by_product(self, product_query: str, year: int | None = None) -> list[dict]:
         import json as _json
         from sqlalchemy import text
+        # `montant_xof` est le total de la COMMANDE, `montant_lignes_xof` la part
+        # réellement portée par les lignes qui matchent. Les deux sont renvoyés
+        # parce que les confondre est précisément l'erreur à éviter : sur
+        # FP/2024/10750, une recherche « cisco » remonte une commande de 422 M
+        # dont 22 M seulement sont du Cisco.
         sql = """
-            SELECT DISTINCT o.name, o.client_name, o.amount, o.date_order, o.state,
+            SELECT o.name, o.client_name, o.amount, o.date_order, o.state,
+                   SUM(sol.subtotal_xof) as matched_amount,
                    json_group_array(json_object(
-                       'product', json_extract(j.value, '$.product'),
-                       'qty', json_extract(j.value, '$.qty'),
-                       'subtotal', json_extract(j.value, '$.subtotal')
+                       'product', sol.product_name,
+                       'qty', sol.qty,
+                       'subtotal_xof', sol.subtotal_xof
                    )) as matching_lines
-            FROM sale_orders o, json_each(o.order_lines) j
-            WHERE lower(json_extract(j.value, '$.product')) LIKE lower(:query)
+            FROM sale_order_lines sol
+            JOIN sale_orders o ON o.order_id = sol.order_id
+            WHERE lower(sol.product_name) LIKE lower(:query)
+              AND sol.display_type IS NULL
         """
         params: dict = {"query": f"%{product_query}%"}
         if year:
             sql += " AND strftime('%Y', o.date_order) = :year"
             params["year"] = str(year)
-        sql += " GROUP BY o.name ORDER BY o.date_order DESC LIMIT 50"
+        sql += " GROUP BY o.order_id ORDER BY o.date_order DESC LIMIT 50"
         async with AsyncSessionLocal() as session:
             result = await session.execute(text(sql), params)
             rows = result.fetchall()
@@ -1146,25 +1186,33 @@ class LocalCRMAdapter(CRMRepository):
                 "montant_xof": r[2],
                 "date": r[3],
                 "état": r[4],
-                "lignes_correspondantes": _json.loads(r[5]) if r[5] else [],
+                # Part du produit recherché dans la commande — à utiliser pour tout
+                # chiffrage par produit ou constructeur, jamais `montant_xof`.
+                "montant_lignes_xof": round(r[5] or 0),
+                "part_lignes_pct": round((r[5] or 0) / r[2] * 100, 1) if r[2] else None,
+                "lignes_correspondantes": _json.loads(r[6]) if r[6] else [],
             }
             for r in rows
         ]
 
     async def get_revenue_by_product(self, year: int | None = None, limit: int = 30) -> list[dict]:
         from sqlalchemy import text
+        # `state NOT IN ('cancel','draft')` : absent de la version JSON de cette
+        # requête, ce qui faisait entrer des devis annulés dans le CA par produit.
         sql = """
-            SELECT json_extract(j.value, '$.product') as product,
-                   SUM(CAST(json_extract(j.value, '$.subtotal') AS REAL)) as total_revenue,
-                   COUNT(DISTINCT o.order_id) as order_count,
-                   SUM(CAST(json_extract(j.value, '$.qty') AS REAL)) as qty_total
-            FROM sale_orders o, json_each(o.order_lines) j
-            WHERE json_extract(j.value, '$.product') IS NOT NULL
-              AND json_extract(j.value, '$.subtotal') > 0
+            SELECT sol.product_name as product,
+                   SUM(sol.subtotal_xof) as total_revenue,
+                   COUNT(DISTINCT sol.order_id) as order_count,
+                   SUM(sol.qty) as qty_total
+            FROM sale_order_lines sol
+            WHERE sol.product_name != ''
+              AND sol.subtotal_xof > 0
+              AND sol.display_type IS NULL
+              AND sol.state NOT IN ('cancel', 'draft')
         """
         params: dict = {}
         if year:
-            sql += " AND strftime('%Y', o.date_order) = :year"
+            sql += " AND strftime('%Y', sol.date_order) = :year"
             params["year"] = str(year)
         sql += " GROUP BY product ORDER BY total_revenue DESC LIMIT :limit"
         params["limit"] = limit
