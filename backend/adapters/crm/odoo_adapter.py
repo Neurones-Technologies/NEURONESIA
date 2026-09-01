@@ -25,6 +25,8 @@ class OdooAdapter(CRMRepository):
         self._uid: Optional[int] = None
         # Client persistant : les cookies de session sont conservés entre les appels
         self._client = httpx.AsyncClient(timeout=60, follow_redirects=True)
+        # {model: {noms de champs}} — cf. available_fields()
+        self._fields_cache: dict[str, set[str]] = {}
 
     async def _authenticate(self) -> int:
         if self._uid:
@@ -72,6 +74,39 @@ class OdooAdapter(CRMRepository):
     async def _count(self, model: str, domain: list) -> int:
         result = await self._call(model, "search_count", [domain])
         return result if isinstance(result, int) else 0
+
+    async def available_fields(self, model: str) -> set[str]:
+        """Noms des champs réellement portés par `model`, mis en cache par process.
+
+        Les champs de marge et de coût d'achat (« Total Achats », « Marge Totale »)
+        viennent du module sale_margin ou d'un développement maison : leur nom
+        technique varie d'une instance à l'autre et un `search_read` sur un champ
+        absent fait échouer l'appel ENTIER. Demander la liste une fois vaut mieux
+        qu'empiler les try/except par champ.
+
+        Échec du sondage → set vide, et l'appelant retombe sur ses champs
+        standard : mieux vaut une synchro sans marge qu'une synchro cassée.
+        """
+        if model in self._fields_cache:
+            return self._fields_cache[model]
+        try:
+            result = await self._call(model, "fields_get", [[], ["type"]])
+            names = set(result.keys()) if isinstance(result, dict) else set()
+        except Exception as e:
+            logger.warning("fields_get impossible sur %s : %s", model, e)
+            names = set()
+        self._fields_cache[model] = names
+        return names
+
+    async def _pick_field(self, model: str, candidates: tuple[str, ...]) -> str | None:
+        """Premier champ de `candidates` existant sur `model`, sinon None."""
+        available = await self.available_fields(model)
+        if not available:
+            return None
+        for name in candidates:
+            if name in available:
+                return name
+        return None
 
     # ─── Clients ────────────────────────────────────────────────────────────
 
@@ -303,13 +338,18 @@ class OdooAdapter(CRMRepository):
         if not records:
             return None
         r = records[0]
-        lines = await self.get_order_lines_by_ids([r["id"]])
+        currency = (r.get("currency_id") or [None, "XOF"])[1]
+        # Pas de taux ici : cette lecture sert l'AFFICHAGE d'un bon de commande, où
+        # montant et lignes doivent rester dans la devise du document. Passer la
+        # devise sans les taux fait marquer les lignes `fx_status='unknown'`, ce qui
+        # est exact — elles ne sont pas en XOF et ne prétendent pas l'être.
+        lines = await self.get_order_lines_by_ids([r["id"]], currency_by_order={r["id"]: currency})
         invoices = await self._get_invoices_by_ids(r.get("invoice_ids") or [])
         return {
             "name": r["name"],
             "client_name": (r.get("partner_id") or [None, "—"])[1],
             "amount": float(r.get("amount_total", 0)),
-            "currency": (r.get("currency_id") or [None, "XOF"])[1],
+            "currency": currency,
             "date_order": r.get("date_order", "")[:10],
             "state": r.get("state", ""),
             "salesperson": (r.get("user_id") or [None, ""])[1] or "",
@@ -421,21 +461,50 @@ class OdooAdapter(CRMRepository):
         logger.info("Dates de paiement fournisseurs récupérées : %d factures payées", len(result))
         return result
 
-    async def get_order_lines_by_ids(self, order_ids: list[int]) -> dict[int, list]:
-        """Retourne {odoo_order_id: [{product, product_code, product_category, qty, subtotal, unit_price}]}."""
+    # Champs optionnels de sale.order.line, demandés seulement s'ils existent sur
+    # l'instance (cf. available_fields) : `display_type` est standard depuis Odoo 12
+    # mais absent des forks anciens, `purchase_price` vient du module sale_margin.
+    _LINE_OPTIONAL_FIELDS = ("display_type", "qty_delivered", "qty_invoiced", "purchase_price")
+
+    async def get_order_lines_by_ids(
+        self,
+        order_ids: list[int],
+        currency_by_order: dict[int, str] | None = None,
+        rates: dict[str, float] | None = None,
+    ) -> dict[int, list]:
+        """Lignes de commande d'une liste de commandes, montants convertis en XOF.
+
+        `currency_by_order` / `rates` : devise de chaque commande et taux inverse
+        (1 devise = X XOF), tels que fournis par le job de synchro. Sans eux, les
+        montants sont renvoyés tels quels et marqués `fx_status='unknown'`.
+
+        La conversion est faite ICI et pas côté appelant parce que c'est le seul
+        endroit qui voit la ligne : `sale_orders.amount` était converti alors que
+        les lignes ne l'étaient pas, si bien que 153 commandes du miroir portaient
+        un total en XOF et des lignes en USD ou en EUR — un facteur 600 sur toute
+        agrégation par produit, sous un champ nommé `subtotal_xof`.
+
+        `subtotal` / `unit_price` restent les clés attendues par les consommateurs
+        historiques du JSON `sale_orders.order_lines`, mais contiennent désormais
+        des XOF. Les valeurs d'origine sont conservées sous `*_src` pour l'audit.
+        """
         if not order_ids:
             return {}
-        # Tente d'abord avec price_unit (disponible en standard Odoo)
+        rates = rates or {}
+        currency_by_order = currency_by_order or {}
+        base_fields = ["order_id", "product_id", "name", "product_uom_qty",
+                       "price_subtotal", "price_unit"]
+        available = await self.available_fields("sale.order.line")
+        extra = [f for f in self._LINE_OPTIONAL_FIELDS if f in available] if available else []
         try:
             lines = await self._call(
                 "sale.order.line", "search_read",
                 [[["order_id", "in", order_ids]]],
-                {"fields": ["order_id", "product_id", "name", "product_uom_qty",
-                            "price_subtotal", "price_unit"],
-                 "limit": 10000},
+                {"fields": base_fields + extra, "limit": 10000},
             )
         except Exception:
-            # Fallback minimal sans price_unit
+            # Fallback minimal : un champ refusé fait échouer tout le search_read,
+            # or une synchro sans prix unitaire vaut mieux qu'une synchro sans lignes.
             try:
                 lines = await self._call(
                     "sale.order.line", "search_read",
@@ -481,15 +550,73 @@ class OdooAdapter(CRMRepository):
             qty = float(line.get("product_uom_qty", 0))
             subtotal = float(line.get("price_subtotal", 0))
             unit_price = float(line.get("price_unit", 0)) if "price_unit" in line else None
+            purchase_price = float(line.get("purchase_price") or 0)
+            currency = currency_by_order.get(oid) or "XOF"
+            if not currency_by_order:
+                rate, fx_status = 1.0, "unknown"
+            elif currency == "XOF":
+                rate, fx_status = 1.0, "exact"
+            else:
+                # Devise connue mais taux absent : ne rien inventer, marquer la ligne.
+                found = rates.get(currency)
+                rate, fx_status = (found, "exact") if found else (1.0, "unknown")
             result.setdefault(oid, []).append({
+                "line_odoo_id": line.get("id"),
                 "product": product_name,
                 "product_code": meta.get("code"),
                 "product_category": meta.get("category"),
+                "display_type": line.get("display_type") or None,
                 "qty": qty,
-                "subtotal": subtotal,
-                "unit_price": unit_price,
+                "qty_delivered": float(line.get("qty_delivered") or 0),
+                "qty_invoiced": float(line.get("qty_invoiced") or 0),
+                "subtotal": subtotal * rate,
+                "unit_price": (unit_price * rate) if unit_price is not None else None,
+                "purchase_price": purchase_price * rate,
+                "subtotal_src": subtotal,
+                "unit_price_src": unit_price,
+                "currency_src": currency,
+                "fx_status": fx_status,
             })
         return result
+
+    # Coût d'achat et marge de la commande, tels qu'affichés dans la vue devis
+    # (« Total Achats », « Total Frais Approche », « Provision », « Marge Totale »,
+    # « Marge Global »). Aucun nom n'est garanti : `margin`/`margin_percent` sont
+    # ceux du module standard sale_margin, les autres suivent la nomenclature
+    # maison observée sur neurones.dossier.manager (marge_definitive,
+    # perc_marge_definitive, depense_provisoire…). On prend le PREMIER candidat
+    # présent, et la colonne reste à 0.0 si aucun ne l'est.
+    _SALE_ORDER_MARGIN_CANDIDATES: dict[str, tuple[str, ...]] = {
+        "purchase_total": ("total_achats", "total_achat", "amount_achat", "amount_purchase",
+                           "total_purchase", "purchase_total", "depense_provisoire"),
+        "approach_costs": ("total_frais_approche", "frais_approche", "amount_frais_approche",
+                           "approach_cost", "total_landed_cost"),
+        "provision": ("provision", "amount_provision", "montant_provision"),
+        "margin_amount": ("marge_totale", "total_marge", "amount_marge", "marge", "margin"),
+        "margin_pct": ("marge_global", "marge_globale", "perc_marge", "perc_marge_global",
+                       "margin_percent", "margin_pct"),
+    }
+
+    async def sale_order_margin_fields(self) -> dict[str, str]:
+        """{colonne du miroir: champ Odoo retenu} pour les montants de marge.
+
+        Renvoie uniquement les entrées résolues : une clé absente signifie que
+        l'instance ne porte aucun candidat, et le miroir gardera 0.0 — « marge
+        inconnue », à ne pas lire comme « marge nulle ».
+        """
+        resolved: dict[str, str] = {}
+        for column, candidates in self._SALE_ORDER_MARGIN_CANDIDATES.items():
+            field = await self._pick_field("sale.order", candidates)
+            if field:
+                resolved[column] = field
+        if resolved:
+            logger.info("Champs de marge sale.order résolus : %s", resolved)
+        else:
+            logger.info(
+                "Aucun champ de marge trouvé sur sale.order — colonnes de marge "
+                "laissées à 0.0 (croiser avec dossiers.marge_definitive)"
+            )
+        return resolved
 
     async def get_sale_orders(self, client_id: str = None, year: int | None = None, limit: int = 100, since: datetime | None = None) -> list[dict]:  # signature matches port
         domain = [["state", "in", ["sale", "done"]]]
@@ -497,10 +624,14 @@ class OdooAdapter(CRMRepository):
             domain.append(["partner_id", "=", int(client_id)])
         if since:
             domain.append(["write_date", ">=", since.strftime("%Y-%m-%d %H:%M:%S")])
+        # amount_untaxed est standard sur sale.order ; les champs de marge sont
+        # sondés parce qu'un champ inexistant fait échouer tout le search_read.
+        margin_fields = sorted(set((await self.sale_order_margin_fields()).values()))
+        extra = ["amount_untaxed"] + margin_fields
         fields_with_dossier = ["id", "name", "partner_id", "amount_total",
-                               "currency_id", "date_order", "state", "user_id", "dossier_id", "invoice_ids"]
+                               "currency_id", "date_order", "state", "user_id", "dossier_id", "invoice_ids"] + extra
         fields_without_dossier = ["id", "name", "partner_id", "amount_total",
-                                  "currency_id", "date_order", "state", "user_id", "invoice_ids"]
+                                  "currency_id", "date_order", "state", "user_id", "invoice_ids"] + extra
         try:
             records = await self._call(
                 "sale.order", "search_read", [domain],
@@ -517,7 +648,26 @@ class OdooAdapter(CRMRepository):
                 raise
         return records
 
-    async def get_all_purchase_orders(self, limit: int = 2000, since: datetime | None = None) -> list[dict]:
+    # Taille de page des achats. Même tranche que la synchro des dossiers : 500
+    # enregistrements par aller-retour XML-RPC passent sans timeout sur cette
+    # instance, 5 000 non.
+    _PO_PAGE = 500
+
+    async def get_all_purchase_orders(self, limit: int = 0, since: datetime | None = None) -> list[dict]:
+        """Commandes d'achat confirmées, PAGINÉES jusqu'à épuisement.
+
+        `limit=0` (défaut) ramène tout. Un plafond fixe était le comportement
+        d'origine et il tronquait en silence : Odoo porte 7 487 achats confirmés,
+        l'appel en demandait 2 000, et le miroir en contenait déjà 2 134 — le
+        plafond était donc dépassé sans qu'aucune trace ne le dise. Les montants
+        d'achat du tableau de bord Budget étaient calculés sur un quart des
+        données. Un simple relèvement du plafond aurait rendu la panne muette un
+        peu plus longtemps ; la pagination la supprime.
+
+        Tri par `id asc` et non par date : avec un OFFSET, un tri sur une colonne
+        à ex æquo peut rendre deux fois la même ligne et en sauter une autre.
+        L'appelant fait des upserts par clé, l'ordre ne lui sert à rien.
+        """
         domain = [["state", "in", ["purchase", "done"]]]
         if since:
             domain.append(["write_date", ">=", since.strftime("%Y-%m-%d %H:%M:%S")])
@@ -529,23 +679,47 @@ class OdooAdapter(CRMRepository):
                                "date_order", "state", "dossier_id"]
         fields_without_dossier = ["id", "name", "partner_id", "amount_total", "currency_id",
                                   "date_order", "state"]
-        try:
-            return await self._call(
-                "purchase.order", "search_read", [domain],
-                {"fields": fields_with_dossier, "limit": limit, "order": "date_order desc"},
-            )
-        except RuntimeError as e:
-            if "dossier_id" in str(e):
-                logger.warning("Champ dossier_id absent sur purchase.order — sync sans ce champ : %s", e)
+        champs = fields_with_dossier
+
+        async def _page(offset: int, taille: int) -> list[dict]:
+            nonlocal champs
+            try:
                 return await self._call(
                     "purchase.order", "search_read", [domain],
-                    {"fields": fields_without_dossier, "limit": limit, "order": "date_order desc"},
+                    {"fields": champs, "limit": taille, "offset": offset, "order": "id asc"},
                 )
-            logger.warning("purchase.order non disponible : %s", e)
-            return []
+            except RuntimeError as e:
+                if "dossier_id" in str(e) and champs is fields_with_dossier:
+                    logger.warning("Champ dossier_id absent sur purchase.order — sync sans ce champ : %s", e)
+                    # Bascule DÉFINITIVE pour les pages suivantes : sans elle, chaque
+                    # page repayait l'échec avant de retomber sur le jeu réduit.
+                    champs = fields_without_dossier
+                    return await self._call(
+                        "purchase.order", "search_read", [domain],
+                        {"fields": champs, "limit": taille, "offset": offset, "order": "id asc"},
+                    )
+                raise
+
+        tout: list[dict] = []
+        offset = 0
+        try:
+            while True:
+                taille = self._PO_PAGE if not limit else min(self._PO_PAGE, limit - len(tout))
+                if taille <= 0:
+                    break
+                page = await _page(offset, taille)
+                tout.extend(page)
+                # Page incomplète = fin du jeu. Ne pas s'arrêter sur `len(page) == 0`
+                # seulement : cela ferait un aller-retour de plus à chaque synchro.
+                if len(page) < taille:
+                    break
+                offset += len(page)
         except Exception as e:
-            logger.warning("purchase.order non disponible : %s", e)
-            return []
+            # Une page en échec ne doit pas jeter ce qui a déjà été lu : la synchro
+            # continue sur un jeu partiel ET le dit, plutôt que de rendre une liste
+            # vide qui se lirait comme « aucun achat ».
+            logger.warning("purchase.order interrompu à l'offset %d (%d déjà lus) : %s", offset, len(tout), e)
+        return tout
 
     # ─── Fournisseurs (res.partner, supplier_rank > 0) ────────────────────────
 

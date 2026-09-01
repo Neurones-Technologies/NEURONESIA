@@ -305,7 +305,11 @@ class LocalCRMAdapter(CRMRepository):
             return [
                 {
                     "ref": o.name,
-                    "client": c.name if c else "—",
+                    # `sale_orders.client_name` est dénormalisé et renseigné même
+                    # quand le tiers n'existe pas dans `clients` : sans ce repli,
+                    # la puce « dernière commande entrée » affiche un tiret à la
+                    # place du client, ce qui la rend inutilisable.
+                    "client": (c.name if c else None) or o.client_name or "—",
                     "montant_xof": o.amount,
                     "date": o.date_order.strftime("%d/%m/%Y") if o.date_order else "—",
                     "état": o.state,
@@ -598,12 +602,35 @@ class LocalCRMAdapter(CRMRepository):
             ),
         }
 
-    async def get_invoice_collection_stats(self, client_name: str = "", year: int | None = None) -> dict:
+    async def get_invoice_collection_stats(self, client_name: str = "", year: int | None = None,
+                                           exercice: int | None = None) -> dict:
         """
         Calcule les stats de recouvrement :
         - Délai moyen entre invoice_date et due_date (délai accordé)
         - Retard moyen sur les factures impayées en souffrance
         - % payé, montant total, montant en attente
+
+        Deux bornes temporelles, qui ne font PAS la même chose :
+
+        `year` filtre la population sur la date d'ÉMISSION. C'est ce que demande
+        une question du type « les factures de 2025 » ; ce n'est pas une borne
+        d'exercice pour un DSO.
+
+        `exercice` ne filtre rien : il restreint le seul ÉCHANTILLON DE DÉLAIS aux
+        factures RÉGLÉES pendant l'année demandée. La distinction est ce qui rend
+        le chiffre juste. Borner un DSO sur l'année d'émission ne retient que les
+        factures émises ET déjà encaissées dans la même année — donc les payeurs
+        rapides, par construction : une facture de novembre réglée en 120 jours ne
+        peut pas figurer dans l'échantillon. Sur le miroir d'août 2026, l'émission
+        2026 donne 29 jours sur 12 factures, les règlements 2026 donnent 71 jours
+        sur 48 — le premier chiffre n'est pas un DSO, c'est un biais de censure.
+
+        Le délai accordé suit le même échantillon que le délai réel : l'écart entre
+        les deux (affiché par l'écran DAF) n'a de sens que sur les mêmes factures.
+
+        Les montants restent en revanche calculés sur toute la population :
+        `montant_en_attente_xof` est une créance, pas une activité de l'année, et
+        la borner masquerait les impayés les plus anciens — les seuls qui comptent.
         """
 
         async with AsyncSessionLocal() as session:
@@ -632,17 +659,29 @@ class LocalCRMAdapter(CRMRepository):
         montant_paye = sum(inv.amount for inv, _ in rows if inv.status == "paid")
         montant_en_attente = sum(inv.amount for inv, _ in rows if inv.status != "paid")
 
+        # Échantillon de mesure des délais. Sans `exercice`, toutes les factures
+        # réglées du miroir ; avec, celles RÉGLÉES pendant l'exercice — jamais
+        # celles émises pendant l'exercice (cf. docstring : biais de censure).
+        def _regle_dans_exercice(inv) -> bool:
+            return exercice is None or (inv.payment_date and inv.payment_date.year == exercice)
+
         # Délai réel de recouvrement = payment_date - invoice_date (factures payées uniquement)
         delais_reels = []
+        echantillon = []
         for inv, _ in rows:
-            if inv.status == "paid" and inv.payment_date and inv.invoice_date:
+            if inv.status == "paid" and inv.payment_date and inv.invoice_date and _regle_dans_exercice(inv):
                 d = (inv.payment_date.replace(tzinfo=None) - inv.invoice_date.replace(tzinfo=None)).days
                 if 0 <= d <= 730:  # filtrer les aberrations
                     delais_reels.append(d)
+                    echantillon.append(inv)
 
-        # Délai accordé = due_date - invoice_date (délai contractuel)
+        # Délai accordé = due_date - invoice_date (délai contractuel). Mesuré sur
+        # le MÊME échantillon que le délai réel quand un exercice est demandé :
+        # l'écart entre les deux est l'indicateur, et deux populations
+        # différentes le rendraient faux.
         delais_accordes = []
-        for inv, _ in rows:
+        base_accordes = echantillon if exercice is not None else [inv for inv, _ in rows]
+        for inv in base_accordes:
             if inv.invoice_date and inv.due_date:
                 d = (inv.due_date.replace(tzinfo=None) - inv.invoice_date.replace(tzinfo=None)).days
                 if 0 <= d <= 365:
@@ -677,10 +716,21 @@ class LocalCRMAdapter(CRMRepository):
             "nb_impayes_en_souffrance": len(retards),
             "dso_approx_jours": dso_approx,
             "nb_factures_avec_date_paiement": len(delais_reels),
+            # Portée des DÉLAIS, distincte de celle des montants ci-dessus qui
+            # restent sur toute la population. L'écran doit afficher les deux.
+            "exercice_delais": exercice,
+            "portee_montants": "tous exercices",
             "note": (
-                f"Délai réel basé sur {len(delais_reels)} facture(s) avec date de paiement Odoo."
+                f"Délai réel basé sur {len(delais_reels)} facture(s) réglée(s)"
+                + (f" en {exercice}" if exercice else "")
+                + ", avec date de paiement Odoo."
                 if has_real_dso else
-                "Dates de paiement non encore synchronisées — lancer une sync complète pour obtenir le délai réel."
+                (
+                    f"Aucun règlement daté en {exercice} — le chiffre affiché retombe sur "
+                    "l'approximation bilancielle."
+                    if exercice else
+                    "Dates de paiement non encore synchronisées — lancer une sync complète pour obtenir le délai réel."
+                )
             ),
         }
 
@@ -763,9 +813,31 @@ class LocalCRMAdapter(CRMRepository):
             return None
 
     async def get_pipeline_stats(self) -> dict:
+        """Pipeline OUVERT — affaires ni gagnées, ni perdues, ni annulées.
+
+        Le filtre d'étape a été ajouté après coup : la version d'origine sommait
+        les 9 475 opportunités de la table, gagnées et perdues comprises, et
+        annonçait 410 693 M FCFA de « pipeline ouvert » là où les affaires
+        réellement ouvertes en pèsent 131 936 — un facteur 37. Le champ `stage`
+        vient d'Odoo en texte libre et mélange trois nomenclatures (« 6-Gagné » /
+        « Won » / « Gagné »), d'où la reconnaissance par mot-clé.
+
+        `par_stade` reste volontairement NON filtré : c'est une ventilation par
+        étape, où voir le poids du gagné et du perdu est légitime.
+
+        ATTENTION — `ca_potentiel_brut_xof` inclut les affaires dont la date de
+        clôture est déjà passée, soit 82 % du montant (anomalie A4). Pour la part
+        encore dans les temps, lire `uc_briefing.indicateurs` (`pipe_actif_brut`),
+        qui porte la même donnée coupée sur l'échéance.
+        """
         from sqlalchemy import text
+        from modules.uc_briefing.indicateurs import _PIPE_OUVERT
         async with AsyncSessionLocal() as session:
-            sql_total = "SELECT COUNT(*), SUM(expected_revenue), SUM(expected_revenue * probability / 100) FROM opportunities"
+            sql_total = (
+                "SELECT COUNT(*), SUM(expected_revenue), "
+                "SUM(expected_revenue * probability / 100) "
+                f"FROM opportunities WHERE {_PIPE_OUVERT}"
+            )
             r = (await session.execute(text(sql_total))).fetchone()
             total_nb = r[0] or 0
             total_brut = round(r[1] or 0)
@@ -1075,14 +1147,19 @@ class LocalCRMAdapter(CRMRepository):
     async def get_cross_sell_opportunities(self, product_anchor: str, product_target: str | None = None, limit: int = 20) -> list[dict]:
         from sqlalchemy import text
         # Clients ayant acheté product_anchor
+        # Lecture sur sale_order_lines et non sur le JSON `sale_orders.order_lines` :
+        # une ligne = un enregistrement, donc le LIKE porte sur le libellé du PRODUIT
+        # et pas sur le blob de la commande entière. `display_type IS NULL` écarte
+        # les titres de section et les notes du devis (27 % des lignes du miroir).
         sql_anchor = """
-            SELECT DISTINCT o.client_id, o.client_name,
-                   MAX(o.date_order) as last_anchor_purchase,
-                   COUNT(*) as nb_achats_anchor
-            FROM sale_orders o, json_each(o.order_lines) j
-            WHERE lower(json_extract(j.value, '$.product')) LIKE lower(:anchor)
-              AND o.state NOT IN ('cancel', 'draft')
-            GROUP BY o.client_id, o.client_name
+            SELECT sol.client_id, sol.client_name,
+                   MAX(sol.date_order) as last_anchor_purchase,
+                   COUNT(DISTINCT sol.order_id) as nb_achats_anchor
+            FROM sale_order_lines sol
+            WHERE lower(sol.product_name) LIKE lower(:anchor)
+              AND sol.display_type IS NULL
+              AND sol.state NOT IN ('cancel', 'draft')
+            GROUP BY sol.client_id, sol.client_name
         """
         async with AsyncSessionLocal() as session:
             anchor_rows = (await session.execute(text(sql_anchor), {"anchor": f"%{product_anchor}%"})).fetchall()
@@ -1094,9 +1171,10 @@ class LocalCRMAdapter(CRMRepository):
             if product_target:
                 # Clients qui ont AUSSI acheté product_target
                 sql_target = """
-                    SELECT DISTINCT o.client_id FROM sale_orders o, json_each(o.order_lines) j
-                    WHERE lower(json_extract(j.value, '$.product')) LIKE lower(:target)
-                      AND o.state NOT IN ('cancel', 'draft')
+                    SELECT DISTINCT sol.client_id FROM sale_order_lines sol
+                    WHERE lower(sol.product_name) LIKE lower(:target)
+                      AND sol.display_type IS NULL
+                      AND sol.state NOT IN ('cancel', 'draft')
                 """
                 target_rows = (await session.execute(text(sql_target), {"target": f"%{product_target}%"})).fetchall()
                 already_bought = {r[0] for r in target_rows}
@@ -1121,21 +1199,29 @@ class LocalCRMAdapter(CRMRepository):
     async def search_orders_by_product(self, product_query: str, year: int | None = None) -> list[dict]:
         import json as _json
         from sqlalchemy import text
+        # `montant_xof` est le total de la COMMANDE, `montant_lignes_xof` la part
+        # réellement portée par les lignes qui matchent. Les deux sont renvoyés
+        # parce que les confondre est précisément l'erreur à éviter : sur
+        # FP/2024/10750, une recherche « cisco » remonte une commande de 422 M
+        # dont 22 M seulement sont du Cisco.
         sql = """
-            SELECT DISTINCT o.name, o.client_name, o.amount, o.date_order, o.state,
+            SELECT o.name, o.client_name, o.amount, o.date_order, o.state,
+                   SUM(sol.subtotal_xof) as matched_amount,
                    json_group_array(json_object(
-                       'product', json_extract(j.value, '$.product'),
-                       'qty', json_extract(j.value, '$.qty'),
-                       'subtotal', json_extract(j.value, '$.subtotal')
+                       'product', sol.product_name,
+                       'qty', sol.qty,
+                       'subtotal_xof', sol.subtotal_xof
                    )) as matching_lines
-            FROM sale_orders o, json_each(o.order_lines) j
-            WHERE lower(json_extract(j.value, '$.product')) LIKE lower(:query)
+            FROM sale_order_lines sol
+            JOIN sale_orders o ON o.order_id = sol.order_id
+            WHERE lower(sol.product_name) LIKE lower(:query)
+              AND sol.display_type IS NULL
         """
         params: dict = {"query": f"%{product_query}%"}
         if year:
             sql += " AND strftime('%Y', o.date_order) = :year"
             params["year"] = str(year)
-        sql += " GROUP BY o.name ORDER BY o.date_order DESC LIMIT 50"
+        sql += " GROUP BY o.order_id ORDER BY o.date_order DESC LIMIT 50"
         async with AsyncSessionLocal() as session:
             result = await session.execute(text(sql), params)
             rows = result.fetchall()
@@ -1146,25 +1232,33 @@ class LocalCRMAdapter(CRMRepository):
                 "montant_xof": r[2],
                 "date": r[3],
                 "état": r[4],
-                "lignes_correspondantes": _json.loads(r[5]) if r[5] else [],
+                # Part du produit recherché dans la commande — à utiliser pour tout
+                # chiffrage par produit ou constructeur, jamais `montant_xof`.
+                "montant_lignes_xof": round(r[5] or 0),
+                "part_lignes_pct": round((r[5] or 0) / r[2] * 100, 1) if r[2] else None,
+                "lignes_correspondantes": _json.loads(r[6]) if r[6] else [],
             }
             for r in rows
         ]
 
     async def get_revenue_by_product(self, year: int | None = None, limit: int = 30) -> list[dict]:
         from sqlalchemy import text
+        # `state NOT IN ('cancel','draft')` : absent de la version JSON de cette
+        # requête, ce qui faisait entrer des devis annulés dans le CA par produit.
         sql = """
-            SELECT json_extract(j.value, '$.product') as product,
-                   SUM(CAST(json_extract(j.value, '$.subtotal') AS REAL)) as total_revenue,
-                   COUNT(DISTINCT o.order_id) as order_count,
-                   SUM(CAST(json_extract(j.value, '$.qty') AS REAL)) as qty_total
-            FROM sale_orders o, json_each(o.order_lines) j
-            WHERE json_extract(j.value, '$.product') IS NOT NULL
-              AND json_extract(j.value, '$.subtotal') > 0
+            SELECT sol.product_name as product,
+                   SUM(sol.subtotal_xof) as total_revenue,
+                   COUNT(DISTINCT sol.order_id) as order_count,
+                   SUM(sol.qty) as qty_total
+            FROM sale_order_lines sol
+            WHERE sol.product_name != ''
+              AND sol.subtotal_xof > 0
+              AND sol.display_type IS NULL
+              AND sol.state NOT IN ('cancel', 'draft')
         """
         params: dict = {}
         if year:
-            sql += " AND strftime('%Y', o.date_order) = :year"
+            sql += " AND strftime('%Y', sol.date_order) = :year"
             params["year"] = str(year)
         sql += " GROUP BY product ORDER BY total_revenue DESC LIMIT :limit"
         params["limit"] = limit
@@ -1306,29 +1400,110 @@ class LocalCRMAdapter(CRMRepository):
             return [self._dossier_to_dict(d) for d in result.scalars()]
 
     async def get_margin_stats(self, year: int | None = None) -> dict:
-        """Statistiques globales de marge : CA prov, CA def, marge prov, marge def, % moyens."""
+        """Statistiques globales de marge : CA prov, CA def, marge prov, marge def, % moyens.
+
+        `year` ne borne que les FLUX (dossiers ouverts pendant l'exercice : CA,
+        marges, taux moyens). Les STOCKS renvoyés par la même requête —
+        `backlog_total`, `reste_a_encaisser`, `total_encaisse`,
+        `fournisseurs_payes`, `fournisseurs_restant` — restent calculés sur TOUS
+        les exercices, quel que soit `year`.
+
+        C'est la seule lecture juste : le backlog est le reste à livrer à la date
+        du jour, et un dossier ouvert en 2025 encore en cours de livraison en fait
+        partie. Le borner sur `date_creation` le tronquait aux seuls dossiers nés
+        dans l'exercice — sur le miroir d'août 2026, 1,6 Md FCFA affichés au lieu
+        de 9,2 Md, soit six fois moins que la réalité. Même raisonnement pour le
+        reste à encaisser, qui est une créance et non une activité de l'année.
+
+        `nb_dossiers` compte donc les dossiers de l'exercice, et
+        `nb_dossiers_tous_exercices` ceux sur lesquels portent les stocks : les
+        deux nombres n'ont pas le même dénominateur et l'appelant qui calcule une
+        moyenne doit prendre celui qui correspond à son numérateur.
+
+        TAUX DE MARGE — lire `taux_marge_provisoire_pct` /
+        `taux_marge_definitive_pct`, jamais `perc_marge_*_moyen`. Ces deux
+        derniers sont des AVG() non pondérés de pourcentages par dossier : sur ce
+        miroir la moyenne provisoire vaut -745 %, tirée par des dossiers à
+        dénominateur minuscule. Les taux publiés ici sont des ratios agrégés.
+
+        Le taux DÉFINITIF se calcule en outre sur le seul périmètre imputé (les
+        dossiers portant une dépense définitive), et vient avec
+        `couverture_marge_definitive_pct` et `marge_definitive_exploitable`. Un
+        dossier sans dépense imputée affiche 100 % de marge par construction :
+        sur l'exercice 2026, 1 dossier facturé sur 100 est imputé, soit 0,5 % du
+        CA — le taux brut y vaut 99,5 %, le taux imputé 11,9 %, et aucun des deux
+        n'est publiable comme « la marge de l'exercice ». L'appelant qui affiche
+        ce taux DOIT tester `marge_definitive_exploitable` d'abord.
+        """
         from sqlalchemy import text
         async with AsyncSessionLocal() as session:
-            year_filter = "AND strftime('%Y', date_creation) = :year" if year else ""
+            # Prédicat d'exercice appliqué aux seuls agrégats de flux, via un CASE
+            # plutôt qu'un WHERE : un WHERE écarterait les lignes AVANT les SUM de
+            # stocks, qui doivent voir toute la table. Une seule passe suffit.
+            ex = "strftime('%Y', date_creation) = :year" if year else "1"
             params = {"year": str(year)} if year else {}
             sql = text(f"""
                 SELECT
-                    COUNT(*) nb_dossiers,
-                    SUM(ca_provisoire) total_ca_provisoire,
-                    SUM(ca_definitif) total_ca_definitif,
-                    SUM(marge_provisoire) total_marge_provisoire,
-                    SUM(marge_definitive) total_marge_definitive,
-                    AVG(CASE WHEN ca_provisoire > 0 THEN perc_marge_provisoire END) avg_perc_marge_prov,
-                    AVG(CASE WHEN ca_definitif > 0 THEN perc_marge_definitive END) avg_perc_marge_def,
+                    -- Flux : bornés à l'exercice quand `year` est fourni.
+                    SUM(CASE WHEN {ex} THEN 1 ELSE 0 END) nb_dossiers,
+                    SUM(CASE WHEN {ex} THEN ca_provisoire ELSE 0 END) total_ca_provisoire,
+                    SUM(CASE WHEN {ex} THEN ca_definitif ELSE 0 END) total_ca_definitif,
+                    SUM(CASE WHEN {ex} THEN marge_provisoire ELSE 0 END) total_marge_provisoire,
+                    SUM(CASE WHEN {ex} THEN marge_definitive ELSE 0 END) total_marge_definitive,
+                    AVG(CASE WHEN {ex} AND ca_provisoire > 0 THEN perc_marge_provisoire END) avg_perc_marge_prov,
+                    AVG(CASE WHEN {ex} AND ca_definitif > 0 THEN perc_marge_definitive END) avg_perc_marge_def,
+                    -- Stocks : toujours sur tous les exercices (cf. docstring).
                     SUM(montant_recu) total_recu,
                     SUM(reste_a_encaisser) total_reste,
                     SUM(backlog) total_backlog,
                     SUM(fournisseurs_payes) total_four_payes,
-                    SUM(fournisseurs_restant) total_four_restant
+                    SUM(fournisseurs_restant) total_four_restant,
+                    COUNT(*) nb_dossiers_tous,
+                    -- Contrepartie hors borne des deux CA de flux. Un écran de
+                    -- STOCK (le backlog du DO) doit pouvoir l'expliquer contre le
+                    -- CA de la même population : rapporter un backlog tous
+                    -- exercices au seul CA de l'exercice donnerait un taux de
+                    -- matérialisation faux, et spectaculairement faux en début
+                    -- d'année.
+                    SUM(ca_provisoire) total_ca_prov_tous,
+                    SUM(ca_definitif) total_ca_def_tous,
+                    -- Périmètre IMPUTÉ de l'exercice : les dossiers dont la
+                    -- dépense définitive est renseignée. C'est le seul périmètre
+                    -- où une marge définitive veut dire quelque chose — un
+                    -- dossier sans dépense imputée affiche 100 % de marge par
+                    -- construction. Sur l'exercice 2026, 1 dossier facturé sur
+                    -- 100 est imputé : sans cette contrepartie, l'écran publie
+                    -- « marge définitive 99,99 % ».
+                    SUM(CASE WHEN {ex} AND depense_definitive > 0 THEN 1 ELSE 0 END) nb_marge_imputee,
+                    SUM(CASE WHEN {ex} AND depense_definitive > 0 THEN ca_definitif ELSE 0 END) ca_def_impute,
+                    SUM(CASE WHEN {ex} AND depense_definitive > 0 THEN marge_definitive ELSE 0 END) marge_def_impute
                 FROM dossiers
-                WHERE 1=1 {year_filter}
             """)
             row = (await session.execute(sql, params)).fetchone()
+
+            # ── Taux de marge : ratios AGRÉGÉS, jamais la moyenne des
+            # pourcentages par dossier. `perc_marge_*_moyen`, conservés plus bas
+            # pour les appelants existants, sont des AVG() non pondérés que
+            # quelques dossiers à dénominateur minuscule tirent à -745 % ; le
+            # briefing s'en était déjà déporté (uc_briefing.facts._taux_marge),
+            # les écrans doivent suivre.
+            ca_prov_exercice = row[1] or 0
+            taux_prov = round((row[3] or 0) / ca_prov_exercice * 100, 1) if ca_prov_exercice else None
+
+            # La marge DÉFINITIVE se calcule sur le seul périmètre imputé, et sa
+            # couverture est publiée avec elle : sous le seuil, le taux existe
+            # mais n'est pas exploitable et l'écran doit afficher la couverture
+            # plutôt que le chiffre. Même règle et même seuil que le tableau de
+            # bord Budget du DAF — importé, et non recopié, pour que les deux
+            # écrans ne puissent pas diverger au premier ajustement.
+            from modules.uc_daf.budget import COUVERTURE_MARGE_MIN_PCT
+            nb_impute = row[15] or 0
+            ca_def_impute = row[16] or 0
+            marge_def_impute = row[17] or 0
+            ca_def_exercice = row[2] or 0
+            taux_def = round(marge_def_impute / ca_def_impute * 100, 1) if ca_def_impute else None
+            couverture_pct = round(ca_def_impute / ca_def_exercice * 100, 1) if ca_def_exercice else 0.0
+
             return {
                 "annee": year or "toutes",
                 "nb_dossiers": row[0] or 0,
@@ -1343,6 +1518,24 @@ class LocalCRMAdapter(CRMRepository):
                 "backlog_total": row[9] or 0,
                 "fournisseurs_payes": row[10] or 0,
                 "fournisseurs_restant": row[11] or 0,
+                # Portée des cinq clés ci-dessus, à afficher avec elles : sans ça
+                # un écran borné à 2026 laisse croire que son backlog l'est aussi.
+                "portee_stocks": "tous exercices",
+                "nb_dossiers_tous_exercices": row[12] or 0,
+                "ca_provisoire_tous_exercices": row[13] or 0,
+                "ca_definitif_tous_exercices": row[14] or 0,
+                # ── Taux de marge exploitables (cf. calcul ci-dessus) ─────────
+                # À préférer systématiquement aux `perc_marge_*_moyen`, qui ne
+                # sont maintenus que pour ne pas casser les appelants existants.
+                "taux_marge_provisoire_pct": taux_prov,
+                "taux_marge_definitive_pct": taux_def,
+                "couverture_marge_definitive_pct": couverture_pct,
+                "nb_dossiers_marge_imputee": nb_impute,
+                "ca_marge_imputee_xof": ca_def_impute,
+                # Faux = le taux définitif existe mais ne se publie pas comme
+                # « la marge de l'exercice » : l'écran annonce la couverture.
+                "marge_definitive_exploitable": bool(nb_impute) and couverture_pct >= COUVERTURE_MARGE_MIN_PCT,
+                "seuil_couverture_marge_pct": COUVERTURE_MARGE_MIN_PCT,
             }
 
     async def get_top_margin_dossiers(self, limit: int = 10, year: int | None = None,
@@ -1890,7 +2083,8 @@ class LocalCRMAdapter(CRMRepository):
             for r in rows
         ]
 
-    async def get_account_activity(self, as_of: date | None = None) -> list[dict]:
+    async def get_account_activity(self, as_of: date | None = None,
+                                   annee: int | None = None) -> list[dict]:
         """Rythme de commande de CHAQUE compte, pour la segmentation dormant/actif.
 
         Source de la dormance : `sale_orders.date_order` — la commande SIGNÉE,
@@ -1929,14 +2123,25 @@ class LocalCRMAdapter(CRMRepository):
         de paiement, ne se traitent pas de la même façon.
         """
         from sqlalchemy import text
-        jour = (as_of or date.today()).isoformat()
+        reference = as_of or date.today()
+        jour = reference.isoformat()
+        exercice = annee or reference.year
         sql = """
             WITH cmd AS (
                 SELECT client_id,
                        MAX(date_order) AS last_order,
                        MIN(date_order) AS first_order,
                        COUNT(*) AS nb_cmd,
-                       SUM(amount) AS ca
+                       SUM(amount) AS ca,
+                       -- Agrégats de l'EXERCICE, à côté des cumuls historiques
+                       -- et jamais à leur place : `last_order`, `first_order`,
+                       -- `nb_cmd` et `ca` définissent la dormance (silence
+                       -- depuis la dernière commande, intervalle médian), qui
+                       -- perdrait tout sens bornée à l'année — un compte muet
+                       -- depuis 2024 n'a simplement aucune ligne en 2026.
+                       SUM(CASE WHEN strftime('%Y', date_order) = :annee THEN amount ELSE 0 END) AS ca_ex,
+                       SUM(CASE WHEN strftime('%Y', date_order) = :annee THEN 1 ELSE 0 END) AS nb_cmd_ex,
+                       MAX(CASE WHEN strftime('%Y', date_order) = :annee THEN date_order END) AS last_order_ex
                 FROM sale_orders
                 WHERE client_id IS NOT NULL AND client_id != ''
                   AND state IN ('sale', 'done')
@@ -1986,6 +2191,7 @@ class LocalCRMAdapter(CRMRepository):
             SELECT COALESCE(NULLIF(TRIM(cl.name), ''), n.client_name, '(compte sans nom)') AS compte,
                    c.client_id, c.last_order, c.first_order, c.nb_cmd, c.ca,
                    cm.salesperson_name,
+                   c.ca_ex, c.nb_cmd_ex, c.last_order_ex,
                    COALESCE(i.nb, 0), COALESCE(i.mnt, 0), COALESCE(i.retard, 0),
                    COALESCE(op.nb, 0), COALESCE(op.mnt, 0),
                    CASE WHEN cl.client_id IS NULL THEN 1 ELSE 0 END AS hors_referentiel
@@ -1998,6 +2204,7 @@ class LocalCRMAdapter(CRMRepository):
             UNION ALL
             SELECT COALESCE(NULLIF(TRIM(cl.name), ''), '(compte sans nom)'),
                    cl.client_id, NULL, NULL, 0, 0, NULL,
+                   0, 0, NULL,
                    COALESCE(i.nb, 0), COALESCE(i.mnt, 0), COALESCE(i.retard, 0),
                    COALESCE(op.nb, 0), COALESCE(op.mnt, 0), 0
             FROM clients cl
@@ -2006,7 +2213,7 @@ class LocalCRMAdapter(CRMRepository):
             WHERE NOT EXISTS (SELECT 1 FROM cmd c2 WHERE c2.client_id = cl.client_id)
         """
         async with AsyncSessionLocal() as session:
-            rows = (await session.execute(text(sql), {"jour": jour})).fetchall()
+            rows = (await session.execute(text(sql), {"jour": jour, "annee": str(exercice)})).fetchall()
         return [
             {
                 "compte": r[0] or "(compte sans nom)",
@@ -2016,12 +2223,20 @@ class LocalCRMAdapter(CRMRepository):
                 "nb_commandes": int(r[4] or 0),
                 "ca_total_xof": round(r[5] or 0),
                 "commercial": r[6] or "",
-                "nb_impayes": int(r[7] or 0),
-                "impaye_xof": round(r[8] or 0),
-                "retard_max_jours": int(r[9] or 0),
-                "nb_opp_ouvertes": int(r[10] or 0),
-                "opp_ouvertes_xof": round(r[11] or 0),
-                "hors_referentiel": bool(r[12]),
+                # ── Exercice : ce que le compte a commandé CETTE ANNÉE ────────
+                # Le cockpit se lit sur l'exercice en cours ; les trois clés
+                # ci-dessus (`nb_commandes`, `ca_total_xof`, `derniere_commande`)
+                # restent historiques car elles portent la dormance.
+                "annee_exercice": exercice,
+                "ca_exercice_xof": round(r[7] or 0),
+                "nb_commandes_exercice": int(r[8] or 0),
+                "derniere_commande_exercice": str(r[9])[:10] if r[9] else None,
+                "nb_impayes": int(r[10] or 0),
+                "impaye_xof": round(r[11] or 0),
+                "retard_max_jours": int(r[12] or 0),
+                "nb_opp_ouvertes": int(r[13] or 0),
+                "opp_ouvertes_xof": round(r[14] or 0),
+                "hors_referentiel": bool(r[15]),
             }
             for r in rows
         ]

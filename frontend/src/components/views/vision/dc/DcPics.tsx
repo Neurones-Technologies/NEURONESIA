@@ -1,5 +1,5 @@
 import { getAlertes, getComptesDc } from "@/lib/api/commercial";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { SEVERITE_TAG } from "./source";
@@ -67,12 +67,12 @@ export async function DcPics() {
             body: [
               `${formatNumber(pics.couverture.nb_pics)} pic(s) détecté(s) sur la fenêtre ${pics.fenetre_mois[0]} → ${pics.fenetre_mois[pics.fenetre_mois.length - 1]}. Un mois est un pic quand il pèse au moins ${pics.seuils.facteur} fois la médiane mensuelle du compte lui-même.`,
               `Le seuil est un MULTIPLE de la médiane du compte, et non un montant : un compte qui commande 200 M quand il en fait 180 d'habitude ne fait pas un pic, un compte à 40 M qui saute à 150 M en fait un.`,
-              `Un plancher de ${formatMFcfa(pics.seuils.montant_plancher_xof)} M FCFA écarte le bruit : sans lui, un compte dont la médiane est à 800 000 FCFA alerterait à 2 M.`,
+              `Un plancher de ${formatFcfa(pics.seuils.montant_plancher_xof)} FCFA écarte le bruit : sans lui, un compte dont la médiane est à 800 000 FCFA alerterait à 2 M.`,
             ],
             kv: [
               ["Pics détectés", formatNumber(pics.couverture.nb_pics)],
               ["Facteur de déclenchement", `× ${pics.seuils.facteur}`],
-              ["Plancher de montant", `${formatMFcfa(pics.seuils.montant_plancher_xof)} M FCFA`],
+              ["Plancher de montant", `${formatFcfa(pics.seuils.montant_plancher_xof)} FCFA`],
               ["Fenêtre observée", `${pics.fenetre_mois.length} mois`],
             ],
           }}
@@ -160,7 +160,7 @@ export async function DcPics() {
               <Lst
                 items={pics.pics.map((p) => ({
                   title: p.compte,
-                  sub: `${p.mois}${p.mois_en_cours ? " (mois en cours)" : ""} · ${formatNumber(p.nb_commandes_mois)} commande(s) · médiane ${formatMFcfa(p.mediane_mensuelle_xof)} M`,
+                  sub: `${p.mois}${p.mois_en_cours ? " (mois en cours)" : ""} · ${formatNumber(p.nb_commandes_mois)} commande(s) · médiane ${formatFcfa(p.mediane_mensuelle_xof)}`,
                   tag: `× ${formatPct(p.intensite, 1)}`,
                   tagVariant: "w" as const,
                   detail: {
@@ -169,7 +169,7 @@ export async function DcPics() {
                     tag: `${formatPct(p.intensite, 1)} fois sa médiane`,
                     tagVariant: "w" as const,
                     body: [
-                      `${formatMFcfa(p.montant_xof)} M FCFA commandés sur ${p.mois} en ${formatNumber(p.nb_commandes_mois)} commande(s), contre une médiane mensuelle de ${formatMFcfa(p.mediane_mensuelle_xof)} M FCFA calculée sur ${formatNumber(p.nb_mois_historique)} mois d'historique.`,
+                      `${formatFcfa(p.montant_xof)} FCFA commandés sur ${p.mois} en ${formatNumber(p.nb_commandes_mois)} commande(s), contre une médiane mensuelle de ${formatFcfa(p.mediane_mensuelle_xof)} FCFA calculée sur ${formatNumber(p.nb_mois_historique)} mois d'historique.`,
                       p.mois_en_cours
                         ? "Le mois est encore en cours : le montant peut encore monter, et le pic est donc au moins celui affiché."
                         : "Le mois est clos : le pic est définitif.",
@@ -177,8 +177,8 @@ export async function DcPics() {
                     ],
                     kv: [
                       ["Mois", p.mois],
-                      ["Montant du mois", `${formatMFcfa(p.montant_xof)} M FCFA`],
-                      ["Médiane mensuelle", `${formatMFcfa(p.mediane_mensuelle_xof)} M FCFA`],
+                      ["Montant du mois", `${formatFcfa(p.montant_xof)} FCFA`],
+                      ["Médiane mensuelle", `${formatFcfa(p.mediane_mensuelle_xof)} FCFA`],
                       ["Intensité", `× ${formatPct(p.intensite, 1)}`],
                       ["Mois d'historique", formatNumber(p.nb_mois_historique)],
                       ["Commercial rattaché", p.commercial || "non renseigné"],
@@ -236,7 +236,7 @@ export async function DcPics() {
                     ].filter(Boolean),
                     kv: [
                       ["Sévérité", a.severity],
-                      ["Montant concerné", `${formatMFcfa(a.montant_xof)} M FCFA`],
+                      ["Montant concerné", `${formatFcfa(a.montant_xof)} FCFA`],
                       ["Commercial", a.commercial || "non renseigné"],
                       ["Signalée depuis", formatDate(a.depuis)],
                     ],

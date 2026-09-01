@@ -94,15 +94,55 @@ _SYSTEM_MARGINS = (
 _USER_TEMPLATE_MARGINS = """Chiffres réels sur l'ensemble des dossiers actifs ({nb_dossiers} dossiers) :
 - Backlog non facturé : {backlog_m} M FCFA
 - Taux de matérialisation du CA (définitif / provisoire) : {taux_materialisation}%
-- Marge provisoire moyenne : {marge_provisoire_pct}%
-- Marge définitive moyenne : {marge_definitive_pct}%
-- Écart marge définitive − provisoire : {ecart_marge_pts} points
+{bloc_marge}
 - Dossier le plus dégradé : {pire_dossier_ref} ({pire_dossier_client}), marge définitive {pire_dossier_marge}%
 
 Rédige l'analyse en 3 paragraphes courts, aucune invention de chiffre ou de nom au-delà de ceux fournis."""
 
 
+def _bloc_marge(ctx: dict) -> str:
+    """Les lignes « marge » du prompt, rendues selon que le taux définitif est
+    exploitable ou non.
+
+    Un dossier sans dépense imputée affiche 100 % de marge par construction. Sur
+    un exercice où l'imputation ne couvre que 0,5 % du CA — c'est le cas de 2026
+    sur ce miroir — il n'y a pas de marge définitive à commenter, et un LLM à qui
+    on sert « 99,99 % » commentera une performance exceptionnelle. La consigne
+    « aucune invention au-delà des chiffres fournis » ne protège que si les
+    chiffres fournis sont vrais : c'est ici que ça se joue, pas dans le système.
+    """
+    lignes = [f"- Marge provisoire (marge / CA provisoire) : {ctx.get('marge_provisoire_pct')}%"]
+    if ctx.get("marge_definitive_exploitable"):
+        lignes += [
+            f"- Marge définitive (périmètre à dépense imputée) : {ctx.get('marge_definitive_pct')}%",
+            f"- Écart marge définitive − provisoire : {ctx.get('ecart_marge_pts')} points",
+        ]
+    else:
+        lignes.append(
+            "- Marge définitive : NON MESURABLE sur cette période — la dépense n'est "
+            f"imputée que sur {ctx.get('couverture_marge_pct')}% du CA facturé. "
+            "Ne commente aucune marge définitive et ne l'estime pas : dis que la "
+            "donnée manque, et pourquoi."
+        )
+    return "\n".join(lignes)
+
+
 def _fallback_margins(ctx: dict) -> str:
+    # Même verdict de mesurabilité que le gabarit ci-dessus : sans marge
+    # définitive, le premier paragraphe dit ce qui manque au lieu de chiffrer un
+    # écart contre un taux qui n'existe pas (et `abs(None)` lèverait).
+    if not ctx.get("marge_definitive_exploitable") or ctx.get("ecart_marge_pts") is None:
+        return "\n\n".join([
+            f"La marge définitive n'est pas mesurable sur cette période : la dépense n'est "
+            f"imputée que sur {ctx.get('couverture_marge_pct')}% du CA facturé. La marge "
+            f"provisoire ({ctx['marge_provisoire_pct']}%) reste, elle, mesurée sur "
+            f"{ctx['nb_dossiers']} dossiers.",
+            f"Le taux de matérialisation du CA ({ctx['taux_materialisation']}%) indique que le backlog "
+            f"({ctx['backlog_m']} M FCFA) se facture "
+            + ("plus lentement que prévu." if ctx["taux_materialisation"] < 80 else "à un rythme cohérent avec le plan."),
+            f"Dossier le plus dégradé : {ctx['pire_dossier_ref']} ({ctx['pire_dossier_client']}), "
+            f"marge définitive à {ctx['pire_dossier_marge']}% — à vérifier en priorité avant la prochaine clôture.",
+        ])
     sens = "défavorable" if ctx["ecart_marge_pts"] < 0 else "favorable"
     return "\n\n".join([
         f"L'écart entre marge définitive ({ctx['marge_definitive_pct']}%) et marge provisoire "
@@ -118,6 +158,10 @@ def _fallback_margins(ctx: dict) -> str:
 
 async def build_margins_analysis(llm, ctx: dict) -> str:
     """ctx : agrégats de get_margin_stats()/get_top_margin_dossiers() (jamais recalculés par le LLM)."""
+    # `bloc_marge` est DÉRIVÉ ici, pas fourni par l'appelant : le gabarit et le
+    # repli doivent rendre le même verdict de mesurabilité, et le calculer en un
+    # seul endroit est ce qui garantit qu'ils ne peuvent pas diverger.
+    ctx = {**ctx, "bloc_marge": _bloc_marge(ctx)}
     if llm is None:
         return _fallback_margins(ctx)
     try:

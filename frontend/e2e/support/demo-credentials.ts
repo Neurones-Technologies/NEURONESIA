@@ -13,6 +13,8 @@
  * compte visé qui donne son sens au test.
  */
 export const DEMO_EMAILS = {
+  // Le seul compte `admin` du seed — seul à voir l'écran Comptes.
+  admin: "oboyer@neuronestech.com",
   dg: "jmkouadio@neuronestech.com",
   dc: "pbourron@neuronestech.com",
   df: "cdjereke@neuronestech.com",

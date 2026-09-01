@@ -1,6 +1,6 @@
 import { getCrossSellAnalysis, getCrossSellSignals } from "@/lib/api/crosssell";
 import { getAccountActivity } from "@/lib/api/dashboard";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, Reste, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
@@ -48,7 +48,7 @@ export async function DcBaseInstallee() {
               name: s.label,
               sub: [
                 s.borne,
-                s.ca_historique_xof > 0 ? `${formatMFcfa(s.ca_historique_xof)} M historiques` : null,
+                s.ca_historique_xof > 0 ? `${formatFcfa(s.ca_historique_xof)} historiques` : null,
                 ...marqueurs,
               ]
                 .filter(Boolean)
@@ -63,19 +63,19 @@ export async function DcBaseInstallee() {
                 tagVariant: DORMANCE_TAG[s.segment],
                 body: [
                   s.segment === "prospect"
-                    ? `${formatNumber(s.nb_comptes)} comptes du référentiel n'ont jamais passé de commande. Ce ne sont pas des clients perdus mais des prospects : ${formatNumber(s.nb_avec_opp_ouverte)} d'entre eux portent déjà des opportunités ouvertes pour ${formatMFcfa(s.pipe_ouvert_xof)} M FCFA.`
-                    : `${formatNumber(s.nb_comptes)} comptes n'ont pas commandé depuis ${s.borne}, pour ${formatMFcfa(s.ca_historique_xof)} M FCFA de chiffre d'affaires historique cumulé (${formatPct(s.part_ca_pct, 0)} % du total). Silence médian du segment : ${s.silence_median_mois ?? "—"} mois.`,
+                    ? `${formatNumber(s.nb_comptes)} comptes du référentiel n'ont jamais passé de commande. Ce ne sont pas des clients perdus mais des prospects : ${formatNumber(s.nb_avec_opp_ouverte)} d'entre eux portent déjà des opportunités ouvertes pour ${formatFcfa(s.pipe_ouvert_xof)} FCFA.`
+                    : `${formatNumber(s.nb_comptes)} comptes n'ont pas commandé depuis ${s.borne}, pour ${formatFcfa(s.ca_historique_xof)} FCFA de chiffre d'affaires historique cumulé (${formatPct(s.part_ca_pct, 0)} % du total). Silence médian du segment : ${s.silence_median_mois ?? "—"} mois.`,
                   s.nb_avec_opp_ouverte > 0 && s.segment !== "prospect"
-                    ? `${formatNumber(s.nb_avec_opp_ouverte)} de ces comptes portent des opportunités ouvertes pour ${formatMFcfa(s.pipe_ouvert_xof)} M FCFA. Le silence se mesurant sur les commandes signées, un compte peut apparaître ici tout en faisant l'objet d'un travail commercial en cours.`
+                    ? `${formatNumber(s.nb_avec_opp_ouverte)} de ces comptes portent des opportunités ouvertes pour ${formatFcfa(s.pipe_ouvert_xof)} FCFA. Le silence se mesurant sur les commandes signées, un compte peut apparaître ici tout en faisant l'objet d'un travail commercial en cours.`
                     : null,
                   s.nb_avec_impaye > 0
-                    ? `${formatNumber(s.nb_avec_impaye)} comptes de ce segment portent un impayé échu, pour ${formatMFcfa(s.impaye_xof)} M FCFA. À traiter avec la Direction Financière avant toute relance.`
+                    ? `${formatNumber(s.nb_avec_impaye)} comptes de ce segment portent un impayé échu, pour ${formatFcfa(s.impaye_xof)} FCFA. À traiter avec la Direction Financière avant toute relance.`
                     : null,
                 ].filter((l): l is string => Boolean(l)),
                 kv: [
                   ["Comptes", formatNumber(s.nb_comptes)],
                   ["Part du portefeuille", `${formatPct(s.part_nb_pct, 0)} %`],
-                  ["CA historique", `${formatMFcfa(s.ca_historique_xof)} M FCFA`],
+                  ["CA historique", `${formatFcfa(s.ca_historique_xof)} FCFA`],
                   ["Silence médian", s.silence_median_mois !== null ? `${s.silence_median_mois} mois` : "—"],
                   ["Avec impayé échu", formatNumber(s.nb_avec_impaye)],
                   ["Avec pipe ouvert", formatNumber(s.nb_avec_opp_ouverte)],
@@ -85,7 +85,7 @@ export async function DcBaseInstallee() {
                       (c) =>
                         [
                           c.compte,
-                          `${formatMFcfa(c.ca_total_xof)} M${c.mois_silence !== null ? ` · ${c.mois_silence} mois` : ""}${c.alerte_impaye ? " · impayé" : ""}`,
+                          `${formatFcfa(c.ca_total_xof)}${c.mois_silence !== null ? ` · ${c.mois_silence} mois` : ""}${c.alerte_impaye ? " · impayé" : ""}`,
                         ] as [string, string],
                     ),
                 ],
@@ -100,7 +100,7 @@ export async function DcBaseInstallee() {
           {formatNumber(dormance.totaux.nb_prospects)}{" "}
           prospects n&apos;ont jamais commandé — ce ne sont pas des clients perdus.
           {dormance.qualite_donnees.nb_hors_referentiel > 0 &&
-            ` ${formatNumber(dormance.qualite_donnees.nb_hors_referentiel)} comptes ont commandé (${formatMFcfa(dormance.qualite_donnees.ca_hors_referentiel_xof)} M FCFA) sans exister dans le référentiel clients d'Odoo.`}
+            ` ${formatNumber(dormance.qualite_donnees.nb_hors_referentiel)} comptes ont commandé (${formatFcfa(dormance.qualite_donnees.ca_hors_referentiel_xof)} FCFA) sans exister dans le référentiel clients d'Odoo.`}
         </Note>
       </Tile>
 
@@ -115,8 +115,8 @@ export async function DcBaseInstallee() {
           <Lst
             items={dormance.decrochages.slice(0, 6).map((c) => ({
               title: c.compte,
-              sub: `${c.mois_silence} mois sans commande · ${formatMFcfa(c.ca_total_xof)} M historiques${c.nb_opp_ouvertes > 0 ? ` · ${formatNumber(c.nb_opp_ouvertes)} opportunités ouvertes` : ""}`,
-              tag: c.alerte_impaye ? `${formatMFcfa(c.impaye_xof)} M impayés` : c.label,
+              sub: `${c.mois_silence} mois sans commande · ${formatFcfa(c.ca_total_xof)} historiques${c.nb_opp_ouvertes > 0 ? ` · ${formatNumber(c.nb_opp_ouvertes)} opportunités ouvertes` : ""}`,
+              tag: c.alerte_impaye ? `${formatFcfa(c.impaye_xof)} impayés` : c.label,
               tagVariant: c.alerte_impaye ? ("r" as const) : ("w" as const),
               detail: {
                 kicker: `Compte · ${c.label.toLowerCase()}`,
@@ -124,12 +124,12 @@ export async function DcBaseInstallee() {
                 tag: `${c.mois_silence} mois de silence`,
                 tagVariant: c.alerte_impaye ? ("r" as const) : ("w" as const),
                 body: [
-                  `Dernière commande le ${formatDate(c.derniere_commande)}, soit ${c.mois_silence} mois. Ce compte a généré ${formatMFcfa(c.ca_total_xof)} M FCFA sur ${formatNumber(c.nb_commandes)} commandes depuis le début de la relation.`,
+                  `Dernière commande le ${formatDate(c.derniere_commande)}, soit ${c.mois_silence} mois. Ce compte a généré ${formatFcfa(c.ca_total_xof)} FCFA sur ${formatNumber(c.nb_commandes)} commandes depuis le début de la relation.`,
                   c.nb_opp_ouvertes > 0
-                    ? `Il porte ${formatNumber(c.nb_opp_ouvertes)} opportunités ouvertes pour ${formatMFcfa(c.opp_ouvertes_xof)} M FCFA : il y a du travail commercial en cours, mais aucune commande signée depuis ${c.mois_silence} mois.`
+                    ? `Il porte ${formatNumber(c.nb_opp_ouvertes)} opportunités ouvertes pour ${formatFcfa(c.opp_ouvertes_xof)} FCFA : il y a du travail commercial en cours, mais aucune commande signée depuis ${c.mois_silence} mois.`
                     : "Aucune opportunité ouverte sur ce compte : le silence est total, côté commande comme côté pipeline.",
                   c.alerte_impaye
-                    ? `Ce compte porte ${formatMFcfa(c.impaye_xof)} M FCFA d'impayé échu, avec un retard maximum de ${formatNumber(c.retard_max_jours)} jours. Une relance commerciale se coordonne avec la Direction Financière — le détail des factures relève de son périmètre.`
+                    ? `Ce compte porte ${formatFcfa(c.impaye_xof)} FCFA d'impayé échu, avec un retard maximum de ${formatNumber(c.retard_max_jours)} jours. Une relance commerciale se coordonne avec la Direction Financière — le détail des factures relève de son périmètre.`
                     : "Aucun impayé échu sur ce compte.",
                   c.hors_referentiel
                     ? "Ce compte n'existe pas dans le référentiel clients d'Odoo alors qu'il a passé des commandes : anomalie de synchronisation à faire corriger."
@@ -139,11 +139,11 @@ export async function DcBaseInstallee() {
                   ["Segment", c.label],
                   ["Dernière commande", formatDate(c.derniere_commande)],
                   ["Silence", `${c.mois_silence} mois`],
-                  ["CA historique", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
+                  ["CA historique", `${formatFcfa(c.ca_total_xof)} FCFA`],
                   ["Commandes", formatNumber(c.nb_commandes)],
                   ["Commercial rattaché", c.commercial || "non renseigné"],
-                  ["Pipe ouvert", c.nb_opp_ouvertes > 0 ? `${formatMFcfa(c.opp_ouvertes_xof)} M FCFA` : "—"],
-                  ["Impayé échu", c.alerte_impaye ? `${formatMFcfa(c.impaye_xof)} M FCFA` : "—"],
+                  ["Pipe ouvert", c.nb_opp_ouvertes > 0 ? `${formatFcfa(c.opp_ouvertes_xof)} FCFA` : "—"],
+                  ["Impayé échu", c.alerte_impaye ? `${formatFcfa(c.impaye_xof)} FCFA` : "—"],
                 ],
                 // note: "Commercial repris de la dernière commande du compte. Le référentiel commercial d'Odoo est en texte libre, sans notion d'équipe.",
               },
@@ -179,9 +179,9 @@ export async function DcBaseInstallee() {
                     title: it.client,
                     tag: it.titre,
                     tagVariant: "w" as const,
-                    body: [it.detail, `Montant historique associé : ${formatMFcfa(it.montant_xof)} M FCFA.`],
+                    body: [it.detail, `Montant historique associé : ${formatFcfa(it.montant_xof)} FCFA.`],
                     kv: [
-                      ["Montant", `${formatMFcfa(it.montant_xof)} M FCFA`],
+                      ["Montant", `${formatFcfa(it.montant_xof)} FCFA`],
                       ["Type de signal", it.titre],
                     ],
                     // note: "Signal calculé sur les lignes de commande réelles (catégories déjà achetées et ancienneté).",
@@ -200,9 +200,9 @@ export async function DcBaseInstallee() {
                       title: it.client,
                       tag: it.titre,
                       tagVariant: "a" as const,
-                      body: [it.detail, `Montant historique associé : ${formatMFcfa(it.montant_xof)} M FCFA.`],
+                      body: [it.detail, `Montant historique associé : ${formatFcfa(it.montant_xof)} FCFA.`],
                       kv: [
-                        ["Montant", `${formatMFcfa(it.montant_xof)} M FCFA`],
+                        ["Montant", `${formatFcfa(it.montant_xof)} FCFA`],
                         ["Type de signal", it.titre],
                       ],
                       // note: "Comparaison de catégories achetées entre comptes de profil voisin, sur les commandes réelles.",

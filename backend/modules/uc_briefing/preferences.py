@@ -27,6 +27,22 @@ CE QUI N'EST PAS AU CATALOGUE, et pourquoi — vérifié sur la base réelle :
     lui fournir, et en coder un en dur ferait passer un choix arbitraire pour une
     priorité commerciale. Demande une agrégation dédiée, pas une case à cocher.
 
+  - intercontrat, taux d'occupation, complétude des timesheets (trame DO) :
+    `account.analytic.line` n'est pas synchronisé, et aucune table de saisie des
+    temps n'existe. Le modèle d'affaires ne s'y prête pas non plus — le CA se
+    fait en intégration (Cisco 10 393 M, Fortinet 5 288 M, Dell 4 732 M), pas en
+    régie : 358 lignes de commande sur 14 767 évoquent un jour/homme.
+  - devis à relancer, taux de transformation devis → commande (trame DC) :
+    `sale_orders.state` vaut `sale` sur les 3 108 lignes du miroir. Aucun devis
+    (`draft` / `sent`) n'est synchronisé et `validity_date` n'existe pas ici.
+    Il n'y a rien à relancer tant que la synchronisation ne les ramène pas.
+  - position de trésorerie (trame DAF) : `account.payment` et
+    `account.bank.statement.line` ne sont pas synchronisés. Le solde relevé à
+    l'audit n'est pas dans l'application.
+  - taux de couverture du pipe par rapport à l'objectif : `commercial_objectives`
+    est vide. Le numérateur existe, le dénominateur non — et le dériver ferait
+    passer une hypothèse pour une cible votée.
+
 Règle générale : aucun élément n'entre ici sans que sa source ait été vérifiée
 non vide sur des données réelles.
 """
@@ -62,197 +78,323 @@ class Element:
     `description` dit ce que la PUCE racontera, pas ce que la donnée est : c'est
     ce que lit la personne qui coche, et elle décide d'un contenu de briefing,
     pas d'un branchement technique.
+
+    `question` porte la QUESTION MÉTIER à laquelle l'élément répond, mot pour mot
+    celle de la trame de briefing quotidien. C'est le champ qui a réorienté tout
+    le catalogue : construit à l'envers — en inventoriant ce que le CRM savait
+    agréger — il produisait un briefing qui répondait à « qu'est-ce qu'on sait
+    calculer ? » et non à « qu'est-ce que ce directeur se demande le matin ? ».
+    Un élément sans `question` est un COMPLÉMENT : il reste disponible, il
+    n'arrive jamais dans le briefing sans un geste explicite.
+
+    `bloc` donne la forme attendue d'un briefing utile, en trois temps :
+    le chiffre et son mouvement, les exceptions, ce qu'on fait aujourd'hui.
+    C'est lui qui ordonne les puces — l'ordre du code n'a aucune raison de
+    correspondre à l'ordre de lecture.
     """
     id: str
     libelle: str
     description: str
     defaut: bool
+    question: str = ""
+    bloc: str = "chiffre"
+
+
+# Ordre de lecture d'un briefing. Les puces sortent triées par bloc, puis par
+# position dans le catalogue du rôle — jamais dans l'ordre où le code les a
+# produites, qui suit les dépendances de calcul et non l'urgence.
+#
+# `couverture` passe après tout : c'est la ligne qui dit quelles questions sont
+# restées sans réponse, utile mais jamais prioritaire sur un fait.
+# `complement` ferme la marche : un élément hors trame ne doit jamais précéder
+# une réponse à une question posée.
+ORDRE_BLOCS = ("chiffre", "alerte", "action", "couverture", "complement")
 
 
 # ── Catalogue par rôle ────────────────────────────────────────────────────────
-# Les éléments marqués `defaut=True` reproduisent le briefing tel qu'il existait
-# avant cette fonctionnalité, à une exception près : les éléments qui RÉPARENT
-# une promesse déjà faite par narratif.ROLE_FOCUS arrivent cochés eux aussi. Le
-# prompt annonce déjà ces sujets au LLM (« les renouvellements et échéances à
-# venir », « la couverture par rapport aux objectifs », « la visibilité de charge
-# par practice », « la marge réelle par rapport à la marge annoncée ») sans
-# qu'aucun fait ne les porte : les livrer décochés reviendrait à livrer le
-# correctif éteint.
+# UN ÉLÉMENT = UNE QUESTION de la trame, dans l'ordre de la trame. Les agrégats
+# qui ne répondent à aucune question n'ont pas disparu : ils sont marqués
+# `bloc="complement"`, sans `question`, et décochés.
 #
-# Tout autre élément nouveau arrive DÉCOCHÉ — personne ne doit voir son débrief
-# s'allonger tout seul après un déploiement.
+# Les défauts sont désormais EXACTEMENT les éléments porteurs d'une question.
+# Auparavant les six éléments cochés du directeur commercial ne répondaient à
+# aucune : le briefing par défaut était intégralement hors trame, et personne ne
+# pouvait s'en apercevoir depuis l'écran.
+#
+# CE QUI N'EST PAS AU CATALOGUE, et pourquoi — vérifié sur la base réelle :
+#   - renouvellements de contrats : la table `contracts` est VIDE (0 ligne). La
+#     case serait structurellement muette, ce qui est pire qu'une case absente :
+#     elle fait croire à un réglage qui n'a aucun effet. C'est `deadline` sur les
+#     opportunités qui porte réellement les échéances.
+#   - répartition sectorielle : `clients.sector` est rempli pour 1 client sur
+#     1 508. La puce dirait « 100 % Non renseigné ».
+#   - montée en valeur (`get_cross_sell_opportunities`) : la méthode exige un
+#     `product_anchor` obligatoire — elle répond « qui a acheté X et pas Y », pas
+#     « où sont les occasions ». En coder un en dur ferait passer un choix
+#     arbitraire pour une priorité commerciale.
+#
+# Les questions de la trame SANS réponse possible ne deviennent pas des cases
+# muettes non plus : elles sont déclarées dans `SANS_REPONSE` et restituées en
+# une seule ligne de couverture (cf. l'élément `questions_sans_reponse`).
 
 CATALOGUE: dict[str, list[Element]] = {
+    # ═══ Direction générale — ratios croisés et points de rupture ═══════════
+    # Format voulu par la trame : cinq chiffres, trois alertes, trois
+    # arbitrages. Pas plus.
     "dg": [
         Element("ca_ytd", "CA à date comparable",
                 "Le CA commandé au jour J face au même jour de l'an dernier, en montant et en nombre de commandes.",
-                True),
-        Element("rupture_rythme", "Comptes en rupture de rythme",
-                "Les comptes majeurs qui ont cessé de commander, nommés et datés, avec le CA historique en jeu.",
-                True),
-        Element("croisement_impaye_rupture", "Impayé croisé avec silence",
-                "Les comptes qui cumulent une dette échue et un arrêt de commande — le cas à trancher.",
-                True),
-        Element("file_arbitrage", "File d'arbitrage",
-                "Les dossiers qu'aucune direction ne peut trancher seule, avec l'enjeu et le coût d'une semaine de report.",
-                True),
+                True, "Où en est l'exercice à date comparable ?", "chiffre"),
+        Element("visibilite_carnet", "Visibilité du carnet",
+                "Combien de mois de facturation le backlog couvre, face au plancher retenu.",
+                True, "Combien de mois de visibilité j'ai ?", "chiffre"),
+        Element("book_to_bill", "Book-to-bill",
+                "Ce qui est commandé rapporté à ce qui est facturé : le carnet se remplit-il plus vite qu'il ne se vide.",
+                True, "Est-ce que je remplis plus vite que je ne consomme ?", "chiffre"),
+        Element("marge_exercice", "Marge de l'exercice",
+                "La marge provisoire et définitive de l'exercice, en montant et en pourcentage du CA.",
+                True, "Est-ce que je gagne de l'argent ?", "chiffre"),
         Element("position_tresorerie", "Position nette de trésorerie",
                 "Ce qui est dû aux fournisseurs face à ce qui reste à encaisser, et le découvert structurel entre les deux.",
-                True),
+                True, "Est-ce que je serai payé ?", "chiffre"),
+        Element("croisement_impaye_rupture", "Impayé croisé avec silence",
+                "Les comptes qui cumulent une dette échue et un arrêt de commande — le cas à trancher.",
+                True, "Quels sont mes 3 risques du jour ?", "alerte"),
+        Element("rupture_rythme", "Comptes en rupture de rythme",
+                "Les comptes majeurs qui ont cessé de commander, nommés et datés, avec le CA historique en jeu.",
+                True, "Quels sont mes 3 risques du jour ?", "alerte"),
         Element("concentration", "Concentration du portefeuille",
-                "La part du top 5 dans le CA de l'exercice, rapportée au seuil de vigilance de 50 %.",
-                True),
+                "La part du top 5 dans le CA de l'exercice, rapportée au seuil de vigilance.",
+                True, "Quels sont mes 3 risques du jour ?", "alerte"),
+        Element("file_arbitrage", "Arbitrages en attente",
+                "Les dossiers qu'aucune direction ne peut trancher seule, avec l'enjeu et le coût d'une semaine de report.",
+                True, "Quelles décisions m'attendent ?", "action"),
+        Element("questions_sans_reponse", "Questions restées sans réponse",
+                "Les questions de la trame que les données ne permettent pas de traiter aujourd'hui, et ce qui les bloque.",
+                True, "", "couverture"),
+        # ── Compléments : hors trame, décochés ───────────────────────────────
         Element("taux_materialisation", "Matérialisation du CA",
-                "La part du provisoire devenue définitive face au seuil de 80 %, et le backlog non encore facturé.",
-                True),
+                "La part du provisoire devenue définitive face à son seuil, et le backlog non encore facturé.",
+                False, "", "complement"),
         Element("retention_clients", "Rétention et churn",
                 "Combien de clients de l'an dernier ont recommandé cette année, combien sont perdus, combien sont nouveaux.",
-                False),
+                False, "", "complement"),
         Element("engagement_fournisseurs", "Engagement fournisseurs",
                 "Le montant fournisseur restant dû et les fournisseurs qui concentrent l'engagement.",
-                False),
-        # ── Vue 360 (élargissement du pilotage DG) — tous décochés par défaut ──
+                False, "", "complement"),
         Element("ca_pluriannuel", "CA pluriannuel",
                 "Le CA commandé des cinq derniers exercices, la meilleure année et où se situe l'exercice en cours.",
-                False),
-        Element("marge_exercice", "Marge de l'exercice",
-                "La marge provisoire et définitive de l'exercice, en montant et en pourcentage moyen.",
-                False),
+                False, "", "complement"),
         Element("prevision_atterrissage", "Prévision d'atterrissage",
                 "Le réalisé du trimestre en cours et la projection de fin de trimestre, du pessimiste à l'optimiste.",
-                False),
+                False, "", "complement"),
         Element("taux_transformation", "Taux de transformation",
                 "La part des affaires gagnées en nombre et en valeur, et le client qui concentre les pertes.",
-                False),
+                False, "", "complement"),
         Element("echeances_affaires", "Affaires à échéance",
-                "Les opportunités encore ouvertes dont la clôture tombe dans les 60 jours, et la plus proche.",
-                False),
+                "Les opportunités encore ouvertes dont la clôture tombe dans la fenêtre retenue.",
+                False, "", "complement"),
         Element("delai_encaissement", "Délai d'encaissement",
                 "Le délai réel entre facturation et paiement, le retard moyen des impayés et le taux de recouvrement.",
-                False),
+                False, "", "complement"),
         Element("performance_commerciaux", "Performance par commercial",
                 "La répartition du réalisé de l'exercice entre commerciaux, et qui le porte.",
-                False),
+                False, "", "complement"),
         Element("mix_sectoriel", "Mix sectoriel",
                 "La répartition du CA de l'exercice par secteur client, et le secteur dominant.",
-                False),
+                False, "", "complement"),
         Element("rythme_mensuel", "Rythme mensuel",
                 "Le CA mois par mois de l'exercice, et le dernier mois complet face à la moyenne de l'année.",
-                False),
+                False, "", "complement"),
         Element("affaires_imminentes", "Affaires imminentes",
                 "Les opportunités les plus chaudes du pipeline, en score pondéré, et la première d'entre elles.",
-                False),
+                False, "", "complement"),
         Element("factures_echues", "Factures échues",
-                "Le stock de factures échues non réglées, côté clients et côté fournisseurs — nombre, montant et part au-delà de 90 jours.",
-                False),
+                "Le stock de factures échues non réglées, côté clients et côté fournisseurs.",
+                False, "", "complement"),
     ],
+
+    # ═══ Direction commerciale ══════════════════════════════════════════════
     "dir_commercial": [
-        Element("pipeline_ouvert", "Pipeline ouvert",
-                "Le montant brut et pondéré du pipeline, et le nombre d'opportunités qui le portent.",
-                True),
+        Element("ca_commande_periode", "CA commandé et son mouvement",
+                "Ce qui a été commandé depuis le 1er du mois et depuis le 1er janvier, avec la variation depuis hier et sur le mois.",
+                True, "Combien j'ai commandé hier / depuis le 1er du mois ?", "chiffre"),
+        Element("carnet_commandes", "Carnet de commandes",
+                "Ce qui est vendu et pas encore facturé, et son mouvement.",
+                True, "Où en est mon carnet de commandes ?", "chiffre"),
+        Element("pipeline_ouvert", "Pipeline ouvert et pondéré",
+                "Le montant brut et pondéré du pipeline, la part encore dans les temps, et le nombre d'affaires qui le portent.",
+                True, "Mon pipeline couvre-t-il encore mon objectif ?", "chiffre"),
+        # « Ce qui a bougé » précède le taux de transformation : c'est l'ordre de
+        # la trame (question 4 contre question 9), et le résumé de tête ne retient
+        # que trois chiffres — le mouvement du jour y a sa place, un taux
+        # d'exercice beaucoup moins.
+        Element("mouvements_recents", "Ce qui a bougé",
+                "Les commandes entrées, factures émises, règlements reçus et changements d'étape des sept derniers jours.",
+                True, "Qu'est-ce qui a bougé dans le pipe ?", "chiffre"),
+        Element("taux_victoire", "Taux de transformation",
+                "La part des affaires gagnées, en nombre et en valeur.",
+                True, "Quel est mon taux de transformation ?", "chiffre"),
+        Element("hygiene_pipe", "Ce qui dort, ce qui est périmé",
+                "Les affaires encore dans les temps qui ne bougent plus, et le stock d'opportunités dont l'échéance est déjà passée.",
+                True, "Qu'est-ce qui dort ?", "alerte"),
+        Element("echeances_opportunites", "Échéances à venir",
+                "Les affaires encore ouvertes dont la clôture tombe dans la fenêtre retenue — ce qu'il faut relancer avant qu'il ne soit trop tard.",
+                True, "Quelles affaires vont expirer ?", "alerte"),
+        Element("concentration_clients", "Dépendance aux plus gros comptes",
+                "La part du commandé portée par le top 3 et le top 5, face au seuil de vigilance.",
+                True, "Suis-je trop dépendant d'un client ?", "alerte"),
+        Element("questions_sans_reponse", "Questions restées sans réponse",
+                "Les questions de la trame que les données ne permettent pas de traiter aujourd'hui, et ce qui les bloque.",
+                True, "", "couverture"),
+        # ── Compléments ──────────────────────────────────────────────────────
         Element("forecast_scenarios", "Fourchette de forecast",
                 "Les trois scénarios à six mois — pessimiste, réaliste, optimiste.",
-                True),
-        Element("taux_victoire", "Taux de victoire",
-                "La part des affaires gagnées, en nombre et en valeur.",
-                True),
+                False, "", "complement"),
         Element("pertes_par_client", "Où se concentrent les pertes",
                 "Le client qui concentre le plus d'opportunités perdues, en montant et en nombre.",
-                True),
+                False, "", "complement"),
         Element("top_lead", "Lead le plus chaud",
                 "L'opportunité au meilleur score pondéré du pipeline.",
-                True),
-        # Répare ROLE_FOCUS["dir_commercial"] : « les opportunités qui glissent ».
-        Element("echeances_opportunites", "Échéances à 60 jours",
-                "Les opportunités encore ouvertes dont la date de clôture tombe dans les deux mois.",
-                True),
-        Element("couverture_objectifs", "Couverture des objectifs",
-                "L'écart entre le vendu et l'objectif de la période, par commercial.",
-                False),
+                False, "", "complement"),
+        Element("couverture_objectifs", "Réalisé par commercial",
+                "La répartition du réalisé de l'exercice entre commerciaux.",
+                False, "", "complement"),
         Element("mix_offre", "Mix d'offre",
                 "La répartition du CA par famille d'offre sur l'exercice.",
-                False),
+                False, "", "complement"),
     ],
+
+    # ═══ Direction administrative et financière ═════════════════════════════
     "dir_financier": [
-        Element("exposition_impayes", "Exposition aux impayés",
-                "Le montant total dû et le nombre de factures concernées.",
-                True),
-        Element("retard_90j", "Retard au-delà de 90 jours",
-                "La part la plus ancienne de l'exposition, celle qui ne rentrera pas seule.",
-                True),
-        Element("marge_definitive", "Marge définitive moyenne",
-                "La marge réellement constatée sur les dossiers arrêtés.",
-                True),
-        Element("encaissable_vs_du", "À encaisser face à ce qui est dû",
-                "Le reste à encaisser des clients face au restant dû aux fournisseurs.",
-                True),
-        Element("top_debiteur", "Plus gros débiteur",
-                "Le client nommé qui porte le plus gros impayé, avec son retard maximal.",
-                True),
-        Element("forecast_trimestre", "Prévision de trimestre",
-                "L'atterrissage réaliste du trimestre en cours.",
-                True),
-        # Répare ROLE_FOCUS["dir_financier"] : « la marge réelle par rapport à la
-        # marge annoncée en début de dossier ».
+        Element("balance_agee", "Balance âgée client",
+                "Les créances par tranche d'ancienneté — à échoir, 0-30, 30-60, 60-90, au-delà — et la part en contentieux.",
+                True, "Qu'est-ce qui reste dû, et depuis quand ?", "chiffre"),
+        Element("dso_glissant", "DSO glissant",
+                "Le délai réel d'encaissement sur douze mois glissants, face à la période précédente.",
+                True, "Mon DSO se dégrade-t-il ?", "chiffre"),
+        Element("ca_facture_periode", "CA facturé et encaissé",
+                "Ce qui a été facturé et encaissé sur le mois et sur l'exercice, face au commandé, avec leur mouvement.",
+                True, "Où en est le CA facturé du mois ?", "chiffre"),
+        Element("attente_facturation", "CA en attente de facturation",
+                "Ce qui est vendu et pas encore facturé, et ce que cela représente face au facturé mensuel.",
+                True, "Combien de CA dort en attente de facturation ?", "chiffre"),
+        Element("marge_definitive", "Marge brute constatée",
+                "La marge réellement constatée sur les dossiers arrêtés, rapportée au CA définitif.",
+                True, "Ma marge brute tient-elle ?", "chiffre"),
+        Element("relances_du_jour", "Relances du jour",
+                "Les clients à relancer aujourd'hui, groupés par débiteur, avec leur retard maximal.",
+                True, "Qui dois-je relancer aujourd'hui ?", "action"),
+        Element("echeancier_fournisseurs", "Échéances fournisseurs",
+                "Ce qu'il faudra décaisser aux fournisseurs à 30, 60 et 90 jours, et qui concentre cet engagement.",
+                True, "Quelles sont mes échéances fournisseurs ?", "alerte"),
         Element("ecart_marge_promise", "Écart marge prévue / réelle",
                 "La distance entre la marge annoncée à l'ouverture des dossiers et celle constatée à l'arrêté.",
-                True),
-        Element("echeancier_fournisseurs", "Échéancier fournisseurs",
-                "Ce qu'il faudra décaisser aux fournisseurs, et qui concentre cet engagement.",
-                False),
+                True, "Ma marge brute tient-elle ?", "alerte"),
+        Element("questions_sans_reponse", "Questions restées sans réponse",
+                "Les questions de la trame que les données ne permettent pas de traiter aujourd'hui, et ce qui les bloque.",
+                True, "", "couverture"),
+        # ── Compléments ──────────────────────────────────────────────────────
+        # `exposition_impayes`, `retard_90j` et `top_debiteur` sont ABSORBÉS par
+        # `balance_agee` et `relances_du_jour`, qui portent les mêmes montants
+        # avec la ventilation et le nom du débiteur en plus. Les cocher tous
+        # produirait trois puces parlant du même encours.
+        Element("exposition_impayes", "Exposition aux impayés",
+                "Le montant total dû et le nombre de factures concernées, sans ventilation.",
+                False, "", "complement"),
+        Element("retard_90j", "Retard au-delà de 90 jours",
+                "La part la plus ancienne de l'exposition, celle qui ne rentrera pas seule.",
+                False, "", "complement"),
+        Element("top_debiteur", "Plus gros débiteur",
+                "Le client nommé qui porte le plus gros impayé, avec son retard maximal.",
+                False, "", "complement"),
+        Element("encaissable_vs_du", "À encaisser face à ce qui est dû",
+                "Le reste à encaisser des clients face au restant dû aux fournisseurs.",
+                False, "", "complement"),
+        Element("forecast_trimestre", "Prévision de trimestre",
+                "L'atterrissage réaliste du trimestre en cours.",
+                False, "", "complement"),
     ],
+
+    # ═══ Direction des opérations ═══════════════════════════════════════════
+    # Les questions sont RÉÉCRITES autour du dossier, et ne reprennent pas la
+    # trame mot pour mot. Celle-ci décrit une ESN en régie — intercontrat, TJM,
+    # taux d'occupation, complétude des timesheets — quand l'activité se fait en
+    # intégration (Cisco 10 393 M, Fortinet 5 288 M, Dell 4 732 M) et que 358
+    # lignes de commande sur 14 767 seulement évoquent un jour/homme. Importer
+    # ces questions telles quelles laisserait cinq cases muettes sur huit.
     "dir_operations": [
-        Element("volume_marges", "Dossiers et marges moyennes",
-                "Le nombre de dossiers en base, avec les marges provisoire et définitive moyennes.",
-                True),
-        Element("backlog", "Backlog non facturé",
-                "Ce qui est vendu mais pas encore facturé, et le restant dû aux fournisseurs.",
-                True),
-        Element("top_dossier_marge", "Dossier le plus margé",
-                "Le dossier au plus fort apport de marge provisoire.",
-                True),
-        # Répare ROLE_FOCUS["dir_operations"] : « la visibilité de charge par practice ».
-        Element("charge_par_practice", "Charge par famille d'offre",
-                "La répartition du CA par famille de prestation sur l'exercice.",
-                True),
-        Element("dossiers_marge_faible", "Dossiers à marge dégradée",
-                "Les dossiers dont la marge provisoire est la plus basse — l'inverse du palmarès.",
-                False),
-        Element("fiabilite_fournisseurs", "Fiabilité des fournisseurs",
+        Element("backlog", "Carnet à produire",
+                "Ce qui est vendu mais pas encore facturé, son mouvement, et le restant dû aux fournisseurs.",
+                True, "Où en est mon carnet à produire ?", "chiffre"),
+        Element("volume_marges", "Marge par dossier",
+                "Le nombre de dossiers en base, avec les marges provisoire et définitive rapportées au CA.",
+                True, "Quelle est ma marge par mission ?", "chiffre"),
+        Element("derive_budgetaire", "Dossiers qui dérivent",
+                "Les dossiers dont la dépense constatée dévore la dépense prévue, et l'écart entre marge annoncée et marge réelle.",
+                True, "Quelles missions dérivent ?", "alerte"),
+        Element("sous_traitance_dossiers", "Sous-traitance par dossier",
+                "L'engagement fournisseur rapporté au dossier qu'il sert, et les dossiers qui achètent plus qu'ils ne rapportent.",
+                True, "Ma sous-traitance est-elle sous contrôle ?", "alerte"),
+        Element("fiabilite_fournisseurs", "Fournisseurs qui retardent",
                 "Les fournisseurs dont les encours et les retards pèsent sur les dossiers en cours.",
-                False),
+                True, "Quels fournisseurs mettent mes projets en retard ?", "alerte"),
         Element("risque_rupture_fournisseur", "Concentration fournisseur",
                 "Les fournisseurs sur lesquels l'engagement se concentre — autant de points de défaillance unique.",
-                False),
-        Element("commandes_recentes", "Dernières commandes entrées",
+                True, "Où se concentre mon risque fournisseur ?", "alerte"),
+        Element("commandes_recentes", "Ce qui vient d'entrer",
                 "Les commandes des derniers jours, celles qui viennent d'arriver en production.",
-                False),
+                True, "Qu'est-ce qui vient d'entrer en production ?", "chiffre"),
+        Element("questions_sans_reponse", "Questions restées sans réponse",
+                "Les questions de la trame que les données ne permettent pas de traiter aujourd'hui, et ce qui les bloque.",
+                True, "", "couverture"),
+        # ── Compléments ──────────────────────────────────────────────────────
+        Element("top_dossier_marge", "Dossier le plus margé",
+                "Le dossier au plus fort apport de marge provisoire.",
+                False, "", "complement"),
+        Element("dossiers_marge_faible", "Dossiers à marge dégradée",
+                "Les dossiers dont la marge provisoire est la plus basse — l'inverse du palmarès.",
+                False, "", "complement"),
+        Element("charge_par_practice", "Charge par famille d'offre",
+                "La répartition du CA par famille de prestation sur l'exercice.",
+                False, "", "complement"),
     ],
+
+    # ═══ Commercial de terrain ══════════════════════════════════════════════
+    # La trame ne définit pas ce profil : ses questions sont celles du directeur
+    # commercial, restreintes à ce qui reste vrai sans filtre par personne.
     "commercial": [
         Element("pipeline_perso", "Pipeline ouvert",
                 "Le nombre d'opportunités ouvertes et le montant pondéré au scénario réaliste.",
-                True),
-        Element("taux_victoire_nb", "Taux de victoire",
+                True, "Où en est mon pipeline ?", "chiffre"),
+        Element("taux_victoire_nb", "Taux de transformation",
                 "La part des affaires gagnées, en nombre.",
-                True),
-        Element("top_lead", "Lead le plus chaud",
-                "L'opportunité au meilleur score pondéré, avec son étape.",
-                True),
-        # Réparent ROLE_FOCUS["commercial"] : « les ruptures de rythme sur ses
-        # propres comptes, les renouvellements et échéances à venir ».
-        # NB : ces sources ne sont PAS filtrées par commercial (cf. plus bas).
-        Element("echeances_opportunites", "Échéances à 30 jours",
-                "Les opportunités encore ouvertes dont la date de clôture tombe dans le mois.",
-                True),
+                True, "Quel est mon taux de transformation ?", "chiffre"),
+        Element("mouvements_recents", "Ce qui a bougé",
+                "Les commandes, factures, règlements et changements d'étape des sept derniers jours, sur tout le portefeuille S2I.",
+                True, "Qu'est-ce qui a bougé ?", "chiffre"),
+        Element("hygiene_pipe", "Ce qui dort, ce qui est périmé",
+                "Les affaires encore dans les temps qui ne bougent plus, et le stock d'opportunités à échéance dépassée.",
+                True, "Qu'est-ce qui dort ?", "alerte"),
+        Element("echeances_opportunites", "Échéances à venir",
+                "Les affaires encore ouvertes dont la clôture tombe dans la fenêtre retenue.",
+                True, "Quelles affaires vont expirer ?", "alerte"),
         Element("comptes_silencieux", "Comptes qui ont décroché",
                 "Les comptes sans commande depuis trop longtemps, nommés et datés.",
-                True),
-        Element("impayes_portefeuille", "Impayés en cours",
+                True, "Quels comptes ont décroché ?", "alerte"),
+        Element("impayes_portefeuille", "Impayés qui bloquent",
                 "Les factures échues qui bloquent les prochaines commandes.",
-                False),
+                True, "Quels impayés bloquent mes prochaines commandes ?", "alerte"),
+        Element("questions_sans_reponse", "Questions restées sans réponse",
+                "Les questions de la trame que les données ne permettent pas de traiter aujourd'hui, et ce qui les bloque.",
+                True, "", "couverture"),
+        # ── Compléments ──────────────────────────────────────────────────────
+        Element("top_lead", "Lead le plus chaud",
+                "L'opportunité au meilleur score pondéré, avec son étape.",
+                False, "", "complement"),
         Element("deals_perdus", "Affaires perdues récemment",
                 "Les opportunités perdues, et les clients sur lesquels elles se concentrent.",
-                False),
+                False, "", "complement"),
     ],
 }
 
@@ -264,9 +406,92 @@ CATALOGUE: dict[str, list[Element]] = {
 # de résoudre les 32 orthographes distinctes de `salesperson_name` via
 # SalespersonModel et ses alias — chantier distinct, pas un ajustement.
 
+
+# ── Questions de la trame restées sans réponse ───────────────────────────────
+# Elles ne deviennent PAS des cases muettes — la doctrine du catalogue l'interdit
+# — mais elles ne disparaissent pas non plus : le briefing les restitue en une
+# ligne unique, avec leur cause. Une seule ligne, et non une puce d'aveu par
+# question : la direction des opérations en compterait cinq sur huit.
+#
+# Cette ligne est aussi un levier : elle met sous les yeux de chaque direction ce
+# que la qualité du référentiel Odoo lui coûte, chaque matin.
+SANS_REPONSE: dict[str, list[tuple[str, str]]] = {
+    "dg": [
+        ("La machine tourne-t-elle à plein ?",
+         "aucune saisie des temps n'est synchronisée"),
+        ("Quelle est ma marge par BU ?",
+         "le miroir ne porte aucune notion d'unité d'affaires"),
+        ("Quel est mon cash disponible ?",
+         "les paiements et relevés bancaires ne sont pas synchronisés"),
+    ],
+    "dir_commercial": [
+        ("Quels devis vont expirer ?",
+         "aucun devis n'est synchronisé, toutes les commandes du miroir sont déjà confirmées"),
+        ("Est-ce que je vends au bon prix (TJM) ?",
+         "sans objet — l'activité se fait en intégration, pas en régie"),
+        ("Mon pipe couvre-t-il mon objectif ?",
+         "le pipe est mesuré, mais aucun objectif n'est saisi en base"),
+    ],
+    "dir_financier": [
+        ("Quelle est ma position de trésorerie ?",
+         "les paiements et relevés bancaires ne sont pas synchronisés"),
+        ("Ai-je des engagements réceptionnés non facturés ?",
+         "les lignes de commande d'achat ne sont pas synchronisées"),
+        ("Où en est le facturé face à l'objectif ?",
+         "le facturé est mesuré, mais aucun objectif n'est saisi en base"),
+    ],
+    "dir_operations": [
+        ("Qui est en intercontrat, quel est mon taux d'occupation ?",
+         "aucune saisie des temps n'est synchronisée, et l'activité ne se fait pas en régie"),
+        ("Quelles missions se terminent bientôt ?",
+         "la date de fin n'est renseignée que sur 9 dossiers sur 2 392"),
+        ("Le consommé dépasse-t-il le vendu, ligne à ligne ?",
+         "les quantités livrées et facturées valent zéro sur les 19 510 lignes du miroir"),
+    ],
+    "commercial": [
+        ("Quels devis dois-je relancer ?",
+         "aucun devis n'est synchronisé"),
+        ("Où en est mon portefeuille à moi ?",
+         "les sources ne sont pas filtrables par commercial — 32 orthographes distinctes de vendeur"),
+    ],
+}
+
+
 DEFAUTS: dict[str, list[str]] = {
     role: [e.id for e in elements if e.defaut] for role, elements in CATALOGUE.items()
 }
+
+
+def rang(role: str, element_id: str) -> tuple[int, int]:
+    """Position de lecture d'un élément : (rang du bloc, rang dans le rôle).
+
+    Un identifiant inconnu passe en dernier plutôt que de lever : un élément
+    retiré du catalogue mais encore cité par une composition enregistrée ne doit
+    pas coûter le briefing.
+    """
+    for index, element in enumerate(CATALOGUE.get(role, [])):
+        if element.id == element_id:
+            bloc = element.bloc if element.bloc in ORDRE_BLOCS else "complement"
+            return (ORDRE_BLOCS.index(bloc), index)
+    # Identifiant inconnu : rangé avec les compléments plutôt qu'au-delà du
+    # dernier bloc — un rang hors bornes ferait déborder toute indexation de
+    # `ORDRE_BLOCS` chez l'appelant (cf. Puces.par_bloc).
+    return (ORDRE_BLOCS.index("complement"), 9999)
+
+
+def questions_de(role: str) -> list[str]:
+    """Questions couvertes par le rôle, dans l'ordre de lecture, sans doublon.
+
+    Plusieurs éléments peuvent répondre à la même question — les trois alertes
+    du directeur général répondent toutes à « quels sont mes 3 risques du
+    jour ? ». La liste les fusionne.
+    """
+    vues: list[str] = []
+    for element in CATALOGUE.get(role, []):
+        if element.question and element.question not in vues:
+            vues.append(element.question)
+    return vues
+
 
 _IDS: dict[str, set[str]] = {role: {e.id for e in elements} for role, elements in CATALOGUE.items()}
 

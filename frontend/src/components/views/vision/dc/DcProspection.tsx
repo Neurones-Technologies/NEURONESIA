@@ -1,5 +1,5 @@
 import { getComptesDc, getEquipeDc, Periode } from "@/lib/api/commercial";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { PeriodeNav } from "./periode-nav";
@@ -80,7 +80,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
               ["Opportunités générées (gabarit)", formatNumber(prosp.totaux.nb_opportunites)],
               ["Objectif annuel", formatNumber(prosp.objectif_annuel_nb)],
               ["Taux d'atteinte", `${formatPct(prosp.totaux.taux_atteinte_pct, 0)} %`],
-              ["Montant généré (gabarit)", `${formatMFcfa(prosp.totaux.montant_genere_xof)} M FCFA`],
+              ["Montant généré (gabarit)", `${formatFcfa(prosp.totaux.montant_genere_xof)} FCFA`],
             ],
           }}
         />
@@ -99,13 +99,13 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
               tag: "mesuré",
               tagVariant: "s",
               body: [
-                `${formatNumber(acquisition.annee_courante.nb_comptes)} comptes ont passé leur première commande en ${acquisition.annee_courante.annee}, pour ${formatMFcfa(acquisition.annee_courante.ca_xof)} M FCFA de CA cumulé depuis leur entrée.`,
+                `${formatNumber(acquisition.annee_courante.nb_comptes)} comptes ont passé leur première commande en ${acquisition.annee_courante.annee}, pour ${formatFcfa(acquisition.annee_courante.ca_xof)} FCFA de CA cumulé depuis leur entrée.`,
                 `L'exercice précédent en a compté ${formatNumber(acquisition.annee_courante.nb_comptes_annee_precedente)} sur douze mois complets : la comparaison n'est valable qu'à date équivalente.`,
                 "C'est la seule mesure fiable du « focus nouveaux comptes » demandé : la date de première commande signée existe, contrairement aux dates de création d'opportunité.",
               ],
               kv: [
                 ["Nouveaux comptes", formatNumber(acquisition.annee_courante.nb_comptes)],
-                ["CA cumulé associé", `${formatMFcfa(acquisition.annee_courante.ca_xof)} M FCFA`],
+                ["CA cumulé associé", `${formatFcfa(acquisition.annee_courante.ca_xof)} FCFA`],
                 ["Exercice précédent", formatNumber(acquisition.annee_courante.nb_comptes_annee_precedente)],
               ],
             }}
@@ -152,7 +152,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
           <Bars
             rows={prosp.lignes.map((l) => ({
               name: l.libelle,
-              sub: `objectif ${formatNumber(l.objectif_nb)} · ${formatNumber(l.nb_nouveaux_comptes)} nouveaux comptes · ${formatMFcfa(l.montant_genere_xof)} M FCFA générés`,
+              sub: `objectif ${formatNumber(l.objectif_nb)} · ${formatNumber(l.nb_nouveaux_comptes)} nouveaux comptes · ${formatFcfa(l.montant_genere_xof)} FCFA générés`,
               value: formatNumber(l.nb_opportunites),
               pct: (l.nb_opportunites / maxProsp) * 100,
               variant: l.ecart_nb < 0 ? ("r" as const) : ("s" as const),
@@ -162,7 +162,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
                 tag: "donnée statique",
                 tagVariant: "n" as const,
                 body: [
-                  `${formatNumber(l.nb_opportunites)} opportunités générées pour un objectif de ${formatNumber(l.objectif_nb)}, soit un écart de ${l.ecart_nb > 0 ? "+" : ""}${formatNumber(l.ecart_nb)}. Dont ${formatNumber(l.nb_nouveaux_comptes)} sur des comptes nouveaux, pour ${formatMFcfa(l.montant_genere_xof)} M FCFA.`,
+                  `${formatNumber(l.nb_opportunites)} opportunités générées pour un objectif de ${formatNumber(l.objectif_nb)}, soit un écart de ${l.ecart_nb > 0 ? "+" : ""}${formatNumber(l.ecart_nb)}. Dont ${formatNumber(l.nb_nouveaux_comptes)} sur des comptes nouveaux, pour ${formatFcfa(l.montant_genere_xof)} FCFA.`,
                   prosp.raison,
                   "Ce qui EST mesurable et le remplace utilement : le nombre de comptes ayant passé leur première commande, dans la tuile d'acquisition ci-dessous.",
                 ],
@@ -171,7 +171,7 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
                   ["Objectif", formatNumber(l.objectif_nb)],
                   ["Écart", formatNumber(l.ecart_nb)],
                   ["Nouveaux comptes", formatNumber(l.nb_nouveaux_comptes)],
-                  ["Montant généré", `${formatMFcfa(l.montant_genere_xof)} M FCFA`],
+                  ["Montant généré", `${formatFcfa(l.montant_genere_xof)} FCFA`],
                 ],
               },
             }))}
@@ -195,27 +195,27 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
                   .reverse()
                   .map((a) => ({
                     name: String(a.annee),
-                    sub: `${formatMFcfa(a.ca_xof)} M FCFA de CA cumulé depuis leur entrée${a.annee === acquisition.annee_courante.annee ? " · exercice en cours" : ""}`,
+                    sub: `${formatFcfa(a.ca_xof)} FCFA de CA cumulé depuis leur entrée${a.annee === acquisition.annee_courante.annee ? " · exercice en cours" : ""}`,
                     value: formatNumber(a.nb_comptes),
                     pct: (a.nb_comptes / maxAcq) * 100,
                     variant: a.annee === acquisition.annee_courante.annee ? ("s" as const) : undefined,
                     detail: {
                       kicker: "Exercice · comptes entrants",
                       title: `${formatNumber(a.nb_comptes)} nouveaux comptes en ${a.annee}`,
-                      tag: `${formatMFcfa(a.ca_xof)} M FCFA cumulés`,
+                      tag: `${formatFcfa(a.ca_xof)} FCFA cumulés`,
                       tagVariant: "a" as const,
                       body: [
-                        `${formatNumber(a.nb_comptes)} comptes ont passé leur première commande en ${a.annee}. Leur CA cumulé depuis l'entrée atteint ${formatMFcfa(a.ca_xof)} M FCFA — un montant qui court sur toutes les années suivantes, pas seulement sur ${a.annee}.`,
+                        `${formatNumber(a.nb_comptes)} comptes ont passé leur première commande en ${a.annee}. Leur CA cumulé depuis l'entrée atteint ${formatFcfa(a.ca_xof)} FCFA — un montant qui court sur toutes les années suivantes, pas seulement sur ${a.annee}.`,
                         a.annee === acquisition.annee_courante.annee
                           ? "Exercice en cours : le compte n'est pas comparable à une année pleine."
                           : "Exercice complet.",
                       ],
                       kv: [
                         ["Nouveaux comptes", formatNumber(a.nb_comptes)],
-                        ["CA cumulé", `${formatMFcfa(a.ca_xof)} M FCFA`],
+                        ["CA cumulé", `${formatFcfa(a.ca_xof)} FCFA`],
                         ...a.comptes.slice(0, 6).map(
                           (c) =>
-                            [c.compte, `${formatMFcfa(c.ca_total_xof)} M · ${formatNumber(c.nb_commandes)} cmd`] as [
+                            [c.compte, `${formatFcfa(c.ca_total_xof)} · ${formatNumber(c.nb_commandes)} cmd`] as [
                               string,
                               string,
                             ],
@@ -241,22 +241,22 @@ export async function DcProspection({ periode, annee }: { periode: Periode; anne
                   ).map((c) => ({
                     title: c.compte,
                     sub: `première commande le ${formatDate(c.premiere_commande)} · ${formatNumber(c.nb_commandes)} commande(s)${c.commercial ? ` · ${c.commercial}` : ""}`,
-                    tag: `${formatMFcfa(c.ca_total_xof)} M`,
+                    tag: `${formatFcfa(c.ca_total_xof)}`,
                     tagVariant: "s" as const,
                     detail: {
                       kicker: "Nouveau compte",
                       title: c.compte,
-                      tag: `${formatMFcfa(c.ca_total_xof)} M FCFA`,
+                      tag: `${formatFcfa(c.ca_total_xof)} FCFA`,
                       tagVariant: "s" as const,
                       body: [
-                        `Première commande signée le ${formatDate(c.premiere_commande)}. Depuis, ${formatNumber(c.nb_commandes)} commande(s) pour ${formatMFcfa(c.ca_total_xof)} M FCFA.`,
+                        `Première commande signée le ${formatDate(c.premiere_commande)}. Depuis, ${formatNumber(c.nb_commandes)} commande(s) pour ${formatFcfa(c.ca_total_xof)} FCFA.`,
                         c.commercial
                           ? `Compte rattaché à ${c.commercial} sur sa dernière commande.`
                           : "Aucun commercial rattaché sur sa dernière commande.",
                       ],
                       kv: [
                         ["Première commande", formatDate(c.premiere_commande)],
-                        ["CA depuis l'entrée", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
+                        ["CA depuis l'entrée", `${formatFcfa(c.ca_total_xof)} FCFA`],
                         ["Commandes", formatNumber(c.nb_commandes)],
                         ["Commercial", c.commercial || "non renseigné"],
                       ],

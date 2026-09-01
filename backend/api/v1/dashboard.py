@@ -30,6 +30,26 @@ def _crm(request: Request):
     return request.app.state.container.crm_repo
 
 
+def _annee(annee: int | None) -> int:
+    """Exercice de lecture d'un endpoint de FLUX, l'année en cours par défaut.
+
+    Même convention que `uc_commercial.router._annee` et `uc_daf.router._annee` :
+    un indicateur d'activité (CA, marge, performance commerciale) se lit sur un
+    exercice, et l'exercice par défaut est celui en cours. Sans ce défaut, un
+    appel sans `year` cumulait tout l'historique du miroir — huit exercices
+    confondus sur un écran qui annonce « l'exercice ».
+
+    À n'appliquer qu'aux flux. Les endpoints de STOCK (`/unpaid`, exposition
+    impayés, backlog) n'ont délibérément pas de borne : une créance de 2024 est
+    toujours due aujourd'hui, et la masquer serait perdre l'essentiel.
+
+    Cette convention vaut pour la couche HTTP seulement. Les appelants internes
+    (briefing, arbitrage, outils du copilote) passent par l'adaptateur, dont le
+    défaut reste « tous exercices » — leur portée est choisie appel par appel.
+    """
+    return annee or datetime.now().year
+
+
 async def _hors_boucle(fn, *args):
     """Exécute une agrégation Python synchrone HORS de la boucle d'événements.
 
@@ -103,7 +123,11 @@ async def kpis(
     monthly_previous = await crm.get_monthly_revenue(y - 1)
     open_pipeline = await crm.get_open_pipeline_stats()
     win_rate = await crm.get_win_rate()
-    margins = await crm.get_margin_stats()
+    # Borné sur `y` comme le reste de l'endpoint : le bloc « marges » voisine des
+    # agrégats d'exercice, un cumul de huit exercices à côté d'eux ne se lit pas.
+    # Les stocks qu'il porte (backlog, reste à encaisser) restent hors borne —
+    # c'est `get_margin_stats` qui le garantit, pas l'appelant.
+    margins = await crm.get_margin_stats(year=y)
     return {
         "year": current,
         "previous_year": previous,
@@ -115,8 +139,17 @@ async def kpis(
         "win_rate": win_rate,
         "marges": {
             "nb_dossiers": margins["nb_dossiers"],
+            # Moyennes de pourcentages par dossier : conservées pour les
+            # appelants existants, mais à ne PAS afficher (-745 % sur ce miroir).
             "perc_marge_provisoire_moyen": margins["perc_marge_provisoire_moyen"],
             "perc_marge_definitive_moyen": margins["perc_marge_definitive_moyen"],
+            # Ratios agrégés : ce sont ceux-là qui se publient. Le définitif est
+            # mesuré sur le périmètre imputé et n'a de sens qu'accompagné de sa
+            # couverture (cf. LocalCRMAdapter.get_margin_stats).
+            "taux_marge_provisoire_pct": margins["taux_marge_provisoire_pct"],
+            "taux_marge_definitive_pct": margins["taux_marge_definitive_pct"],
+            "couverture_marge_definitive_pct": margins["couverture_marge_definitive_pct"],
+            "marge_definitive_exploitable": margins["marge_definitive_exploitable"],
             "backlog_total": margins["backlog_total"],
             "reste_a_encaisser": margins["reste_a_encaisser"],
             "total_encaisse": margins["total_encaisse"],
@@ -175,7 +208,13 @@ async def revenue_by_salesperson(
     year: int | None = Query(default=None),
     quarter: int | None = Query(default=None, ge=1, le=4),
 ):
-    return await _crm(request).get_revenue_by_salesperson(year=year, quarter=quarter)
+    """CA par commercial sur l'exercice (l'année en cours par défaut, cf. `_annee`).
+
+    Sans borne, cet endpoint cumulait huit exercices : l'écran DC « Transformation »
+    et le débrief DG — qui, lui, demandait déjà l'année en cours — affichaient deux
+    chiffres différents pour le même commercial.
+    """
+    return await _crm(request).get_revenue_by_salesperson(year=_annee(year), quarter=quarter)
 
 
 @router.get("/revenue/by-sector", dependencies=[Depends(require_views("dashboard"))])
@@ -184,7 +223,8 @@ async def revenue_by_sector(
     year: int | None = Query(default=None),
     limit: int = Query(default=20, le=100),
 ):
-    return await _crm(request).get_revenue_by_sector(year=year, limit=limit)
+    """CA par secteur sur l'exercice (l'année en cours par défaut)."""
+    return await _crm(request).get_revenue_by_sector(year=_annee(year), limit=limit)
 
 
 @router.get("/top-clients", dependencies=[Depends(require_views("dashboard", "clients"))])
@@ -193,7 +233,8 @@ async def top_clients(
     year: int | None = Query(default=None),
     limit: int = Query(default=10, le=50),
 ):
-    return await _crm(request).get_top_clients(limit=limit, year=year)
+    """Premiers comptes par CA de l'exercice (l'année en cours par défaut)."""
+    return await _crm(request).get_top_clients(limit=limit, year=_annee(year))
 
 
 @router.get("/top-orders", dependencies=[Depends(require_views("dashboard", "clients"))])
@@ -202,8 +243,9 @@ async def top_orders(
     year: int | None = Query(default=None),
     limit: int = Query(default=10, le=50),
 ):
-    """Les plus grosses commandes signées, par montant (et non par date)."""
-    return await _crm(request).get_top_orders(limit=limit, year=year)
+    """Les plus grosses commandes signées de l'exercice, par montant (et non par
+    date). L'année en cours par défaut."""
+    return await _crm(request).get_top_orders(limit=limit, year=_annee(year))
 
 
 # ---------- Performance ----------
@@ -341,10 +383,19 @@ async def margins(
     year: int | None = Query(default=None),
     limit: int = Query(default=10, le=50),
 ):
+    """Marges de l'exercice (l'année en cours par défaut) et dossiers qui les portent.
+
+    Attention à la lecture de `stats` : l'exercice ne borne que les flux (CA,
+    marges, taux moyens). Les stocks du même bloc — `backlog_total`,
+    `reste_a_encaisser`, `total_encaisse` — restent sur tous les exercices, et
+    `stats.portee_stocks` le dit. C'est voulu : un dossier ouvert en 2025 et
+    encore en cours de livraison est du backlog d'aujourd'hui.
+    """
     crm = _crm(request)
+    an = _annee(year)
     return {
-        "stats": await crm.get_margin_stats(year=year),
-        "top_dossiers": await crm.get_top_margin_dossiers(limit=limit, year=year),
+        "stats": await crm.get_margin_stats(year=an),
+        "top_dossiers": await crm.get_top_margin_dossiers(limit=limit, year=an),
     }
 
 
@@ -352,11 +403,15 @@ async def margins(
 async def margins_analysis(request: Request, year: int | None = Query(default=None)):
     """Lecture qualitative de l'écart marge provisoire/définitive (backlog, érosion),
     rédigée par Claude à partir des agrégats réels déjà calculés (jamais recalculés
-    par le LLM) — figée pour la journée par le job du matin."""
+    par le LLM) — figée pour la journée par le job du matin.
+
+    Même exercice par défaut que `/margins` : la narration commente les chiffres
+    affichés au-dessus d'elle, elle ne peut pas porter sur une autre période."""
+    an = _annee(year)
     return await daily_cached(
         daily_comp.KEY_MARGINS,
-        daily_comp.margins_variant(year),
-        lambda: daily_comp.margins_analysis(_crm(request), _llm_sonnet(request), year=year),
+        daily_comp.margins_variant(an),
+        lambda: daily_comp.margins_analysis(_crm(request), _llm_sonnet(request), year=an),
     )
 
 
@@ -415,10 +470,22 @@ async def dso(
     client: str = Query(default=""),
     year: int | None = Query(default=None),
 ):
-    """Délai moyen réel de recouvrement (DSO) — calculé sur les dates de
-    paiement Odoo quand elles existent, sinon approximation balance sheet
-    explicitement signalée comme telle (cf. LocalCRMAdapter.get_invoice_collection_stats)."""
-    return await _crm(request).get_invoice_collection_stats(client_name=client, year=year)
+    """Délai moyen réel de recouvrement (DSO) sur l'exercice — calculé sur les
+    dates de paiement Odoo quand elles existent, sinon approximation balance sheet
+    explicitement signalée comme telle (cf. LocalCRMAdapter.get_invoice_collection_stats).
+
+    `year` désigne ici l'exercice d'OBSERVATION (l'année en cours par défaut) et
+    part en `exercice=`, pas en `year=` : la borne porte sur les factures réglées
+    pendant l'année, jamais sur celles émises pendant l'année. Filtrer sur
+    l'émission ne retiendrait que les factures émises et encaissées dans le même
+    exercice, c'est-à-dire les payeurs rapides — 29 jours au lieu de 71 sur le
+    miroir d'août 2026. Le détail du biais est dans la docstring de l'adaptateur.
+
+    Les montants (`montant_en_attente_xof`, `total_factures`) restent hors borne :
+    ce sont des créances, pas l'activité de l'année."""
+    return await _crm(request).get_invoice_collection_stats(
+        client_name=client, exercice=_annee(year),
+    )
 
 
 # ---------- Écart budgétaire par effet clients (module 04) ----------
@@ -599,7 +666,10 @@ async def pilotage(request: Request, year: int | None = Query(default=None)):
     win_rate = await crm.get_win_rate()
     lost = await crm.get_lost_deals(limit=5)
     opportunites = await crm.list_opportunities(limit=500)
-    encaissement = await crm.get_invoice_collection_stats()
+    # Délais mesurés sur les règlements de l'exercice, comme l'écran DAF : le
+    # cockpit DG affiche par ailleurs le CA et la marge de `y`, un DSO cumulé sur
+    # huit exercices à côté d'eux ne se lit pas.
+    encaissement = await crm.get_invoice_collection_stats(exercice=y)
     commerciaux = await crm.get_revenue_by_salesperson(year=y)
     secteurs = await crm.get_revenue_by_sector(year=y, limit=10)
     mensuel = await crm.get_monthly_revenue(y)

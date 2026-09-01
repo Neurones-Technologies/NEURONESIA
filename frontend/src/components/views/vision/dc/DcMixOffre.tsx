@@ -1,5 +1,5 @@
 import { getOfferMix } from "@/lib/api/dashboard";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Note } from "@/components/ui/primitives";
@@ -99,8 +99,11 @@ export async function DcMixOffreTuiles() {
           <div className="tile-h">
             <h3>Famille dominante</h3>
           </div>
-          <div>
-            <span className="stat-v num">{offerMix.dominante.label ?? "—"}</span>
+          {/* Mêmes classes que `StatTile` — `stat-l` pour la ligne valeur + unité,
+              `stat-v--txt` pour le corps réduit d'un libellé : sans elles, un nom
+              de famille un peu long sortait du cadre au corps des chiffres. */}
+          <div className="stat-l">
+            <span className="stat-v num stat-v--txt">{offerMix.dominante.label ?? "—"}</span>
             <span className="stat-u">{formatPct(offerMix.dominante.part_montant_pct, 0)} % du pipe qualifié</span>
           </div>
           <div className={`stat-d${couvertureFaible ? " wat" : ""}`}>
@@ -114,7 +117,7 @@ export async function DcMixOffreTuiles() {
           rows={mixFamilies.map((f) => ({
             name: f.label,
             sub: `${formatNumber(f.nb)} opportunités · ${formatPct(f.part_montant_pct, 0)} % du pipe qualifié · réussite ${formatPct(f.win_rate_pct, 0)} %`,
-            value: `${formatMFcfa(f.montant_xof)} M`,
+            value: `${formatFcfa(f.montant_xof)}`,
             pct: topFamilyMontant ? (f.montant_xof / topFamilyMontant) * 100 : 0,
             variant: f.part_montant_pct > 40 ? ("w" as const) : undefined,
             detail: {
@@ -123,15 +126,15 @@ export async function DcMixOffreTuiles() {
               tag: `${formatPct(f.part_montant_pct, 0)} % du pipe qualifié`,
               tagVariant: f.part_montant_pct > 40 ? ("w" as const) : ("a" as const),
               body: [
-                `${f.label} représente ${formatMFcfa(f.montant_xof)} M FCFA sur ${formatNumber(f.nb)} opportunités ouvertes, soit ${formatPct(f.part_montant_pct, 0)} % du pipe qualifié en montant et ${formatPct(f.part_nb_pct, 0)} % en nombre. Pondéré par la probabilité déclarée, cela ressort à ${formatMFcfa(f.montant_pondere_xof)} M FCFA.`,
+                `${f.label} représente ${formatFcfa(f.montant_xof)} FCFA sur ${formatNumber(f.nb)} opportunités ouvertes, soit ${formatPct(f.part_montant_pct, 0)} % du pipe qualifié en montant et ${formatPct(f.part_nb_pct, 0)} % en nombre. Pondéré par la probabilité déclarée, cela ressort à ${formatFcfa(f.montant_pondere_xof)} FCFA.`,
                 f.nb_closes > 0
                   ? `Sur les ${formatNumber(f.nb_closes)} affaires déjà closes de cette famille, ${formatPct(f.win_rate_pct, 0)} % de la valeur engagée a été gagnée. Un écart entre le poids dans le pipe et le taux de réussite est le signal à lire : beaucoup se positionner là où l'on gagne peu déplace le résultat.`
                   : "Aucune affaire close sur cette famille : le taux de réussite n'est pas encore calculable.",
                 `L'écart entre la part en montant (${formatPct(f.part_montant_pct, 0)} %) et la part en nombre (${formatPct(f.part_nb_pct, 0)} %) dit la taille moyenne des affaires : au-dessus, la famille se joue sur peu de gros deals ; en dessous, sur du volume.`,
               ],
               kv: [
-                ["Montant du pipe", `${formatMFcfa(f.montant_xof)} M FCFA`],
-                ["Montant pondéré", `${formatMFcfa(f.montant_pondere_xof)} M FCFA`],
+                ["Montant du pipe", `${formatFcfa(f.montant_xof)} FCFA`],
+                ["Montant pondéré", `${formatFcfa(f.montant_pondere_xof)} FCFA`],
                 ["Opportunités", formatNumber(f.nb)],
                 ["Part en montant", `${formatPct(f.part_montant_pct, 0)} %`],
                 ["Part en nombre", `${formatPct(f.part_nb_pct, 0)} %`],
@@ -144,7 +147,7 @@ export async function DcMixOffreTuiles() {
         />
         <Note style={{ marginTop: 14 }}>
           Famille déduite du libellé de l&apos;opportunité : {formatNumber(offerMix.coverage.nb_non_classe)}{" "}
-          opportunités ({formatMFcfa(offerMix.coverage.montant_non_classe_xof)} M FCFA) portent un libellé qui ne
+          opportunités ({formatFcfa(offerMix.coverage.montant_non_classe_xof)} FCFA) portent un libellé qui ne
           dit pas ce qui est vendu — les parts ci-dessus portent donc sur {formatPct(couvertureMontant, 0)} % du
           pipe en montant.
         </Note>
@@ -175,16 +178,16 @@ export async function DcMixOffreTuiles() {
               return {
                 name: p.courant ? `${p.period} (en cours)` : p.period,
                 sub: `${formatNumber(p.nb_total)} opportunités${p.echu ? " · échéance dépassée" : ""}${repartition ? ` · ${repartition}` : ""}`,
-                value: `${formatMFcfa(p.montant_total_xof)} M`,
+                value: `${formatFcfa(p.montant_total_xof)}`,
                 pct: (p.montant_total_xof / maxMontant) * 100,
                 variant: p.echu ? ("r" as const) : undefined,
                 detail: {
                   kicker: p.echu ? "Trimestre · échéance dépassée" : "Trimestre · échéance à venir",
                   title: `Échéances ${p.period}`,
-                  tag: p.echu ? "à requalifier" : `${formatMFcfa(p.montant_total_xof)} M FCFA`,
+                  tag: p.echu ? "à requalifier" : `${formatFcfa(p.montant_total_xof)} FCFA`,
                   tagVariant: p.echu ? ("r" as const) : ("a" as const),
                   body: [
-                    `${formatNumber(p.nb_total)} opportunités qualifiées portent une échéance sur ${p.period}, pour ${formatMFcfa(p.montant_total_xof)} M FCFA.`,
+                    `${formatNumber(p.nb_total)} opportunités qualifiées portent une échéance sur ${p.period}, pour ${formatFcfa(p.montant_total_xof)} FCFA.`,
                     p.echu
                       ? "Cette échéance est déjà passée alors que les affaires sont toujours ouvertes. Ce montant n'est pas un atterrissage à venir : c'est un stock à requalifier, et il gonfle mécaniquement la lecture des trimestres passés."
                       : "Ces affaires sont encore devant, leur mix indique la composition attendue de l'atterrissage — sous réserve que les échéances déclarées soient tenues.",
@@ -192,18 +195,18 @@ export async function DcMixOffreTuiles() {
                       .filter((f) => f.montant_xof > 0)
                       .map(
                         (f) =>
-                          `${f.label} : ${formatMFcfa(f.montant_xof)} M FCFA sur ${formatNumber(f.nb)} opportunités, ${formatPct(f.part_montant_pct, 0)} % du trimestre.`,
+                          `${f.label} : ${formatFcfa(f.montant_xof)} FCFA sur ${formatNumber(f.nb)} opportunités, ${formatPct(f.part_montant_pct, 0)} % du trimestre.`,
                       ),
                   ],
                   kv: [
-                    ["Montant du trimestre", `${formatMFcfa(p.montant_total_xof)} M FCFA`],
+                    ["Montant du trimestre", `${formatFcfa(p.montant_total_xof)} FCFA`],
                     ["Opportunités", formatNumber(p.nb_total)],
                     ["Statut", p.echu ? "échéance dépassée" : p.courant ? "trimestre en cours" : "à venir"],
                     ...p.families
                       .filter((f) => f.montant_xof > 0)
                       .map(
                         (f) =>
-                          [f.label, `${formatMFcfa(f.montant_xof)} M (${formatPct(f.part_montant_pct, 0)} %)`] as [
+                          [f.label, `${formatFcfa(f.montant_xof)} (${formatPct(f.part_montant_pct, 0)} %)`] as [
                             string,
                             string,
                           ],
@@ -221,7 +224,7 @@ export async function DcMixOffreTuiles() {
               ? `${formatPct(partEchu, 0)} % du montant qualifié (${formatNumber(offerMix.echu.nb)} opportunités) porte une échéance déjà dépassée — ces trimestres se lisent comme un stock à requalifier, pas comme un atterrissage.`
               : `${formatPct(partEchu, 0)} % du montant qualifié porte une échéance déjà dépassée.`}{" "}
             {offerMix.sans_echeance.nb > 0 &&
-              `${formatNumber(offerMix.sans_echeance.nb)} opportunités sans échéance renseignée (${formatMFcfa(offerMix.sans_echeance.montant_xof)} M FCFA) n'apparaissent dans aucun trimestre.`}
+              `${formatNumber(offerMix.sans_echeance.nb)} opportunités sans échéance renseignée (${formatFcfa(offerMix.sans_echeance.montant_xof)} FCFA) n'apparaissent dans aucun trimestre.`}
           </Note>
         </Tile>
       )}

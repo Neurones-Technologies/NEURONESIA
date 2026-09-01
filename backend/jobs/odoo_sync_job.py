@@ -5,11 +5,12 @@ from datetime import datetime
 from adapters.crm.odoo_adapter import OdooAdapter
 from db.database import AsyncSessionLocal
 from db.models import (
-    ClientModel, InvoiceModel, ProjectModel, SaleOrderModel, PurchaseOrderModel,
-    OpportunityModel, DossierModel, SupplierModel, SupplierInvoiceModel,
+    ClientModel, InvoiceModel, ProjectModel, SaleOrderModel, SaleOrderLineModel,
+    PurchaseOrderModel, OpportunityModel, DossierModel, SupplierModel, SupplierInvoiceModel,
 )
+from core.services.constructeurs import vendor_a_persister
 from modules.uc_offermix.taxonomy import famille_a_persister
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -207,14 +208,109 @@ def _to_xof(amount: float, currency: str, rates: dict[str, float]) -> float:
     return amount * inverse_rate
 
 
+def _currency_map(records: list[dict]) -> dict[int, str]:
+    """{id Odoo de commande: code devise} — à passer à get_order_lines_by_ids.
+
+    Les lignes ne portent pas leur devise : elle vit sur la commande. Sans cette
+    table de correspondance, l'adaptateur ne peut pas convertir et le miroir se
+    retrouve avec un total en XOF et des lignes en USD (facteur ~600).
+    """
+    return {
+        r["id"]: _get_odoo_name(r.get("currency_id"), "XOF")
+        for r in records if r.get("id")
+    }
+
+
+def _margin_row(so: dict, margin_fields: dict[str, str], currency: str,
+                rates: dict[str, float]) -> dict[str, float]:
+    """Colonnes de marge du miroir, converties en XOF.
+
+    `margin_pct` est un pourcentage : il ne se convertit pas. Toute autre valeur
+    est un montant dans la devise de la commande et passe par _to_xof.
+
+    Un champ non résolu par le sondage laisse 0.0 : c'est « inconnu », pas « nul ».
+    """
+    row = {"purchase_total": 0.0, "approach_costs": 0.0, "provision": 0.0,
+           "margin_amount": 0.0, "margin_pct": 0.0}
+    for column, field in margin_fields.items():
+        raw = float(so.get(field) or 0)
+        row[column] = raw if column == "margin_pct" else _to_xof(raw, currency, rates)
+    return row
+
+
+async def _replace_order_lines(session, order: dict, order_id: str, lines: list[dict],
+                               sync_at: datetime) -> int:
+    """Réécrit les lignes d'une commande dans `sale_order_lines`. Renvoie le nb écrit.
+
+    Purge puis réinsertion, et non un upsert par ligne : une ligne supprimée dans
+    Odoo doit disparaître du miroir, ce qu'un upsert laisserait en orphelin à
+    gonfler tous les agrégats. C'est aussi ce qui remplace les lignes d'amorçage à
+    identifiant synthétique posées par `_backfill_sale_order_lines`.
+    """
+    await session.execute(
+        delete(SaleOrderLineModel).where(SaleOrderLineModel.order_id == order_id)
+    )
+    if not lines:
+        return 0
+    partner = order.get("partner_id") or [None, ""]
+    date_order = _parse_date(order.get("date_order"))
+    common = {
+        "order_id": order_id,
+        "order_name": order.get("name") or "",
+        "client_id": str(partner[0]) if partner[0] else "",
+        "client_name": _get_odoo_name(partner),
+        "date_order": date_order,
+        "state": order.get("state", "sale"),
+        "salesperson_name": _get_odoo_name(order.get("user_id")),
+        "synced_at": sync_at,
+    }
+    written = 0
+    for rank, ln in enumerate(lines):
+        odoo_line_id = ln.get("line_odoo_id")
+        unit_src = ln.get("unit_price_src")
+        unit_xof = ln.get("unit_price")
+        produit = (ln.get("product") or "")[:500]
+        code = ln.get("product_code") or ""
+        session.add(SaleOrderLineModel(
+            line_id=f"sol_{odoo_line_id}" if odoo_line_id else f"{order_id}#{rank}",
+            odoo_id=odoo_line_id,
+            product_id=None,
+            product_code=code,
+            product_name=produit,
+            # Recalculé à chaque synchro, et non conservé : la règle de
+            # reconnaissance vit dans le code (core/services/constructeurs.py) et
+            # évolue à chaque marque ajoutée. Une valeur figée en base vieillirait
+            # sans que rien ne le signale.
+            vendor=vendor_a_persister(produit, code),
+            product_category=ln.get("product_category") or "",
+            display_type=ln.get("display_type"),
+            qty=float(ln.get("qty") or 0),
+            qty_delivered=float(ln.get("qty_delivered") or 0),
+            qty_invoiced=float(ln.get("qty_invoiced") or 0),
+            unit_price_xof=float(unit_xof or 0),
+            subtotal_xof=float(ln.get("subtotal") or 0),
+            unit_price_src=float(unit_src or 0),
+            subtotal_src=float(ln.get("subtotal_src") or 0),
+            currency_src=ln.get("currency_src") or "XOF",
+            fx_status=ln.get("fx_status") or "unknown",
+            purchase_price_xof=float(ln.get("purchase_price") or 0),
+            **common,
+        ))
+        written += 1
+    return written
+
+
 async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
     rates = await _get_xof_rates(odoo)
+    margin_fields = await odoo.sale_order_margin_fields()
+    extra = ["amount_untaxed"] + sorted(set(margin_fields.values()))
     try:
         records = await odoo._call(
             "sale.order", "search_read",
             [[["id", "in", ids]]],
             {"fields": ["id", "name", "partner_id", "amount_total",
-                        "currency_id", "date_order", "state", "user_id", "dossier_id", "invoice_ids"]},
+                        "currency_id", "date_order", "state", "user_id", "dossier_id",
+                        "invoice_ids"] + extra},
         )
     except RuntimeError as e:
         if "dossier_id" in str(e):
@@ -222,11 +318,15 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
                 "sale.order", "search_read",
                 [[["id", "in", ids]]],
                 {"fields": ["id", "name", "partner_id", "amount_total",
-                            "currency_id", "date_order", "state", "user_id", "invoice_ids"]},
+                            "currency_id", "date_order", "state", "user_id",
+                            "invoice_ids"] + extra},
             )
         else:
             raise
-    lines_by_order = await odoo.get_order_lines_by_ids([r["id"] for r in records])
+    lines_by_order = await odoo.get_order_lines_by_ids(
+        [r["id"] for r in records], _currency_map(records), rates
+    )
+    sync_at = datetime.utcnow()
     async with AsyncSessionLocal() as session:
         for so in records:
             order_id = f"so_{so['id']}"
@@ -240,16 +340,21 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
             invoice_ids = so.get("invoice_ids") or []
             currency = _get_odoo_name(so.get("currency_id"), "XOF")
             amount_xof = _to_xof(float(so.get("amount_total", 0)), currency, rates)
+            untaxed_xof = _to_xof(float(so.get("amount_untaxed") or 0), currency, rates)
+            margins = _margin_row(so, margin_fields, currency, rates)
             existing = await session.get(SaleOrderModel, order_id)
             if existing:
                 existing.state = so.get("state", "sale")
                 existing.amount = amount_xof
+                existing.amount_untaxed = untaxed_xof
                 existing.name = so["name"]
                 existing.salesperson_name = salesperson
                 existing.dossier_id = dossier
                 existing.order_lines = lines
                 existing.invoice_ids = invoice_ids
-                existing.synced_at = datetime.utcnow()
+                for column, value in margins.items():
+                    setattr(existing, column, value)
+                existing.synced_at = sync_at
             else:
                 session.add(SaleOrderModel(
                     order_id=order_id, odoo_id=so["id"],
@@ -257,6 +362,7 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
                     client_name=_get_odoo_name(partner),
                     name=so["name"],
                     amount=amount_xof,
+                    amount_untaxed=untaxed_xof,
                     currency=currency,
                     date_order=date_order,
                     state=so.get("state", "sale"),
@@ -264,7 +370,9 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
                     dossier_id=dossier,
                     order_lines=lines,
                     invoice_ids=invoice_ids,
+                    **margins,
                 ))
+            await _replace_order_lines(session, so, order_id, lines, sync_at)
         await session.commit()
     logger.info("Webhook : %d bons de commande mis à jour", len(records))
 
@@ -594,14 +702,19 @@ async def run_odoo_sync(force_full: bool = False):
 
         # ─── 3. Bons de commande ─────────────────────────────────────────────
         sale_orders = await odoo.get_sale_orders(limit=5000, since=since)
+        margin_fields = await odoo.sale_order_margin_fields()
         # Lignes d'articles en batch (par tranches de 500 pour éviter timeout Odoo)
         all_odoo_ids = [so["id"] for so in sale_orders]
+        currency_by_order = _currency_map(sale_orders)
         lines_by_order: dict[int, list] = {}
         for i in range(0, len(all_odoo_ids), 500):
-            batch = await odoo.get_order_lines_by_ids(all_odoo_ids[i:i + 500])
+            batch = await odoo.get_order_lines_by_ids(
+                all_odoo_ids[i:i + 500], currency_by_order, rates
+            )
             lines_by_order.update(batch)
         async with AsyncSessionLocal() as session:
             new_so = 0
+            n_lines = 0
             for so in sale_orders:
                 partner = so.get("partner_id") or [None, ""]
                 if _est_exclu(partner[0], _get_odoo_name(partner)):
@@ -615,6 +728,8 @@ async def run_odoo_sync(force_full: bool = False):
                 invoice_ids = so.get("invoice_ids") or []
                 currency = _get_odoo_name(so.get("currency_id"), "XOF")
                 amount_xof = _to_xof(float(so.get("amount_total", 0)), currency, rates)
+                untaxed_xof = _to_xof(float(so.get("amount_untaxed") or 0), currency, rates)
+                margins = _margin_row(so, margin_fields, currency, rates)
                 try:
                     existing = await session.get(SaleOrderModel, order_id)
                 except json.JSONDecodeError as e:
@@ -632,12 +747,15 @@ async def run_odoo_sync(force_full: bool = False):
                 if existing:
                     existing.state = so.get("state", "sale")
                     existing.amount = amount_xof
+                    existing.amount_untaxed = untaxed_xof
                     existing.name = so["name"]
                     existing.date_order = date_order
                     existing.salesperson_name = salesperson
                     existing.dossier_id = dossier
                     existing.order_lines = lines
                     existing.invoice_ids = invoice_ids
+                    for column, value in margins.items():
+                        setattr(existing, column, value)
                     existing.synced_at = sync_start
                 else:
                     session.add(SaleOrderModel(
@@ -646,6 +764,7 @@ async def run_odoo_sync(force_full: bool = False):
                         client_name=_get_odoo_name(partner),
                         name=so["name"],
                         amount=amount_xof,
+                        amount_untaxed=untaxed_xof,
                         currency=currency,
                         date_order=date_order,
                         state=so.get("state", "sale"),
@@ -653,12 +772,21 @@ async def run_odoo_sync(force_full: bool = False):
                         dossier_id=dossier,
                         order_lines=lines,
                         invoice_ids=invoice_ids,
+                        **margins,
                     ))
                     new_so += 1
+                n_lines += await _replace_order_lines(session, so, order_id, lines, sync_start)
             await session.commit()
+            logger.info(
+                "Lignes de commande : %d écrites dans sale_order_lines (%d commandes)",
+                n_lines, len(sale_orders),
+            )
 
         # ─── 4. Achats (montants convertis en XOF) ───────────────────────────
-        purchase_orders = await odoo.get_all_purchase_orders(limit=2000, since=since)
+        # Sans plafond : l'adaptateur pagine jusqu'à épuisement. Le `limit=2000`
+        # d'avant tronquait à un quart des achats confirmés d'Odoo, sans erreur
+        # ni journal — le miroir en portait déjà 2 134, donc au-delà du plafond.
+        purchase_orders = await odoo.get_all_purchase_orders(since=since)
         async with AsyncSessionLocal() as session:
             new_po = 0
             for po in purchase_orders:

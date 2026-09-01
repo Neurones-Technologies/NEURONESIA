@@ -3,7 +3,7 @@ import { getBriefing } from "@/lib/api/briefing";
 import { getClientPortfolio, getClientProfile, ClientProfile } from "@/lib/api/clients";
 import { getCrossSellAnalysis, getCrossSellSignals } from "@/lib/api/crosssell";
 import { getNextActions } from "@/lib/api/dashboard";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Narr, Note } from "@/components/ui/primitives";
@@ -50,21 +50,21 @@ export async function AmVision() {
         kicker="Portefeuille · terrain"
         headline={
           topAction
-            ? `${formatNumber(actions?.actions.length ?? 0)} actions prioritaires, ${formatMFcfa(totalActionsValue)} M FCFA en jeu.`
-            : `${formatNumber((portfolio ?? []).length)} comptes suivis, ${formatMFcfa(totalCa)} M FCFA facturés.`
+            ? `${formatNumber(actions?.actions.length ?? 0)} actions prioritaires, ${formatFcfa(totalActionsValue)} FCFA en jeu.`
+            : `${formatNumber((portfolio ?? []).length)} comptes suivis, ${formatFcfa(totalCa)} FCFA facturés.`
         }
         lines={
           briefLines.length
             ? briefLines
             : [
                 topAction
-                  ? `Action la plus urgente : ${topAction.client}, ${topAction.type.toLowerCase()} pour ${formatMFcfa(topAction.montant_xof)} M FCFA.`
+                  ? `Action la plus urgente : ${topAction.client}, ${topAction.type.toLowerCase()} pour ${formatFcfa(topAction.montant_xof)} FCFA.`
                   : "Aucune action prioritaire détectée sur votre portefeuille.",
                 worstRupture
                   ? `${worstRupture.client} : ${formatNumber(worstRupture.jours ?? 0)} jours sans commande, le plus long silence du portefeuille.`
                   : "Aucun compte au-delà de 90 jours sans commande.",
                 totalReste > 0
-                  ? `${formatMFcfa(totalReste)} M FCFA restent à encaisser sur l'ensemble de vos comptes.`
+                  ? `${formatFcfa(totalReste)} FCFA restent à encaisser sur l'ensemble de vos comptes.`
                   : "Aucun reste à encaisser sur le portefeuille.",
               ]
         }
@@ -72,7 +72,7 @@ export async function AmVision() {
           { label: `${formatNumber((portfolio ?? []).length)} comptes` },
           { label: `${formatNumber(actions?.actions.length ?? 0)} actions prioritaires`, hot: (actions?.actions.length ?? 0) > 0 },
           { label: `${formatNumber(rupture.length)} sans commande > 90 j`, hot: rupture.length > 0 },
-          { label: `${formatMFcfa(totalReste)} M à encaisser`, hot: totalReste > 0 },
+          { label: `${formatFcfa(totalReste)} à encaisser`, hot: totalReste > 0 },
         ]}
       />
 
@@ -81,8 +81,8 @@ export async function AmVision() {
           span={4}
           label="CA cumulé du portefeuille"
           aide="Ce que vos clients vous ont acheté au total. C'est le poids de votre portefeuille."
-          value={formatMFcfa(totalCa)}
-          unit="M FCFA"
+          value={formatFcfa(totalCa)}
+          unit="FCFA"
           reading={`${formatNumber((portfolio ?? []).length)} comptes actifs`}
           detail={{
             kicker: "Indicateur · portefeuille",
@@ -90,15 +90,15 @@ export async function AmVision() {
             tag: `${formatNumber((portfolio ?? []).length)} comptes`,
             tagVariant: "a",
             body: [
-              `Vos ${formatNumber((portfolio ?? []).length)} comptes cumulent ${formatMFcfa(totalCa)} M FCFA de facturation.`,
+              `Vos ${formatNumber((portfolio ?? []).length)} comptes cumulent ${formatFcfa(totalCa)} FCFA de facturation.`,
               focusClient
-                ? `Le premier d'entre eux, ${focusClient.client}, pèse ${formatMFcfa(focusClient.ca_total_xof)} M FCFA, soit ${totalCa ? formatPct((focusClient.ca_total_xof / totalCa) * 100, 0) : "—"} % de votre portefeuille.`
+                ? `Le premier d'entre eux, ${focusClient.client}, pèse ${formatFcfa(focusClient.ca_total_xof)} FCFA, soit ${totalCa ? formatPct((focusClient.ca_total_xof / totalCa) * 100, 0) : "—"} % de votre portefeuille.`
                 : "Aucun compte facturé sur le portefeuille.",
             ],
             kv: [
-              ["CA cumulé", `${formatMFcfa(totalCa)} M FCFA`],
+              ["CA cumulé", `${formatFcfa(totalCa)} FCFA`],
               ["Comptes", formatNumber((portfolio ?? []).length)],
-              ["Reste à encaisser", `${formatMFcfa(totalReste)} M FCFA`],
+              ["Reste à encaisser", `${formatFcfa(totalReste)} FCFA`],
             ],
             // note: "Somme des factures rattachées aux comptes de votre portefeuille dans le miroir Odoo.",
           }}
@@ -107,8 +107,8 @@ export async function AmVision() {
           span={4}
           label="Reste à encaisser"
           aide="Ce que vos clients vous doivent encore. Une partie de votre travail consiste à faire rentrer cet argent."
-          value={formatMFcfa(totalReste)}
-          unit="M FCFA"
+          value={formatFcfa(totalReste)}
+          unit="FCFA"
           reading={totalReste > 0 ? "sur l'ensemble du portefeuille" : "portefeuille soldé"}
           readingVariant={totalReste > 0 ? "wat" : "pos"}
           detail={{
@@ -117,12 +117,12 @@ export async function AmVision() {
             tag: totalReste > 0 ? "en attente" : "soldé",
             tagVariant: totalReste > 0 ? "w" : "s",
             body: [
-              `${formatMFcfa(totalReste)} M FCFA de facturation émise sur vos comptes n'ont pas encore été réglés.`,
+              `${formatFcfa(totalReste)} FCFA de facturation émise sur vos comptes n'ont pas encore été réglés.`,
               "Un encours ouvert change la façon d'aborder un rendez-vous : mieux vaut connaître le montant avant d'entrer que de le découvrir en séance.",
             ],
             kv: [
-              ["Reste à encaisser", `${formatMFcfa(totalReste)} M FCFA`],
-              ["CA cumulé", `${formatMFcfa(totalCa)} M FCFA`],
+              ["Reste à encaisser", `${formatFcfa(totalReste)} FCFA`],
+              ["CA cumulé", `${formatFcfa(totalCa)} FCFA`],
               [
                 "Part non encaissée",
                 totalCa ? `${formatPct((totalReste / totalCa) * 100, 0)} %` : "—",
@@ -191,7 +191,7 @@ export async function AmVision() {
             <div className="kv">
               <div>
                 <span>CA cumulé</span>
-                <b>{formatMFcfa(focusClient.ca_total_xof)} M FCFA</b>
+                <b>{formatFcfa(focusClient.ca_total_xof)} FCFA</b>
               </div>
               <div>
                 <span>Dossiers</span>
@@ -199,7 +199,7 @@ export async function AmVision() {
               </div>
               <div>
                 <span>Reste à encaisser</span>
-                <b>{formatMFcfa(focusClient.reste_a_encaisser_xof)} M FCFA</b>
+                <b>{formatFcfa(focusClient.reste_a_encaisser_xof)} FCFA</b>
               </div>
               <div>
                 <span>Dernière commande</span>
@@ -226,7 +226,7 @@ export async function AmVision() {
                 items={actions.actions.map((a) => ({
                   title: a.client,
                   sub: a.texte,
-                  tag: `${formatMFcfa(a.montant_xof)} M`,
+                  tag: `${formatFcfa(a.montant_xof)}`,
                   tagVariant:
                     a.type === "Recouvrement" ? ("r" as const) : a.type === "Renouvellement" ? ("w" as const) : ("a" as const),
                   detail: {
@@ -241,12 +241,12 @@ export async function AmVision() {
                           : ("a" as const),
                     body: [
                       a.texte,
-                      `Montant engagé : ${formatMFcfa(a.montant_xof)} M FCFA. Cette action est classée par montant parmi ${formatNumber(actions.actions.length)} signaux, pour un total de ${formatMFcfa(totalActionsValue)} M FCFA.`,
+                      `Montant engagé : ${formatFcfa(a.montant_xof)} FCFA. Cette action est classée par montant parmi ${formatNumber(actions.actions.length)} signaux, pour un total de ${formatFcfa(totalActionsValue)} FCFA.`,
                     ],
                     kv: [
                       ["Client", a.client],
                       ["Type", a.type],
-                      ["Montant engagé", `${formatMFcfa(a.montant_xof)} M FCFA`],
+                      ["Montant engagé", `${formatFcfa(a.montant_xof)} FCFA`],
                     ],
                     // note: actions.note ?? "Signaux issus des modules Portefeuille, Montée en valeur et Trésorerie.",
                   },
@@ -275,7 +275,7 @@ export async function AmVision() {
                   return {
                     name: c.client,
                     sub: `${formatNumber(c.nb_dossiers)} dossier(s) · ${jours !== null ? `dernière commande il y a ${formatNumber(jours)} j` : "date inconnue"}`,
-                    value: `${formatMFcfa(c.ca_total_xof)} M`,
+                    value: `${formatFcfa(c.ca_total_xof)}`,
                     pct: topClientCa ? (c.ca_total_xof / topClientCa) * 100 : 0,
                     variant:
                       jours !== null && jours > 90
@@ -299,19 +299,19 @@ export async function AmVision() {
                             ? ("w" as const)
                             : ("s" as const),
                       body: [
-                        `${c.client} totalise ${formatMFcfa(c.ca_total_xof)} M FCFA sur ${formatNumber(c.nb_dossiers)} dossier(s), soit ${formatPct(part, 0)} % de votre portefeuille.`,
+                        `${c.client} totalise ${formatFcfa(c.ca_total_xof)} FCFA sur ${formatNumber(c.nb_dossiers)} dossier(s), soit ${formatPct(part, 0)} % de votre portefeuille.`,
                         jours !== null && jours > 90
                           ? `Aucune commande depuis ${formatNumber(jours)} jours. Sur un compte qui a déjà acheté, ce silence est le signal le plus actionnable de la fiche.`
                           : c.reste_a_encaisser_xof > 0
-                            ? `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA restent à encaisser : à connaître avant toute nouvelle négociation.`
+                            ? `${formatFcfa(c.reste_a_encaisser_xof)} FCFA restent à encaisser : à connaître avant toute nouvelle négociation.`
                             : "Compte à jour, sans encours ouvert ni rupture de rythme.",
                         ...c.signaux,
                       ],
                       kv: [
-                        ["CA cumulé", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
+                        ["CA cumulé", `${formatFcfa(c.ca_total_xof)} FCFA`],
                         ["Part du portefeuille", `${formatPct(part, 0)} %`],
                         ["Dossiers", formatNumber(c.nb_dossiers)],
-                        ["Reste à encaisser", `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA`],
+                        ["Reste à encaisser", `${formatFcfa(c.reste_a_encaisser_xof)} FCFA`],
                         ["Dernière commande", c.derniere_commande ?? "—"],
                         ["Dernier projet", c.dernier_projet ?? "—"],
                       ],
@@ -345,15 +345,15 @@ export async function AmVision() {
                   tag: `${formatNumber(c.jours ?? 0)} jours de silence`,
                   tagVariant: "r" as const,
                   body: [
-                    `Dernière commande le ${c.derniere_commande}, soit ${formatNumber(c.jours ?? 0)} jours sans activité, sur un compte qui a déjà passé ${formatNumber(c.nb_dossiers)} commande(s) pour ${formatMFcfa(c.ca_total_xof)} M FCFA.`,
+                    `Dernière commande le ${c.derniere_commande}, soit ${formatNumber(c.jours ?? 0)} jours sans activité, sur un compte qui a déjà passé ${formatNumber(c.nb_dossiers)} commande(s) pour ${formatFcfa(c.ca_total_xof)} FCFA.`,
                     "Le cockpit ne connaît pas la cause du silence : budget gelé, interlocuteur parti, ou besoin traité ailleurs. C'est précisément ce qu'un appel permet de trancher.",
                   ],
                   kv: [
                     ["Silence", `${formatNumber(c.jours ?? 0)} jours`],
                     ["Dernière commande", c.derniere_commande ?? "—"],
-                    ["CA historique", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
+                    ["CA historique", `${formatFcfa(c.ca_total_xof)} FCFA`],
                     ["Dossiers", formatNumber(c.nb_dossiers)],
-                    ["Reste à encaisser", `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA`],
+                    ["Reste à encaisser", `${formatFcfa(c.reste_a_encaisser_xof)} FCFA`],
                   ],
                   // note: "Seuil de 90 jours, sans historique d'intervalle individuel (feuilles de temps hors périmètre).",
                 },
@@ -394,13 +394,13 @@ export async function AmVision() {
                         tagVariant: isRenew ? ("w" as const) : ("n" as const),
                         body: [
                           it.detail,
-                          `Montant historique associé : ${formatMFcfa(it.montant_xof)} M FCFA.`,
+                          `Montant historique associé : ${formatFcfa(it.montant_xof)} FCFA.`,
                           isRenew
                             ? "Un renouvellement se prépare avant l'échéance, pas après : passé la date, la discussion se fait en position défensive."
                             : "Une catégorie en fin de cycle est une porte d'entrée : le besoin existe déjà, il s'agit de le requalifier avant qu'un concurrent ne le fasse.",
                         ],
                         kv: [
-                          ["Montant", `${formatMFcfa(it.montant_xof)} M FCFA`],
+                          ["Montant", `${formatFcfa(it.montant_xof)} FCFA`],
                           ["Type de signal", it.titre],
                         ],
                         // note: "Calculé sur les vraies lignes de commande (catégories achetées et ancienneté).",

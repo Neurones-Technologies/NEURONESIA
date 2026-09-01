@@ -95,7 +95,7 @@ class CRMSimule:
         return [{"client": "BICICI", "backlog_xof": 9_000_000,
                  "reste_a_encaisser_xof": 4_000_000, "salesperson": "Awa"}]
 
-    async def get_invoice_collection_stats(self, client_name: str = "", year=None):
+    async def get_invoice_collection_stats(self, client_name: str = "", year=None, exercice=None):
         await self._travail(f"collection:{client_name}")
         return {"client": client_name, "total_factures": 12, "payees": 9,
                 "taux_recouvrement_pct": 75.0, "delai_moyen_recouvrement_reel_jours": 36,

@@ -1,9 +1,9 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.auth.jwt_adapter import create_access_token, hash_password, verify_password
@@ -19,7 +19,17 @@ from config.permissions import (
 )
 from core.domain.user import User, UserRole
 from db.database import get_session
-from db.models import ModulePermissionModel, UserModel
+from db.models import (
+    AdminAuditModel,
+    ArbitrageContexteModel,
+    ArbitrageParamModel,
+    BriefingPreferenceModel,
+    CommercialParamModel,
+    ConversationModel,
+    DecisionModel,
+    ModulePermissionModel,
+    UserModel,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -147,6 +157,62 @@ def _admin_user_payload(u: UserModel) -> dict:
     }
 
 
+# ---------- Journal d'administration ----------
+#
+# Les endpoints ci-dessous ne laissaient qu'un `logger.info` : la trace vivait
+# dans les logs du serveur, illisible depuis l'application et perdue à la
+# rotation. Une désactivation ou une suppression de compte doit pouvoir se
+# relire — c'est ce que porte `admin_audit`.
+
+AUDIT_USER_CREATE = "user.create"
+AUDIT_USER_UPDATE = "user.update"
+AUDIT_USER_DELETE = "user.delete"
+AUDIT_PERMISSION_UPDATE = "permission.update"
+AUDIT_PERMISSION_RESET = "permission.reset"
+
+_AUDIT_LIMIT_MAX = 200
+
+
+def _audit(
+    session: AsyncSession,
+    actor: User,
+    action: str,
+    *,
+    target_email: str = "",
+    target_id: int | None = None,
+    details: dict | None = None,
+) -> None:
+    """Ajoute une ligne au journal — SANS commit.
+
+    Le commit reste celui de l'appelant, délibérément : la trace et l'action
+    qu'elle décrit partagent alors la même transaction. Une écriture qui échoue
+    ne laisse donc pas de ligne annonçant un changement qui n'a pas eu lieu, et
+    une action réussie ne peut pas passer inaperçue.
+    """
+    session.add(
+        AdminAuditModel(
+            at=datetime.now(timezone.utc),
+            actor_email=actor.email,
+            action=action,
+            target_email=target_email,
+            target_id=target_id,
+            details=details or {},
+        )
+    )
+
+
+def _audit_payload(row: AdminAuditModel) -> dict:
+    return {
+        "id": row.id,
+        "at": row.at.isoformat() if row.at else None,
+        "actor_email": row.actor_email,
+        "action": row.action,
+        "target_email": row.target_email,
+        "target_id": row.target_id,
+        "details": row.details or {},
+    }
+
+
 @router.post("/users", status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: CreateUserRequest,
@@ -177,6 +243,17 @@ async def create_user(
         role=role,
     )
     session.add(new_user)
+    # `flush` avant l'audit : la ligne du journal porte l'id du compte créé, que
+    # l'autoincrement n'attribue qu'à l'insertion.
+    await session.flush()
+    _audit(
+        session,
+        current_user,
+        AUDIT_USER_CREATE,
+        target_email=new_user.email,
+        target_id=new_user.id,
+        details={"role": new_user.role, "full_name": new_user.full_name},
+    )
     await session.commit()
     await session.refresh(new_user)
     logger.info("Nouvel utilisateur créé : %s (%s) par %s", new_user.email, new_user.role, current_user.email)
@@ -185,15 +262,261 @@ async def create_user(
 
 @router.get("/users")
 async def list_users(
+    q: str | None = Query(None, description="Recherche sur l'email ou le nom complet"),
+    role: str | None = Query(None, description="Filtre sur un rôle exact"),
+    actif: bool | None = Query(None, description="true = comptes actifs, false = désactivés"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Liste les utilisateurs (admin uniquement)."""
+    """Liste les utilisateurs (admin uniquement), filtrable.
+
+    Les filtres sont appliqués ici et non à l'écran : la liste doit rester
+    utilisable quand elle dépasse ce qu'une page peut porter, et un filtre
+    seulement visuel laisserait croire à un périmètre qu'il ne garantit pas.
+
+    `total` compte l'effectif COMPLET, indépendamment des filtres — sans lui,
+    « 3 comptes » après filtrage se lirait comme « 3 comptes en tout ».
+    `admins_actifs` sert l'écran : c'est ce compteur qui dit si la prochaine
+    rétrogradation touchera le dernier administrateur, garde-fou que le serveur
+    applique de toute façon (cf. `_count_other_active_admins`).
+    """
     _require_admin(current_user)
 
-    result = await session.execute(select(UserModel).order_by(UserModel.created_at))
+    stmt = select(UserModel)
+    if q:
+        motif = f"%{q.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(UserModel.email).like(motif),
+                func.lower(UserModel.full_name).like(motif),
+            )
+        )
+    if role:
+        stmt = stmt.where(UserModel.role == _validate_role(role))
+    if actif is not None:
+        stmt = stmt.where(UserModel.is_active.is_(actif))
+
+    result = await session.execute(stmt.order_by(UserModel.created_at))
     users = result.scalars().all()
-    return [_admin_user_payload(u) for u in users]
+
+    # Les compteurs sont TOUJOURS calculés sur l'effectif complet, jamais sur la
+    # page filtrée : un bandeau qui suit le filtre annoncerait « 1 compte actif »
+    # sur une recherche à un résultat.
+    async def _compte(*conditions) -> int:
+        return await session.scalar(
+            select(func.count()).select_from(UserModel).where(*conditions)
+        ) or 0
+
+    return {
+        "users": [_admin_user_payload(u) for u in users],
+        "total": await _compte(),
+        "actifs": await _compte(UserModel.is_active.is_(True)),
+        # Un compte créé et jamais utilisé n'est pas un compte inactif : c'est un
+        # accès ouvert que personne ne surveille.
+        "jamais_connectes": await _compte(UserModel.last_login.is_(None)),
+        "admins_actifs": await _compte(
+            UserModel.role == UserRole.ADMIN.value, UserModel.is_active.is_(True)
+        ),
+        "roles": PERSONA_ROLES,
+    }
+
+
+# ---------- Fiche détaillée d'un compte (admin uniquement) ----------
+#
+# La liste répond « qui a un compte ». Elle ne répond pas aux questions qui
+# décident réellement d'une désactivation ou d'un changement de rôle : ce compte
+# sert-il ? à quoi ? qu'a-t-il produit ? La fiche les instruit, et le fait
+# UNIQUEMENT à partir d'état serveur déjà écrit — aucune table n'a été créée
+# pour elle. Trois sources, trois lectures :
+#
+#   - le PÉRIMÈTRE vient de `allowed_views`, la fonction même qu'appliquent les
+#     dépendances de chaque endpoint (cf. main.py::require_views). Ce n'est donc
+#     pas une reconstitution parallèle des droits, c'est la lecture de l'unique
+#     règle en vigueur.
+#   - l'ACTIVITÉ vient de `conversations` (Copilote), la seule table qui porte un
+#     `user_id`. Elle dit si le compte est vivant, et depuis quels profils.
+#   - l'EMPREINTE vient des colonnes `created_by` / `updated_by` semées dans les
+#     modules métier. Elles portent l'email, pas l'id : un compte supprimé laisse
+#     donc ses traces derrière lui, et renommer un email les détache. C'est une
+#     limite du schéma existant, pas de cette lecture — la fiche s'en tient à ce
+#     qui est effectivement attribuable.
+
+# Tables de réglage qui nomment leur dernier auteur. Le troisième élément est le
+# champ qui identifie la ligne, différent d'une table à l'autre.
+_REGLAGES_TRACES = (
+    (BriefingPreferenceModel, "Composition du débrief", "role"),
+    (ArbitrageParamModel, "Conditions d'arbitrage", "key"),
+    (CommercialParamModel, "Paramètres commerciaux", "key"),
+)
+
+
+async def _empreinte_reglages(session: AsyncSession, email: str) -> list[dict]:
+    """Réglages dont ce compte est le dernier auteur connu.
+
+    « Dernier auteur » et non « auteur » : ces tables ne gardent qu'un
+    `updated_by`, écrasé à chaque écriture. Un réglage modifié puis re-modifié
+    par quelqu'un d'autre sort donc de cette liste — elle dit ce qui porte
+    aujourd'hui la signature du compte, pas tout ce qu'il a jamais touché.
+    """
+    lignes: list[dict] = []
+    for model, libelle, champ in _REGLAGES_TRACES:
+        result = await session.execute(select(model).where(model.updated_by == email))
+        for row in result.scalars():
+            lignes.append(
+                {
+                    "objet": libelle,
+                    "cle": getattr(row, champ, ""),
+                    "at": row.updated_at.isoformat() if row.updated_at else None,
+                }
+            )
+    lignes.sort(key=lambda ligne: ligne["at"] or "", reverse=True)
+    return lignes
+
+
+@router.get("/users/{user_id}")
+async def get_user_detail(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Fiche détaillée d'un compte : périmètre effectif, activité, empreinte, journal."""
+    _require_admin(current_user)
+
+    result = await session.execute(select(UserModel).where(UserModel.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable")
+
+    email = user.email
+
+    # ── Périmètre effectif ────────────────────────────────────────────────────
+    views = await allowed_views(session, user.role)
+    matrix = await get_module_access(session)
+    autorisees = None if views is None else set(views)
+    modules = [
+        {"view": view, "allowed": autorisees is None or view in autorisees}
+        for view in matrix
+    ]
+
+    # ── Activité (Copilote) ───────────────────────────────────────────────────
+    # `role == "user"` isole les QUESTIONS posées : la table porte aussi les
+    # réponses de l'assistant, qui doubleraient le compte sans rien dire de
+    # l'usage fait du compte.
+    nb_questions = await session.scalar(
+        select(func.count())
+        .select_from(ConversationModel)
+        .where(ConversationModel.user_id == user_id, ConversationModel.role == "user")
+    ) or 0
+    derniere_question = await session.scalar(
+        select(func.max(ConversationModel.created_at)).where(
+            ConversationModel.user_id == user_id,
+            ConversationModel.role == "user",
+        )
+    )
+    profils_result = await session.execute(
+        select(ConversationModel.profile, func.count())
+        .where(ConversationModel.user_id == user_id, ConversationModel.role == "user")
+        .group_by(ConversationModel.profile)
+        .order_by(func.count().desc())
+    )
+    profils = [
+        {"profile": profile or "—", "questions": n} for profile, n in profils_result.all()
+    ]
+
+    # ── Empreinte métier ──────────────────────────────────────────────────────
+    decisions_creees = await session.scalar(
+        select(func.count()).select_from(DecisionModel).where(DecisionModel.created_by == email)
+    ) or 0
+    decisions_tranchees = await session.scalar(
+        select(func.count())
+        .select_from(DecisionModel)
+        .where(DecisionModel.created_by == email, DecisionModel.status == "tranchee")
+    ) or 0
+    derniere_decision = await session.scalar(
+        select(func.max(DecisionModel.created_at)).where(DecisionModel.created_by == email)
+    )
+    contextes = await session.scalar(
+        select(func.count())
+        .select_from(ArbitrageContexteModel)
+        .where(ArbitrageContexteModel.created_by == email)
+    ) or 0
+    reglages = await _empreinte_reglages(session, email)
+
+    # ── Journal, restreint à ce compte ────────────────────────────────────────
+    journal_result = await session.execute(
+        select(AdminAuditModel)
+        .where(AdminAuditModel.target_email == email)
+        .order_by(AdminAuditModel.at.desc(), AdminAuditModel.id.desc())
+        .limit(20)
+    )
+
+    # `created_at` est stocké sans fuseau (colonne DateTime nue, comme partout
+    # ailleurs dans ce schéma) : on le relit en UTC pour ne pas soustraire un
+    # naïf d'un aware, ce qui lèverait.
+    anciennete = (
+        (datetime.now(timezone.utc) - user.created_at.replace(tzinfo=timezone.utc)).days
+        if user.created_at
+        else None
+    )
+
+    return {
+        "compte": {
+            **_admin_user_payload(user),
+            "anciennete_jours": anciennete,
+            # Un compte créé et jamais utilisé n'est pas un compte inactif : c'est
+            # un accès ouvert que personne ne surveille. La distinction mérite
+            # d'être servie explicitement plutôt que déduite d'un `last_login` nul.
+            "jamais_connecte": user.last_login is None,
+            # L'écran doit pouvoir dire « c'est votre compte » AVANT le clic : le
+            # serveur refuse l'auto-suppression, autant ne pas la proposer.
+            "est_moi": user.id == current_user.id,
+        },
+        "perimetre": {
+            "is_admin": views is None,
+            "modules": modules,
+            "total": len(modules),
+            "autorises": len(modules) if views is None else len(autorisees or set()),
+        },
+        "activite": {
+            "questions_copilote": nb_questions,
+            "derniere_question": derniere_question.isoformat() if derniere_question else None,
+            "profils": profils,
+        },
+        "empreinte": {
+            "decisions_creees": decisions_creees,
+            "decisions_tranchees": decisions_tranchees,
+            "derniere_decision": derniere_decision.isoformat() if derniere_decision else None,
+            "contextes_renseignes": contextes,
+            "reglages": reglages,
+        },
+        "journal": [_audit_payload(row) for row in journal_result.scalars()],
+    }
+
+
+@router.get("/audit")
+async def list_audit(
+    limit: int = Query(50, ge=1, le=_AUDIT_LIMIT_MAX),
+    action: str | None = Query(None, description="Filtre sur un type d'action"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Journal d'administration, du plus récent au plus ancien (admin uniquement).
+
+    Table en append seul : aucun endpoint n'écrit par-dessus ni ne purge. Le
+    journal n'est pas modifiable depuis l'application — un journal qu'on peut
+    corriger ne prouve rien.
+    """
+    _require_admin(current_user)
+
+    stmt = select(AdminAuditModel)
+    if action:
+        stmt = stmt.where(AdminAuditModel.action == action.strip())
+    result = await session.execute(
+        stmt.order_by(AdminAuditModel.at.desc(), AdminAuditModel.id.desc()).limit(limit)
+    )
+    lignes = [_audit_payload(row) for row in result.scalars()]
+    total = await session.scalar(select(func.count()).select_from(AdminAuditModel)) or 0
+    return {"lignes": lignes, "total": total, "limit": limit}
 
 
 async def _count_other_active_admins(session: AsyncSession, excluded_user_id: int) -> int:
@@ -241,6 +564,12 @@ async def update_user(
             detail="Impossible : c'est le dernier compte admin actif",
         )
 
+    # Le journal porte le DELTA, pas l'état complet : seuls les champs
+    # effectivement modifiés, avec avant/après. Un PATCH qui ne change rien
+    # (mêmes valeurs renvoyées) ne laisse donc aucune ligne — sinon le journal
+    # se remplit d'entrées qui n'annoncent rien.
+    changes: dict[str, dict] = {}
+
     if body.email is not None:
         email = body.email.lower().strip()
         if not email or "@" not in email:
@@ -249,16 +578,25 @@ async def update_user(
             existing = await session.execute(select(UserModel).where(UserModel.email == email))
             if existing.scalar_one_or_none():
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé")
+            changes["email"] = {"avant": user.email, "apres": email}
             user.email = email
 
     if body.full_name is not None:
-        user.full_name = body.full_name.strip()
+        nom = body.full_name.strip()
+        if nom != user.full_name:
+            changes["full_name"] = {"avant": user.full_name, "apres": nom}
+            user.full_name = nom
 
     if body.role is not None:
-        user.role = _validate_role(body.role)
+        role = _validate_role(body.role)
+        if role != user.role:
+            changes["role"] = {"avant": user.role, "apres": role}
+            user.role = role
 
     if body.is_active is not None:
-        user.is_active = body.is_active
+        if body.is_active != user.is_active:
+            changes["is_active"] = {"avant": user.is_active, "apres": body.is_active}
+            user.is_active = body.is_active
 
     if body.password is not None:
         if len(body.password) < 6:
@@ -266,7 +604,21 @@ async def update_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Mot de passe trop court (6 caractères minimum)",
             )
+        # Le mot de passe est tracé comme un FAIT, jamais comme une valeur : ni en
+        # clair, ni haché. Le journal doit dire qu'il a été réinitialisé, pas
+        # offrir une seconde copie du secret à qui le lit.
+        changes["password"] = {"reinitialise": True}
         user.hashed_password = hash_password(body.password)
+
+    if changes:
+        _audit(
+            session,
+            current_user,
+            AUDIT_USER_UPDATE,
+            target_email=user.email,
+            target_id=user.id,
+            details=changes,
+        )
 
     await session.commit()
     await session.refresh(user)
@@ -314,6 +666,17 @@ async def delete_user(
         )
 
     email = user.email
+    # Tracé AVANT la suppression : après, il ne reste rien à décrire. La ligne du
+    # journal survit au compte (`target_email` est une copie, pas une clé
+    # étrangère) — c'est justement la suppression qu'il faut pouvoir relire.
+    _audit(
+        session,
+        current_user,
+        AUDIT_USER_DELETE,
+        target_email=email,
+        target_id=user_id,
+        details={"role": user.role, "full_name": user.full_name, "is_active": user.is_active},
+    )
     await session.delete(user)
     await session.commit()
     invalidate_user_cache(user_id)
@@ -393,11 +756,18 @@ async def update_permission(
         )
     )
     row = result.scalar_one_or_none()
+    avant = row.allowed if row else DEFAULT_MODULE_ACCESS[view].get(role, False)
     if row:
         row.allowed = body.allowed
         row.updated_at = datetime.now(timezone.utc)
     else:
         session.add(ModulePermissionModel(view=view, role=role, allowed=body.allowed))
+    _audit(
+        session,
+        current_user,
+        AUDIT_PERMISSION_UPDATE,
+        details={"view": view, "role": role, "avant": avant, "apres": body.allowed},
+    )
     await session.commit()
     invalidate_permissions_cache()
 
@@ -416,9 +786,19 @@ async def reset_permissions(
     """Supprime toutes les surcharges → retour à la matrice par défaut du code."""
     _require_admin(current_user)
 
-    from sqlalchemy import delete
-
+    # Le nombre de surcharges effacées est la seule chose qui rende cette ligne
+    # de journal interprétable : « matrice réinitialisée » sur une table déjà
+    # vide et sur douze cellules surchargées ne décrit pas le même geste.
+    surcharges = await session.scalar(
+        select(func.count()).select_from(ModulePermissionModel)
+    ) or 0
     await session.execute(delete(ModulePermissionModel))
+    _audit(
+        session,
+        current_user,
+        AUDIT_PERMISSION_RESET,
+        details={"surcharges_effacees": surcharges},
+    )
     await session.commit()
     invalidate_permissions_cache()
 

@@ -1,5 +1,5 @@
 import { getPilotageDg } from "@/lib/api/dashboard";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, StatTile, Tile } from "@/components/ui/bento";
 import { Narr, Section } from "@/components/ui/primitives";
 import { MOIS_ABREV, toSpark } from "./commun";
@@ -48,29 +48,29 @@ export async function DgPilotage() {
             rang="principal"
             label="CA pluriannuel"
             aide="Le CA commandé des cinq derniers exercices. Il situe l'année en cours dans la trajectoire, plutôt que de la juger seule."
-            value={formatMFcfa(meilleureAnnee.ca_xof)}
-            unit={`M FCFA · meilleure année ${meilleureAnnee.annee}`}
+            value={formatFcfa(meilleureAnnee.ca_xof)}
+            unit={`FCFA · meilleure année ${meilleureAnnee.annee}`}
             reading={
               meilleureAnnee.annee === anneeCourante.annee
                 ? "l'exercice en cours est déjà le meilleur des cinq"
                 : partMeilleurePct !== null
-                  ? `exercice en cours (incomplet) : ${formatMFcfa(anneeCourante.ca_xof)} M FCFA, soit ${formatPct(partMeilleurePct, 0)} % de la meilleure année`
+                  ? `exercice en cours (incomplet) : ${formatFcfa(anneeCourante.ca_xof)} FCFA, soit ${formatPct(partMeilleurePct, 0)} % de la meilleure année`
                   : undefined
             }
             spark={toSpark(pilotage.ca_annuel.map((a) => a.ca_xof))}
             sparkAxis={pilotage.ca_annuel.map((a) => String(a.annee))}
             sparkLabels={pilotage.ca_annuel.map(
               (a) =>
-                `${a.annee} : ${formatMFcfa(a.ca_xof)} M FCFA (${formatNumber(a.nb_commandes)} commande(s))`
+                `${a.annee} : ${formatFcfa(a.ca_xof)} FCFA (${formatNumber(a.nb_commandes)} commande(s))`
             )}
           />
           <StatTile
             span={4}
             label={`Atterrissage ${pilotage.atterrissage.trimestre ?? "du trimestre"}`}
             aide="Le CA déjà commandé sur le trimestre en cours, prolongé par la tendance des six derniers mois. Une projection, pas une promesse."
-            value={formatMFcfa(pilotage.atterrissage.projection_fin_trimestre?.realiste_xof ?? 0)}
-            unit="M FCFA en scénario réaliste"
-            reading={`déjà commandé : ${formatMFcfa(pilotage.atterrissage.realise_a_ce_jour_xof ?? 0)} M FCFA · fourchette ${formatMFcfa(pilotage.atterrissage.projection_fin_trimestre?.pessimiste_xof ?? 0)} à ${formatMFcfa(pilotage.atterrissage.projection_fin_trimestre?.optimiste_xof ?? 0)} M FCFA`}
+            value={formatFcfa(pilotage.atterrissage.projection_fin_trimestre?.realiste_xof ?? 0)}
+            unit="FCFA en scénario réaliste"
+            reading={`déjà commandé : ${formatFcfa(pilotage.atterrissage.realise_a_ce_jour_xof ?? 0)} FCFA · fourchette ${formatFcfa(pilotage.atterrissage.projection_fin_trimestre?.pessimiste_xof ?? 0)} à ${formatFcfa(pilotage.atterrissage.projection_fin_trimestre?.optimiste_xof ?? 0)} FCFA`}
           />
           <StatTile
             span={4}
@@ -81,7 +81,7 @@ export async function DgPilotage() {
             reading={
               `${formatPct(pilotage.transformation.win_rate?.taux_valeur_pct ?? null, 0)} % en valeur` +
               (pilotage.transformation.pertes?.by_client?.[0]
-                ? ` · ${pilotage.transformation.pertes.by_client[0].client} concentre le plus de pertes (${formatMFcfa(pilotage.transformation.pertes.by_client[0].montant_xof)} M FCFA)`
+                ? ` · ${pilotage.transformation.pertes.by_client[0].client} concentre le plus de pertes (${formatFcfa(pilotage.transformation.pertes.by_client[0].montant_xof)} FCFA)`
                 : "")
             }
             readingVariant={
@@ -93,9 +93,19 @@ export async function DgPilotage() {
             span={4}
             label={`Marge ${pilotage.annee}`}
             aide="La marge des dossiers ouverts sur l'exercice : annoncée à l'ouverture (provisoire), puis constatée à l'arrêté (définitive)."
-            value={formatMFcfa(pilotage.marge?.marge_provisoire_total ?? 0)}
-            unit={`M FCFA provisoires · moy. ${formatPct(pilotage.marge?.perc_marge_provisoire_moyen ?? null, 1)} %`}
-            reading={`définitive constatée : ${formatMFcfa(pilotage.marge?.marge_definitive_total ?? 0)} M FCFA (moy. ${formatPct(pilotage.marge?.perc_marge_definitive_moyen ?? null, 1)} %) sur ${formatNumber(pilotage.marge?.nb_dossiers ?? 0)} dossiers`}
+            value={formatFcfa(pilotage.marge?.marge_provisoire_total ?? 0)}
+            // Taux agrégés (`taux_marge_*`), jamais `perc_marge_*_moyen` : ces
+            // derniers moyennent des pourcentages par dossier et valent -745 %
+            // sur ce miroir. Cf. l'adaptateur, `get_margin_stats`.
+            unit={`FCFA provisoires · ${formatPct(pilotage.marge?.taux_marge_provisoire_pct ?? null, 1)} % du CA`}
+            // La définitive n'est publiée que si la dépense est imputée sur une
+            // part suffisante du CA : sinon la tuile annonce la couverture. Un
+            // dossier sans dépense imputée affiche 100 % de marge par construction.
+            reading={
+              pilotage.marge?.marge_definitive_exploitable
+                ? `définitive constatée : ${formatFcfa(pilotage.marge?.marge_definitive_total ?? 0)} FCFA (${formatPct(pilotage.marge?.taux_marge_definitive_pct ?? null, 1)} % du CA) sur ${formatNumber(pilotage.marge?.nb_dossiers_marge_imputee ?? 0)} dossiers imputés`
+                : `définitive non exploitable : dépense imputée sur ${formatPct(pilotage.marge?.couverture_marge_definitive_pct ?? null, 1)} % du CA facturé (seuil ${formatPct(pilotage.marge?.seuil_couverture_marge_pct ?? null, 0)} %)`
+            }
           />
           <StatTile
             span={4}
@@ -110,7 +120,7 @@ export async function DgPilotage() {
             unit="jours en moyenne"
             reading={
               encaissement
-                ? `${formatPct(encaissement.taux_recouvrement_pct, 0)} % des factures recouvrées · ${formatMFcfa(encaissement.montant_en_attente_xof)} M FCFA en attente · retard moyen des impayés ${formatNumber(encaissement.retard_moyen_impayes_jours)} j`
+                ? `${formatPct(encaissement.taux_recouvrement_pct, 0)} % des factures recouvrées · ${formatFcfa(encaissement.montant_en_attente_xof)} FCFA en attente · retard moyen des impayés ${formatNumber(encaissement.retard_moyen_impayes_jours)} j`
                 : "aucune facture dans le miroir"
             }
             readingVariant={
@@ -122,7 +132,7 @@ export async function DgPilotage() {
             label="Affaires à échéance"
             aide="Les opportunités encore ouvertes dont la date de clôture tombe dans les 60 prochains jours — celles qui se décident maintenant."
             value={formatNumber(pilotage.echeances.nb)}
-            unit={`sous ${pilotage.echeances.fenetre_jours} jours · ${formatMFcfa(pilotage.echeances.montant_xof)} M FCFA`}
+            unit={`sous ${pilotage.echeances.fenetre_jours} jours · ${formatFcfa(pilotage.echeances.montant_xof)} FCFA`}
             reading={
               prochaineEcheance
                 ? `la plus proche : ${prochaineEcheance.opportunite} (${prochaineEcheance.client}) le ${formatDate(prochaineEcheance.deadline)}`
@@ -143,7 +153,7 @@ export async function DgPilotage() {
                 rows={commerciauxActifs.map((co) => ({
                   name: co.commercial,
                   sub: `${formatNumber(co.nb_commandes)} commande(s) · ${formatPct(commerciauxTotal ? (co.ca_total_xof / commerciauxTotal) * 100 : null, 0)} % du réalisé`,
-                  value: `${formatMFcfa(co.ca_total_xof)} M`,
+                  value: `${formatFcfa(co.ca_total_xof)}`,
                   pct: maxCommercial ? (co.ca_total_xof / maxCommercial) * 100 : 0,
                 }))}
               />
@@ -161,7 +171,7 @@ export async function DgPilotage() {
                 rows={pilotage.mensuel.map((m) => ({
                   name: MOIS_ABREV[m.mois - 1] ?? String(m.mois),
                   sub: `${formatNumber(m.nb_commandes)} commande(s)`,
-                  value: `${formatMFcfa(m.ca_xof)} M`,
+                  value: `${formatFcfa(m.ca_xof)}`,
                   pct: maxMensuel ? (m.ca_xof / maxMensuel) * 100 : 0,
                 }))}
               />

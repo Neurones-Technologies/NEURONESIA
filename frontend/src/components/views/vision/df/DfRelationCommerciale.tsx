@@ -1,5 +1,5 @@
 import { getRelationCommerciale, MauvaisPayeur } from "@/lib/api/daf";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Note, Tag } from "@/components/ui/primitives";
@@ -137,14 +137,14 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             tag: "stock d'impayés",
             tagVariant: "r",
             body: [
-              `${formatMFcfa(dso.encours_xof)} M FCFA d'encours client pour ${formatMFcfa(dso.ca_exercice_xof)} M FCFA de CA sur l'exercice, soit ${formatNumber(dso.dso_encours_jours ?? 0)} jours de chiffre d'affaires immobilisés.`,
+              `${formatFcfa(dso.encours_xof)} FCFA d'encours client pour ${formatFcfa(dso.ca_exercice_xof)} FCFA de CA sur l'exercice, soit ${formatNumber(dso.dso_encours_jours ?? 0)} jours de chiffre d'affaires immobilisés.`,
               `Cette lecture est bien plus élevée que le délai constaté (${formatPct(dso.delai_encaissement_moyen_jours, 0)} j) parce qu'elle inclut les factures anciennes JAMAIS réglées, que le délai constaté ne peut pas voir : il ne se calcule que sur ce qui a été payé.`,
               "L'écart entre les deux lectures est donc la mesure du stock d'impayés, pas une incohérence de calcul.",
             ],
             kv: [
-              ["Encours total", `${formatMFcfa(dso.encours_xof)} M FCFA`],
-              ["Dont échu", `${formatMFcfa(dso.encours_echu_xof)} M FCFA`],
-              ["CA de l'exercice", `${formatMFcfa(dso.ca_exercice_xof)} M FCFA`],
+              ["Encours total", `${formatFcfa(dso.encours_xof)} FCFA`],
+              ["Dont échu", `${formatFcfa(dso.encours_echu_xof)} FCFA`],
+              ["CA de l'exercice", `${formatFcfa(dso.ca_exercice_xof)} FCFA`],
               ["Jours de CA immobilisés", formatNumber(dso.dso_encours_jours ?? 0)],
               ["Taux de recouvrement", `${formatPct(dso.taux_recouvrement_pct, 1)} %`],
             ],
@@ -171,7 +171,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             body: [
               dpo.source === "reel"
                 ? `Délai moyen de ${formatPct(dpo.dpo_jours, 1)} jours entre la facture fournisseur et son règlement, sur ${formatNumber(dpo.nb_factures_fournisseurs)} factures.`
-                : `Aucune facture fournisseur n'est synchronisée : le DPO affiché est posé. Ce qui est mesuré, ce sont ${formatMFcfa(dpo.base_mesuree.achats_engages_exercice_xof)} M FCFA d'achats ENGAGÉS sur ${formatNumber(dpo.base_mesuree.nb_commandes_exercice)} commandes auprès de ${formatNumber(dpo.base_mesuree.nb_fournisseurs_exercice)} fournisseurs.`,
+                : `Aucune facture fournisseur n'est synchronisée : le DPO affiché est posé. Ce qui est mesuré, ce sont ${formatFcfa(dpo.base_mesuree.achats_engages_exercice_xof)} FCFA d'achats ENGAGÉS sur ${formatNumber(dpo.base_mesuree.nb_commandes_exercice)} commandes auprès de ${formatNumber(dpo.base_mesuree.nb_fournisseurs_exercice)} fournisseurs.`,
               dpo.raison ?? dpo.note,
               dpo.source === "reel" ? dpo.note : "Une commande passée n'est pas une dette échue : entre les deux, il manque la facture, son échéance et son règlement.",
             ],
@@ -183,7 +183,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                   ? `${formatPct(dpo.base_mesuree.delai_negocie_moyen_jours, 0)} j`
                   : `non renseigné (${formatNumber(dpo.base_mesuree.nb_fiches_fournisseur)} fiches fournisseur)`,
               ],
-              ["Achats engagés (mesuré)", `${formatMFcfa(dpo.base_mesuree.achats_engages_exercice_xof)} M FCFA`],
+              ["Achats engagés (mesuré)", `${formatFcfa(dpo.base_mesuree.achats_engages_exercice_xof)} FCFA`],
               ["Commandes d'achat", formatNumber(dpo.base_mesuree.nb_commandes_exercice)],
               ["Factures fournisseurs", formatNumber(dpo.nb_factures_fournisseurs)],
             ],
@@ -203,8 +203,8 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
             tag: `${formatNumber(payeurs.totaux.nb_contentieux)} contentieux`,
             tagVariant: "r",
             body: [
-              `${formatNumber(payeurs.totaux.nb_clients_a_risque)} clients sur ${formatNumber(payeurs.totaux.nb_clients_factures)} portent un encours échu ou un comportement de paiement lent, pour ${formatMFcfa(payeurs.totaux.encours_echu_total_xof)} M FCFA d'encours échu au total.`,
-              `${formatNumber(payeurs.totaux.nb_clients_arriere_ancien)} d'entre eux portent une créance de plus de deux ans (${formatMFcfa(payeurs.totaux.encours_arriere_ancien_xof)} M FCFA) : à cette ancienneté, la question n'est plus de relancer mais de provisionner.`,
+              `${formatNumber(payeurs.totaux.nb_clients_a_risque)} clients sur ${formatNumber(payeurs.totaux.nb_clients_factures)} portent un encours échu ou un comportement de paiement lent, pour ${formatFcfa(payeurs.totaux.encours_echu_total_xof)} FCFA d'encours échu au total.`,
+              `${formatNumber(payeurs.totaux.nb_clients_arriere_ancien)} d'entre eux portent une créance de plus de deux ans (${formatFcfa(payeurs.totaux.encours_arriere_ancien_xof)} FCFA) : à cette ancienneté, la question n'est plus de relancer mais de provisionner.`,
               payeurs.note,
             ],
             kv: [
@@ -212,7 +212,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
               ["Clients à risque", formatNumber(payeurs.totaux.nb_clients_a_risque)],
               ["En contentieux", formatNumber(payeurs.totaux.nb_contentieux)],
               ["Payeurs lents", formatNumber(payeurs.totaux.nb_payeurs_lents)],
-              ["Arriéré de plus de 2 ans", `${formatMFcfa(payeurs.totaux.encours_arriere_ancien_xof)} M FCFA`],
+              ["Arriéré de plus de 2 ans", `${formatFcfa(payeurs.totaux.encours_arriere_ancien_xof)} FCFA`],
               ["Concentration top 5", `${formatPct(payeurs.totaux.part_top5_encours_echu_pct, 1)} %`],
             ],
           }}
@@ -236,18 +236,18 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                 (p) => p.tranches.find((x) => x.code === t.code)?.montant_xof ?? 0,
               ),
             }))}
-            formatY={(v) => `${formatMFcfa(v)} M`}
+            formatY={(v) => `${formatFcfa(v)}`}
             infos={courbeEncours.points.map((p) => {
               const detail = p.tranches
                 .filter((t) => t.montant_xof > 0)
-                .map((t) => `${t.libelle} ${formatMFcfa(t.montant_xof)} M`)
+                .map((t) => `${t.libelle} ${formatFcfa(t.montant_xof)}`)
                 .join(" · ");
-              return `${p.libelle} — encours ${formatMFcfa(p.total_xof)} M sur ${formatNumber(p.nb_factures)} factures. ${detail}`;
+              return `${p.libelle} — encours ${formatFcfa(p.total_xof)} sur ${formatNumber(p.nb_factures)} factures. ${detail}`;
             })}
           />
           <ChartNote>
-            {formatMFcfa(evo.encours_debut_xof)} M en {courbeEncours.points[0]?.libelle ?? evo.depuis} →{" "}
-            {formatMFcfa(evo.encours_fin_xof)} M aujourd&apos;hui, soit{" "}
+            {formatFcfa(evo.encours_debut_xof)} en {courbeEncours.points[0]?.libelle ?? evo.depuis} →{" "}
+            {formatFcfa(evo.encours_fin_xof)} aujourd&apos;hui, soit{" "}
             {evo.variation_pct > 0 ? "+" : ""}
             {formatPct(evo.variation_pct, 0)} %. La part au-delà de 90 jours passe de{" "}
             {formatPct(evo.part_contentieux_debut_pct, 0)} % à {formatPct(evo.part_contentieux_fin_pct, 0)} %.
@@ -278,7 +278,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                   fiable: !p.synchronisation_incomplete,
                   info: `${p.libelle} — ${
                     p.delai_moyen_jours !== null ? `${formatPct(p.delai_moyen_jours, 1)} jours` : "non publié"
-                  }, sur ${formatNumber(p.nb_reglements_fenetre)} règlements de la fenêtre · ${formatMFcfa(p.montant_encaisse_mois_xof)} M encaissés ce mois${
+                  }, sur ${formatNumber(p.nb_reglements_fenetre)} règlements de la fenêtre · ${formatFcfa(p.montant_encaisse_mois_xof)} encaissés ce mois${
                     p.synchronisation_incomplete ? " · synchronisation incomplète" : ""
                   }`,
                 })),
@@ -305,14 +305,14 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
         <Tile
           span={4}
           title="Balance âgée des créances"
-          kick={`${formatMFcfa(balance.total_xof)} M FCFA d'encours`}
+          kick={`${formatFcfa(balance.total_xof)} FCFA d'encours`}
           aide="Ce qu'on vous doit, rangé par ancienneté du retard. Plus une créance est ancienne, moins elle a de chances d'être encaissée."
         >
           <Bars
             rows={balance.tranches.map((t) => ({
               name: t.libelle,
               sub: `${formatNumber(t.nb_factures ?? 0)} facture(s) · ${formatPct(t.part_pct, 1)} % de l'encours`,
-              value: `${formatMFcfa(t.montant_xof)} M`,
+              value: `${formatFcfa(t.montant_xof)}`,
               pct: t.part_pct,
               variant:
                 t.code === "90_plus" ? ("r" as const) : t.code === "non_echu" ? ("s" as const) : ("w" as const),
@@ -322,7 +322,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                 tag: `${formatPct(t.part_pct, 1)} % de l'encours`,
                 tagVariant: t.code === "90_plus" ? "r" : t.code === "non_echu" ? "s" : "w",
                 body: [
-                  `${formatMFcfa(t.montant_xof)} M FCFA restant dus sur ${formatNumber(t.nb_factures ?? 0)} facture(s) dans cette tranche.`,
+                  `${formatFcfa(t.montant_xof)} FCFA restant dus sur ${formatNumber(t.nb_factures ?? 0)} facture(s) dans cette tranche.`,
                   t.code === "90_plus"
                     ? "Au-delà de 90 jours, le recouvrement amiable a rarement encore prise. C'est la tranche qui détermine le besoin de provision."
                     : t.code === "non_echu"
@@ -331,7 +331,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                   balance.note,
                 ],
                 kv: [
-                  ["Montant restant dû", `${formatMFcfa(t.montant_xof)} M FCFA`],
+                  ["Montant restant dû", `${formatFcfa(t.montant_xof)} FCFA`],
                   ["Factures", formatNumber(t.nb_factures ?? 0)],
                   ["Part de l'encours", `${formatPct(t.part_pct, 1)} %`],
                 ],
@@ -341,7 +341,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
           {contentieux && contentieux.part_pct > 50 && (
             <Note accent style={{ marginTop: 14 }}>
               {formatPct(contentieux.part_pct, 0)} % de l&apos;encours client dépasse 90 jours de retard, soit{" "}
-              {formatMFcfa(contentieux.montant_xof)} M FCFA sur {formatNumber(contentieux.nb_factures ?? 0)}{" "}
+              {formatFcfa(contentieux.montant_xof)} FCFA sur {formatNumber(contentieux.nb_factures ?? 0)}{" "}
               factures. À ce niveau, le sujet n&apos;est plus le délai de paiement mais l&apos;assainissement du
               poste client.
             </Note>
@@ -351,7 +351,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
         <Tile
           span={4}
           title="Dette fournisseurs par ancienneté"
-          kick={sourceKick(dpo.source, `${formatMFcfa(dpo.dette_xof)} M FCFA`)}
+          kick={sourceKick(dpo.source, `${formatFcfa(dpo.dette_xof)} FCFA`)}
           aide="Ce que vous devez à vos fournisseurs, rangé par ancienneté du retard — mesuré sur les factures fournisseurs synchronisées depuis Odoo."
         >
           <Bars
@@ -361,7 +361,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                 t.nb_factures !== null
                   ? `${formatNumber(t.nb_factures)} facture(s) · ${formatPct(t.part_pct, 1)} %`
                   : `${formatPct(t.part_pct, 1)} % de la dette posée`,
-              value: `${formatMFcfa(t.montant_xof)} M`,
+              value: `${formatFcfa(t.montant_xof)}`,
               pct: t.part_pct,
               variant: t.code === "90_plus" ? ("r" as const) : t.code === "non_echu" ? ("s" as const) : ("w" as const),
             }))}
@@ -438,7 +438,7 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                       tag: STATUT_LIBELLE[c.statut],
                       tagVariant: STATUT_TAG[c.statut],
                       body: [
-                        `${formatMFcfa(c.encours_echu_xof)} M FCFA d'encours échu sur ${formatNumber(c.nb_factures_ouvertes)} facture(s) ouverte(s), avec un retard courant maximal de ${formatNumber(c.retard_courant_max_jours)} jours (échéance la plus ancienne : ${formatDate(c.echeance_la_plus_ancienne)}).`,
+                        `${formatFcfa(c.encours_echu_xof)} FCFA d'encours échu sur ${formatNumber(c.nb_factures_ouvertes)} facture(s) ouverte(s), avec un retard courant maximal de ${formatNumber(c.retard_courant_max_jours)} jours (échéance la plus ancienne : ${formatDate(c.echeance_la_plus_ancienne)}).`,
                         c.comportement_significatif
                           ? `Son comportement de paiement est mesuré sur ${formatNumber(c.nb_factures_reglees)} factures réglées : ${formatPct(c.retard_moyen_regle_jours, 1)} jours de retard en moyenne. C'est un payeur ${(c.retard_moyen_regle_jours ?? 0) > 30 ? "structurellement lent" : "globalement fiable"}.`
                           : `Il n'a réglé que ${formatNumber(c.nb_factures_reglees)} facture(s) : son retard moyen est affiché mais n'entre pas dans l'indice — sur si peu de factures, un retard est un incident, pas un comportement.`,
@@ -450,8 +450,8 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                         c.client_connu ? "" : "Ce client n'existe pas dans le référentiel : la facture est rattachée à un tiers supprimé ou hors périmètre. À corriger dans l'ERP.",
                       ].filter(Boolean),
                       kv: [
-                        ["Encours échu", `${formatMFcfa(c.encours_echu_xof)} M FCFA`],
-                        ["Encours total", `${formatMFcfa(c.encours_xof)} M FCFA`],
+                        ["Encours échu", `${formatFcfa(c.encours_echu_xof)} FCFA`],
+                        ["Encours total", `${formatFcfa(c.encours_xof)} FCFA`],
                         ["Factures ouvertes", formatNumber(c.nb_factures_ouvertes)],
                         ["Retard courant max", `${formatNumber(c.retard_courant_max_jours)} j`],
                         [
@@ -462,12 +462,12 @@ export async function DfRelationCommerciale({ annee }: { annee?: number }) {
                         ],
                         ["Part de l'encours échu", `${formatPct(c.part_encours_echu_pct, 1)} %`],
                         ["Indice de risque", formatPct(c.indice_risque, 1)],
-                        ["Total facturé", `${formatMFcfa(c.montant_facture_xof)} M FCFA`],
+                        ["Total facturé", `${formatFcfa(c.montant_facture_xof)} FCFA`],
                       ],
                     }}
                   >
                     <td>{c.client}</td>
-                    <td className="r mono">{formatMFcfa(c.encours_echu_xof)} M</td>
+                    <td className="r mono">{formatFcfa(c.encours_echu_xof)}</td>
                     <td className="r mono">{formatNumber(c.retard_courant_max_jours)} j</td>
                     <td className="r mono">
                       {c.retard_moyen_regle_jours !== null

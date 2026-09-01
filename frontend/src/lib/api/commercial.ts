@@ -109,8 +109,14 @@ export interface CompteClasse {
   compte: string;
   client_id: string | null;
   commercial: string;
+  /** CA de l'EXERCICE en cours — c'est la lecture du cockpit. */
   ca_realise_xof: number;
   nb_commandes: number;
+  /** Cumul depuis l'origine du miroir, servi en CONTEXTE du chiffre d'exercice
+   *  (un compte à 100 M cette année qui en a fait 1 900 depuis 2019 ne se lit
+   *  pas comme un nouveau venu au même montant). Jamais un substitut. */
+  ca_historique_xof: number;
+  nb_commandes_historique: number;
   panier_moyen_xof: number;
   nb_opp_a_venir: number;
   pipe_a_venir_xof: number;
@@ -156,10 +162,13 @@ export interface AnneeAcquisition {
 export interface ComptesDc {
   top_comptes: {
     as_of: string;
+    /** Exercice sur lequel portent `ca_realise_xof` et `nb_commandes`. */
+    annee: number;
     comptes: CompteClasse[];
     totaux: {
       nb_comptes_classes: number;
       ca_realise_xof: number;
+      ca_historique_xof: number;
       pipe_a_venir_xof: number;
       part_ca_top_pct: number;
       part_pipe_top_pct: number;

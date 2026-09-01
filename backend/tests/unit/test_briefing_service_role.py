@@ -7,7 +7,7 @@ le lendemain matin. C'est ce que verrouille le premier test.
 """
 import pytest
 
-from modules.uc_briefing import facts, preferences, service, store
+from modules.uc_briefing import facts, indicateurs, preferences, service, store
 
 
 class CRMMinimal:
@@ -131,6 +131,82 @@ async def test_composition_enregistree_est_appliquee(store_temporaire, monkeypat
     monkeypatch.setattr(preferences, "load", _load)
     section = await service.generate_role("dg", CRMMinimal(), None)
     assert len(section["bullets"]) == 1
+
+
+# ---------- 6e ligne du résumé : la cadence du CA commandé ----------
+
+_BLOC_CA = {
+    "cle": "ca_commande_ytd", "libelle": "CA commandé", "unite": "xof",
+    "nature": "flux", "valeur": 6_128_000_000,
+    "j1": 0, "j1_jours": 1, "j1_depuis": "2026-08-26",
+    "semaine": 0, "semaine_jours": 7, "semaine_depuis": "2026-08-20",
+    "mois": 17_000_000, "mois_jours": 30, "mois_depuis": "2026-07-28",
+}
+
+_LIGNE_ATTENDUE = (
+    "CA commandé : 6,13 Md FCFA — stable vs hier, stable sur 7 j, "
+    "▲ 17,0 M FCFA sur 30 j."
+)
+
+
+@pytest.fixture
+def cadence_mesurable(monkeypatch):
+    async def _delta(cles, as_of=None):
+        return {"ca_commande_ytd": dict(_BLOC_CA)} if "ca_commande_ytd" in cles else {}
+
+    monkeypatch.setattr(indicateurs, "delta", _delta)
+
+
+@pytest.mark.asyncio
+async def test_le_resume_dg_porte_la_cadence_en_derniere_ligne(store_temporaire, cadence_mesurable):
+    """Ajoutée APRÈS la rédaction : elle doit fermer le résumé, pas s'y fondre.
+    `llm=None` fait tomber la rédaction sur le repli déterministe — la ligne
+    doit survivre aux deux chemins, c'est le repli qu'on éprouve ici."""
+    section = await service.generate_role("dg", CRMMinimal(), None)
+
+    assert section["resume"][-1] == _LIGNE_ATTENDUE
+    assert section["resume"].count(_LIGNE_ATTENDUE) == 1
+
+
+@pytest.mark.asyncio
+async def test_la_cadence_ne_passe_pas_par_le_redacteur(store_temporaire, cadence_mesurable, monkeypatch):
+    """Un rythme paraphrasé n'est plus un rythme : le rédacteur ne doit jamais
+    voir la ligne, sinon « ▲ 17,0 M FCFA sur 30 j » ressort en « le CA progresse
+    légèrement »."""
+    soumis = {}
+
+    async def _resume(llm, role, bullets, action=None, **kwargs):
+        soumis["bullets"] = list(bullets)
+        return ["ligne rédigée"]
+
+    monkeypatch.setattr(service, "build_brief_resume", _resume)
+    section = await service.generate_role("dg", CRMMinimal(), None)
+
+    assert all("sur 30 j" not in b for b in soumis["bullets"])
+    assert section["resume"] == ["ligne rédigée", _LIGNE_ATTENDUE]
+
+
+@pytest.mark.asyncio
+async def test_sans_historisation_le_resume_garde_ses_cinq_lignes(store_temporaire, monkeypatch):
+    """Le job de nuit n'a pas tourné : pas de 6e ligne, et surtout pas une ligne
+    vide qui ferait une puce blanche en tête de cockpit."""
+    async def _delta_vide(cles, as_of=None):
+        raise RuntimeError("historisation indisponible")
+
+    monkeypatch.setattr(indicateurs, "delta", _delta_vide)
+    section = await service.generate_role("dg", CRMMinimal(), None)
+
+    assert all(l.strip() for l in section["resume"])
+    assert not any("sur 30 j" in l for l in section["resume"])
+
+
+@pytest.mark.asyncio
+async def test_les_roles_sans_ca_commande_gardent_cinq_lignes(store_temporaire, cadence_mesurable):
+    """Le DAF ne suit pas le CA commandé : lui coller la ligne mettrait dans son
+    briefing un chiffre qui n'est pas de son mandat."""
+    section = await service.generate_role("dir_financier", CRMMinimal(), None)
+
+    assert not any("CA commandé :" in l for l in section["resume"])
 
 
 # ---------- traduction préférences → composition (mode « consigne pilote ») ----------

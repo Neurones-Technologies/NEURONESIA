@@ -1,7 +1,6 @@
 import { getArbitrageDossier } from "@/lib/api/arbitrage";
 import type { ArbitrageDossier, PayeurProfile } from "@/lib/api/arbitrage";
-import { roleToProfile } from "@/lib/auth/roles";
-import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
+import { formatDate, formatFcfa, formatFcfaDepuisM, formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { Clickable } from "@/components/ui/detail";
 import { Note, Tag } from "@/components/ui/primitives";
@@ -118,7 +117,17 @@ export async function DossierPanel({
     );
   }
 
-  const hasMandate = isAdmin || roleToProfile(dossier.mandat_role) === profile;
+  // Trancher relève de la seule Direction générale. Le mandat (`mandat_role`)
+  // continue de dire quelle direction instruit le dossier — il est affiché en
+  // tête, journalisé avec la décision et sert à ordonner la file — mais il
+  // n'ouvre plus le droit d'engager l'entreprise : au-dessus comme en dessous du
+  // seuil d'enjeu, c'est la DG qui arrête l'option retenue. Les autres profils
+  // gardent le dossier entier en lecture et peuvent y verser du contexte terrain
+  // (étape 05), qui n'a jamais demandé de mandat.
+  //
+  // Même règle côté serveur (`router._require_decision_authority`) : ce test-ci
+  // n'évite qu'un aller-retour, il n'autorise rien à lui seul.
+  const peutTrancher = isAdmin || profile === "dg";
   const enjeuM = mFcfa(dossier.enjeu_xof);
   const ratio = (dossier.profil_payeur.cout_report_ratio_semaine * 100).toFixed(1);
 
@@ -153,21 +162,21 @@ export async function DossierPanel({
         <div className="arb-facts">
           <div className="arb-fact">
             <span>Impayé constaté</span>
-            <b>{formatMFcfa(dossier.impaye_xof)} M</b>
+            <b>{formatFcfa(dossier.impaye_xof)}</b>
             <i>
               {formatNumber(dossier.impaye_nb_factures)} facture(s) · mesuré
             </i>
           </div>
           <div className="arb-fact">
             <span>Enjeu commercial</span>
-            <b>{formatMFcfa(dossier.enjeu_xof)} M</b>
+            <b>{formatFcfa(dossier.enjeu_xof)}</b>
             <i>
               {dossier.signal_type.toLowerCase()} · {dossier.signal_nature}
             </i>
           </div>
           <div className="arb-fact">
             <span>Coût du report</span>
-            <b>≈ {formatMFcfa(dossier.cout_report_xof_semaine)} M</b>
+            <b>≈ {formatFcfa(dossier.cout_report_xof_semaine)}</b>
             <i>par semaine · {ratio} % de l&apos;enjeu</i>
           </div>
           <div className="arb-fact">
@@ -178,8 +187,8 @@ export async function DossierPanel({
         </div>
 
         <p>
-          Le mandat revient à {roleLabel(dossier.mandat_role)} : l&apos;enjeu de {formatNumber(enjeuM)} M FCFA{" "}
-          {enjeuM >= seuilM ? "dépasse" : "reste sous"} le seuil de {formatNumber(seuilM)} M au-delà duquel aucune
+          Le mandat revient à {roleLabel(dossier.mandat_role)} : l&apos;enjeu de {formatFcfa(dossier.enjeu_xof)} FCFA{" "}
+          {enjeuM >= seuilM ? "dépasse" : "reste sous"} le seuil de {formatFcfaDepuisM(seuilM)} FCFA au-delà duquel aucune
           direction ne tranche seule. Priorité {dossier.priorite.label} — {dossier.priorite.raison}. Le coût du
           report est une estimation calibrée sur le comportement de paiement de ce client, pas un montant à
           provisionner.
@@ -201,7 +210,7 @@ export async function DossierPanel({
                 {formatNumber(dossier.retard_max_jours)} jours
               </div>
             </div>
-            <div className="num">{formatMFcfa(dossier.impaye_xof)} M FCFA</div>
+            <div className="num">{formatFcfa(dossier.impaye_xof)} FCFA</div>
             <Tag variant={NATURE_VARIANT.mesuré}>mesuré</Tag>
           </div>
           <div className="row-m">
@@ -209,7 +218,7 @@ export async function DossierPanel({
               <div className="row-n">Enjeu commercial ({dossier.signal_type.toLowerCase()})</div>
               <div className="row-s">{signalSummary(dossier)}</div>
             </div>
-            <div className="num">{formatMFcfa(dossier.enjeu_xof)} M FCFA</div>
+            <div className="num">{formatFcfa(dossier.enjeu_xof)} FCFA</div>
             <Tag variant={NATURE_VARIANT[dossier.signal_nature] ?? "w"}>{dossier.signal_nature}</Tag>
           </div>
         </div>
@@ -279,14 +288,14 @@ export async function DossierPanel({
           n="06"
           title="Trancher"
           sub={
-            hasMandate
+            peutTrancher
               ? "le cockpit classe les options, il ne décide pas : l'écart à la recommandation est journalisé, jamais empêché"
-              : `cette décision relève du mandat de ${roleLabel(dossier.mandat_role)}`
+              : "cette décision revient à la Direction générale — le dossier s'instruit ici, il se tranche là"
           }
         />
         <DecisionsLiees dossier={dossier} />
 
-        {hasMandate && recommended ? (
+        {peutTrancher && recommended ? (
           <DecisionCockpit
             options={options}
             recommandee={`${recommended.code} · ${recommended.titre}`}
@@ -309,11 +318,11 @@ export async function DossierPanel({
             <OptionsLecture options={options} />
             <Note>
               {recommended
-                ? `Cette décision relève du mandat de ${roleLabel(dossier.mandat_role)} — dossier visible pour information, non actionnable depuis ce profil.`
+                ? `Seule la Direction générale tranche un arbitrage — dossier visible pour information, non actionnable depuis ce profil. Il est instruit sous le mandat de ${roleLabel(dossier.mandat_role)} : c'est cette direction qui le porte en comité, la décision d'engager restant à la DG.`
                 : "Ce dossier ne porte aucune option exploitable : rien n'y est actionnable pour le moment."}{" "}
-              Le serveur refuse toute journalisation et toute clôture de revue hors mandat, quel que soit
-              l&apos;écran d&apos;où elles sont tentées. Vous pouvez en revanche apporter le contexte terrain
-              ci-dessus : cela ne demande aucun mandat.
+              Le serveur refuse toute journalisation et toute clôture de revue à un profil autre que la
+              Direction générale, quel que soit l&apos;écran d&apos;où elles sont tentées. Vous pouvez en
+              revanche apporter le contexte terrain ci-dessus : cela ne demande aucun mandat.
             </Note>
           </>
         )}

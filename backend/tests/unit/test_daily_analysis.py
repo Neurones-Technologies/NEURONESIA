@@ -75,6 +75,17 @@ class _FakeCrm:
             "ca_definitif_total": 700_000_000,
             "perc_marge_provisoire_moyen": 22.0,
             "perc_marge_definitive_moyen": 18.0,
+            # Taux agrégés : ce sont eux que la narration consomme désormais, les
+            # `perc_*_moyen` étant des moyennes de pourcentages par dossier
+            # (-745 % sur le miroir réel). Le faux CRM doit porter le contrat
+            # complet de `get_margin_stats`, sinon il valide un code qui casse
+            # en production sur une KeyError.
+            "taux_marge_provisoire_pct": 20.0,
+            "taux_marge_definitive_pct": 15.0,
+            "couverture_marge_definitive_pct": 85.0,
+            "nb_dossiers_marge_imputee": 10,
+            "marge_definitive_exploitable": True,
+            "seuil_couverture_marge_pct": 40.0,
         }
 
     async def get_top_margin_dossiers(self, limit=20, year=None):

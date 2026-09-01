@@ -209,10 +209,21 @@ async def margins_analysis(crm, llm, year: int | None = None) -> dict:
         "nb_dossiers": stats["nb_dossiers"],
         "backlog_m": _m_fcfa(stats["backlog_total"]),
         "taux_materialisation": taux_materialisation,
-        "marge_provisoire_pct": stats["perc_marge_provisoire_moyen"],
-        "marge_definitive_pct": stats["perc_marge_definitive_moyen"],
-        "ecart_marge_pts": round(
-            stats["perc_marge_definitive_moyen"] - stats["perc_marge_provisoire_moyen"], 1
+        # Ratios agrégés et non `perc_marge_*_moyen` : ces derniers moyennent des
+        # pourcentages par dossier et valent -745 % sur ce miroir — le LLM
+        # commentait une érosion de 780 points qui n'existe pas.
+        "marge_provisoire_pct": stats["taux_marge_provisoire_pct"],
+        "marge_definitive_pct": stats["taux_marge_definitive_pct"],
+        # L'écart n'a de sens que si le définitif est mesurable : sous le seuil de
+        # couverture il vaut None, et le gabarit doit le dire au lieu de le chiffrer.
+        "marge_definitive_exploitable": stats["marge_definitive_exploitable"],
+        "couverture_marge_pct": stats["couverture_marge_definitive_pct"],
+        "ecart_marge_pts": (
+            round(stats["taux_marge_definitive_pct"] - stats["taux_marge_provisoire_pct"], 1)
+            if stats["marge_definitive_exploitable"]
+            and stats["taux_marge_definitive_pct"] is not None
+            and stats["taux_marge_provisoire_pct"] is not None
+            else None
         ),
         "pire_dossier_ref": pire["ref"] if pire else "—",
         "pire_dossier_client": pire["client"] if pire else "—",

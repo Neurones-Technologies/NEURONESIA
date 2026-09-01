@@ -1,0 +1,626 @@
+{
+  "generated_at": "2026-08-27T08:15:54.021172+00:00",
+  "triggered_by": "manual",
+  "sections": {
+    "dg": {
+      "facts": {
+        "date_arret": "2026-08-27",
+        "ca_ytd_xof": 6128017275.50181,
+        "ca_ytd_n1_xof": 8674098947.8127,
+        "ca_ytd_ecart_xof": -2546081672.31089,
+        "ca_ytd_ecart_pct": -29.4,
+        "nb_commandes_ytd": 263,
+        "nb_commandes_ytd_n1": 278,
+        "rupture_nb_comptes": 6,
+        "rupture_ca_annuel_historique_xof": 2335179189.495026,
+        "rupture_ca_ytd_xof": 844852397.0,
+        "rupture_impaye_cumule_xof": 3810141680.566413,
+        "rupture_comptes": [
+          {
+            "client": "SOCIETE GENERALE COTE D'IVOIRE",
+            "client_id": "118",
+            "nb_commandes": 25,
+            "intervalle_median_jours": 22,
+            "jours_silence": 93,
+            "ratio_silence": 4.23,
+            "derniere_commande": "2026-05-26",
+            "ca_fenetre_xof": 2808062481.0,
+            "ca_annuel_moyen_xof": 936020827.0,
+            "ca_ytd_xof": 25055766.0,
+            "impaye_xof": 362484099.0,
+            "nb_factures_impayees": 18,
+            "retard_max_jours": 1699,
+            "croise_impaye": true,
+            "classe": "recuperable"
+          },
+          {
+            "client": "Orange LIBERIA",
+            "client_id": "102",
+            "nb_commandes": 13,
+            "intervalle_median_jours": 45,
+            "jours_silence": 244,
+            "ratio_silence": 5.42,
+            "derniere_commande": "2025-12-26",
+            "ca_fenetre_xof": 1486296319.485079,
+            "ca_annuel_moyen_xof": 495432106.49502635,
+            "ca_ytd_xof": 0,
+            "impaye_xof": 2822528917.566413,
+            "nb_factures_impayees": 59,
+            "retard_max_jours": 2688,
+            "croise_impaye": true,
+            "classe": "recuperable"
+          },
+          {
+            "client": "Atlantic Business International (ABI)",
+            "client_id": "24",
+            "nb_commandes": 22,
+            "intervalle_median_jours": 32,
+            "jours_silence": 240,
+            "ratio_silence": 7.5,
+            "derniere_commande": "2025-12-30",
+            "ca_fenetre_xof": 901375675.0,
+            "ca_annuel_moyen_xof": 300458558.3333333,
+            "ca_ytd_xof": 0,
+            "impaye_xof": 329174308.0,
+            "nb_factures_impayees": 14,
+            "retard_max_jours": 2107,
+            "croise_impaye": true,
+            "classe": "recuperable"
+          }
+        ],
+        "dormants_nb_comptes": 4,
+        "dormants_ca_annuel_historique_xof": 897430268.0,
+        "croisement_nb_comptes": 5,
+        "croisement_impaye_xof": 3810141680.566413,
+        "croisement_part_impaye_total_pct": 21.3,
+        "croisement_top": {
+          "client": "Orange LIBERIA",
+          "client_id": "102",
+          "nb_commandes": 13,
+          "intervalle_median_jours": 45,
+          "jours_silence": 244,
+          "ratio_silence": 5.42,
+          "derniere_commande": "2025-12-26",
+          "ca_fenetre_xof": 1486296319.485079,
+          "ca_annuel_moyen_xof": 495432106.49502635,
+          "ca_ytd_xof": 0,
+          "impaye_xof": 2822528917.566413,
+          "nb_factures_impayees": 59,
+          "retard_max_jours": 2688,
+          "croise_impaye": true,
+          "classe": "recuperable"
+        },
+        "arbitrage_dossiers_ouverts": 8,
+        "arbitrage_enjeu_xof": 5048000000,
+        "arbitrage_cout_report_xof_semaine": 106700000.0,
+        "arbitrage_echeance_plus_proche_jours": null,
+        "arbitrage_revues_en_retard": 0,
+        "arbitrage_top_dossier": {
+          "subject_ref": "ENI CÔTE D'IVOIRE Ltd",
+          "enjeu_xof": 301022893.0,
+          "cout_report_xof_semaine": 15051145
+        },
+        "fournisseurs_restant_xof": 18001454231.0,
+        "reste_a_encaisser_xof": 9134288492.0,
+        "position_nette_xof": -8867165739.0,
+        "couverture_fournisseurs_pct": 50.7,
+        "concentration_annee": 2026,
+        "concentration_base_xof": 6128017275.50181,
+        "concentration_top5_pct": 45.1,
+        "concentration_seuil_pct": 50,
+        "concentration_top1_client": "CORIS HOLDING BURKINA FASO",
+        "concentration_top1_pct": 17.4,
+        "marge_annee": 2026,
+        "marge_nb_dossiers": 238,
+        "marge_provisoire_xof": 1196958998.0,
+        "marge_definitive_xof": 1738592850.0,
+        "marge_provisoire_moy_pct": 35.8,
+        "marge_definitive_moy_pct": 99.5,
+        "visibilite_mois": 22.2,
+        "visibilite_seuil_mois": 3,
+        "visibilite_backlog_xof": 9174705450.742947,
+        "visibilite_facture_mensuel_xof": 413655507.58705163,
+        "book_to_bill": 1.22,
+        "book_to_bill_plancher": 1.0,
+        "book_to_bill_commande_xof": 10263494428.873957,
+        "book_to_bill_facture_xof": 8422211265.220079,
+        "questions_couvertes": 7,
+        "questions_sans_reponse": [
+          {
+            "question": "La machine tourne-t-elle à plein ?",
+            "cause": "aucune saisie des temps n'est synchronisée"
+          },
+          {
+            "question": "Quelle est ma marge par BU ?",
+            "cause": "le miroir ne porte aucune notion d'unité d'affaires"
+          },
+          {
+            "question": "Quel est mon cash disponible ?",
+            "cause": "les paiements et relevés bancaires ne sont pas synchronisés"
+          }
+        ]
+      },
+      "bullets": [
+        "CA commandé au 27/08/2026 : 6128 M FCFA contre 8674 M FCFA à la même date en 2025 (▼ 2546 M FCFA, -29%), sur 263 commandes contre 278 (stable sur 7 j).",
+        "Visibilité du carnet : 22.2 mois de facturation couverts (9175 M FCFA de backlog pour 414 M FCFA facturés par mois en moyenne sur 3 mois), au-dessus du plancher de 3 mois.",
+        "Book-to-bill sur 12 mois : 1.22 (10263 M FCFA commandés pour 8422 M facturés) — le carnet se remplit plus vite qu'il ne se vide. Réserve : commandé et facturé sont tous deux TTC — le ratio est homogène, les montants ne sont pas des bases HT.",
+        "Marge 2026 : 1197 M FCFA provisoires sur 238 dossiers (35.8% du CA provisoire), 1739 M FCFA définitifs constatés (99.5% du CA définitif).",
+        "Position nette de trésorerie : 18001 M FCFA dus aux fournisseurs contre 9134 M FCFA à encaisser des clients, soit 8867 M FCFA de découvert structurel (51% de couverture) (stable depuis le 13/08).",
+        "Orange LIBERIA croise les deux risques : 2823 M FCFA impayés à 2688 j de retard et 244 j sans commande. Au total 3810 M FCFA d'impayés sur les comptes qui ont cessé de commander, soit 21% de l'exposition.",
+        "6 comptes majeurs en rupture de rythme : SOCIETE GENERALE COTE D'IVOIRE silencieux depuis 93 j (dernière commande le 26/05/2026, 936 M FCFA/an historiques), Orange LIBERIA silencieux depuis 244 j (dernière commande le 26/12/2025, 495 M FCFA/an historiques), Atlantic Business International (ABI) silencieux depuis 240 j (dernière commande le 30/12/2025, 300 M FCFA/an historiques) — 2335 M FCFA/an historiques réduits à 845 M FCFA depuis janvier.",
+        "Concentration 2026 : le top 5 pèse 45% des 6128 M FCFA commandés (seuil de vigilance 50%), CORIS HOLDING BURKINA FASO premier à 17%.",
+        "File d'arbitrage : 8 dossiers ouverts, 5048 M FCFA d'enjeu, 107 M FCFA de coût par semaine de report — le premier est ENI CÔTE D'IVOIRE Ltd (301 M FCFA).",
+        "3 question(s) du briefing restent sans réponse aujourd'hui : « La machine tourne-t-elle à plein ? » — aucune saisie des temps n'est synchronisée ; « Quelle est ma marge par BU ? » — le miroir ne porte aucune notion d'unité d'affaires ; « Quel est mon cash disponible ? » — les paiements et relevés bancaires ne sont pas synchronisés."
+      ],
+      "action": "Trancher aujourd'hui le cas Orange LIBERIA : 2823 M FCFA échus depuis 2688 j sur un compte silencieux depuis 244 j — recouvrer ou réengager, pas les deux.",
+      "resume": [
+        "Le CA commandé au 27/08/2026 atteint 6128 M FCFA, contre 8674 M FCFA à la même date en 2025.",
+        "Le backlog de 9175 M FCFA couvre 22,2 mois de facturation, au-dessus du plancher de 3 mois.",
+        "Sur 12 mois, le book-to-bill est de 1,22 : 10263 M FCFA commandés pour 8422 M FCFA facturés, tous deux TTC.",
+        "Orange LIBERIA cumule 2823 M FCFA impayés à 2688 jours de retard et 244 jours sans commande.",
+        "Trancher aujourd'hui le cas Orange LIBERIA : 2823 M FCFA échus depuis 2688 jours — recouvrer ou réengager, pas les deux."
+      ],
+      "analysis": "CA commandé à 6 128 M FCFA au 27 août 2026, en recul de 2 546 M FCFA soit -29% par rapport aux 8 674 M FCFA enregistrés à la même date en 2025, sur un nombre de commandes quasi stable (263 contre 278). La visibilité du carnet reste confortable : 22,2 mois de facturation couverts, le backlog de 9 175 M FCFA absorbant 414 M FCFA facturés en moyenne par mois sur les trois derniers mois, bien au-dessus du plancher de 3 mois. Le book-to-bill sur 12 mois s'établit à 1,22 — 10 263 M FCFA commandés pour 8 422 M facturés, tous deux TTC, ce qui rend le ratio homogène mais interdit de lire ces montants comme des bases HT. La marge provisoire 2026 ressort à 1 197 M FCFA sur 238 dossiers, soit 35,8% du CA provisoire ; les dossiers définitifs affichent 1 739 M FCFA à 99,5% du CA définitif. La position nette de trésorerie reste stable depuis le 13 août : 18 001 M FCFA dus aux fournisseurs contre 9 134 M FCFA à encaisser des clients, soit un découvert structurel de 8 867 M FCFA — l'entreprise couvre 51% de ses engagements fournisseurs par ses créances clients, et paie ses achats avant d'être payée.\n\nTrois signaux sortent du cadre normal. Orange Liberia cumule les deux risques simultanément : 2 823 M FCFA impayés à 2 688 jours de retard et 244 jours sans commande depuis le 26 décembre 2025 — ce compte illustre le cas où la rupture commerciale et l'impayé se renforcent. En élargissant aux six comptes majeurs en rupture de rythme, les comptes qui ont cessé de commander portent 3 810 M FCFA d'impayés, soit 21% de l'exposition totale : le silence commercial et le risque de recouvrement sont ici corrélés, pas indépendants. Société Générale Côte d'Ivoire est silencieux depuis 93 jours (dernière commande le 26 mai 2026), ABI depuis 240 jours (30 décembre 2025) : ensemble, ces trois comptes représentaient 2 335 M FCFA de commandes annuelles historiques, réduits à 845 M FCFA depuis janvier, soit un manque à gagner de 1 490 M FCFA sur huit mois. La concentration du portefeuille reste en deçà du seuil de vigilance — le top 5 pèse 45% des 6 128 M FCFA commandés contre un seuil à",
+      "generated_at": "2026-08-27T08:15:54.021172+00:00",
+      "triggered_by": "manual"
+    },
+    "dir_commercial": {
+      "facts": {
+        "pipeline_total_xof": 131935623465,
+        "pipeline_pondere_xof": 46236984227,
+        "nb_opportunites_ouvertes": 3969,
+        "pipeline_actif_xof": 10965381228.954865,
+        "pipeline_actif_pondere_xof": 2907447522.538982,
+        "taux_victoire_nb_pct": 65.5,
+        "taux_victoire_valeur_pct": 63.5,
+        "echeances_fenetre_jours": 60,
+        "echeances_nb": 14,
+        "echeances_montant_xof": 1885124598,
+        "echeances_prochaine": {
+          "opportunite": "Acquisition 16 serveurs",
+          "client": "AGL (CI TERMINAL)",
+          "deadline": "2026-08-31",
+          "revenu_attendu_xof": 723760000
+        },
+        "mouvements_depuis": "2026-08-20",
+        "mouvements_jusqu_a": "2026-08-27",
+        "mouvements_nb_commandes": 0,
+        "mouvements_commandes_xof": 0,
+        "mouvements_nb_factures": 0,
+        "mouvements_nb_reglements": 0,
+        "mouvements_reglements_xof": 0,
+        "mouvements_nb_achats": 1,
+        "mouvements_achats_xof": 250000.0,
+        "hygiene_seuil_jours": 15,
+        "hygiene_a_relancer_nb": 108,
+        "hygiene_a_relancer_xof": 10965381228.954865,
+        "hygiene_a_assainir_nb": 3015,
+        "hygiene_a_assainir_xof": 107881026444.05005,
+        "hygiene_sans_echeance_nb": 225,
+        "ca_commande_periode_mois_xof": 15516102.0,
+        "ca_commande_periode_ytd_xof": 6128017275.50181,
+        "ca_commande_periode_nb": 263,
+        "carnet_backlog_xof": 9174705450.742947,
+        "carnet_reste_a_encaisser_xof": 9134288492.0,
+        "dependance_top3_pct": 36.6,
+        "dependance_top5_pct": 45.1,
+        "dependance_seuil_pct": 50,
+        "dependance_top1_client": "CORIS HOLDING BURKINA FASO",
+        "dependance_top1_pct": 17.4,
+        "questions_couvertes": 8,
+        "questions_sans_reponse": [
+          {
+            "question": "Quels devis vont expirer ?",
+            "cause": "aucun devis n'est synchronisé, toutes les commandes du miroir sont déjà confirmées"
+          },
+          {
+            "question": "Est-ce que je vends au bon prix (TJM) ?",
+            "cause": "sans objet — l'activité se fait en intégration, pas en régie"
+          },
+          {
+            "question": "Mon pipe couvre-t-il mon objectif ?",
+            "cause": "le pipe est mesuré, mais aucun objectif n'est saisi en base"
+          }
+        ]
+      },
+      "bullets": [
+        "CA commandé : 16 M FCFA depuis le 1er du mois (stable vs hier), 6128 M FCFA depuis le 1er janvier (▲ 17 M FCFA sur 30 j), sur 263 commandes.",
+        "Carnet de commandes : 9175 M FCFA vendus et pas encore facturés (▲ 4 M FCFA depuis le 13/08), dont 9134 M FCFA restent à encaisser sur les dossiers ouverts.",
+        "Pipeline ouvert : 131936 M FCFA brut, 46237 M FCFA pondéré (3969 opportunités) — dont 10965 M FCFA seulement sur des affaires dont l'échéance n'est pas encore passée (stable depuis le 13/08).",
+        "Depuis le 20/08/2026 : 1 commande(s) d'achat engagée(s) pour moins de 1 M FCFA.",
+        "Taux de victoire : 65.5% en nombre, 63.5% en valeur.",
+        "108 affaire(s) encore dans les temps pour 10965 M FCFA n'ont pas bougé depuis plus de 15 j — la première : Enterprise Network Refresh (20 country) (Agencecipme, M. BADO, 2400 M FCFA, échéance le 31/12/2026, 142 j de silence). En regard, 3015 opportunité(s) restées ouvertes pour 107881 M FCFA ont une échéance déjà dépassée : tant qu'elles ne sont pas clôturées, tout montant de pipeline publié les inclut.",
+        "14 opportunité(s) ouverte(s) à échéance sous 60 j pour 1885 M FCFA — la plus proche : Acquisition 16 serveurs (AGL (CI TERMINAL)) le 31/08/2026.",
+        "Dépendance clients : le top 3 pèse 37% des 6128 M FCFA commandés, le top 5 45% face au seuil de vigilance de 50% — CORIS HOLDING BURKINA FASO premier à 17%.",
+        "3 question(s) du briefing restent sans réponse aujourd'hui : « Quels devis vont expirer ? » — aucun devis n'est synchronisé, toutes les commandes du miroir sont déjà confirmées ; « Est-ce que je vends au bon prix (TJM) ? » — sans objet — l'activité se fait en intégration, pas en régie ; « Mon pipe couvre-t-il mon objectif ? » — le pipe est mesuré, mais aucun objectif n'est saisi en base."
+      ],
+      "action": null,
+      "resume": [
+        "Le CA commandé atteint 6128 M FCFA depuis le 1er janvier, en hausse de 17 M FCFA sur 30 jours, sur 263 commandes.",
+        "Le carnet de commandes s'établit à 9175 M FCFA vendus non facturés, en hausse de 4 M FCFA depuis le 13/08, dont 9134 M FCFA restant à encaisser.",
+        "Le pipeline pondéré atteint 46237 M FCFA, mais seulement 10965 M FCFA portent sur des affaires à échéance non dépassée, stable depuis le 13/08.",
+        "Les 108 affaires dans les temps pour 10965 M FCFA sont toutes immobiles depuis plus de 15 jours, dont Enterprise Network Refresh (Agencecipme, 2400 M FCFA, 142 jours de silence).",
+        "14 opportunités à échéance sous 60 jours représentent 1885 M FCFA, la plus urgente étant Acquisition 16 serveurs (AGL CI TERMINAL) au 31/08/2026."
+      ],
+      "analysis": "Le CA commandé depuis le 1er janvier atteint 6128 M FCFA sur 263 commandes, en progression de 17 M FCFA sur les trente derniers jours, avec 16 M FCFA engagés depuis le 1er du mois courant, stable par rapport à hier. Le carnet de commandes s'établit à 9175 M FCFA vendus et non encore facturés, en hausse de 4 M FCFA depuis le 13 août, dont 9134 M FCFA restent à encaisser sur les dossiers ouverts. Le pipeline brut affiché est de 131936 M FCFA pour un pondéré de 46237 M FCFA, mais ces montants incluent 3015 opportunités à échéance dépassée représentant 107881 M FCFA : la part du pipeline portée par des affaires encore dans les temps se limite à 10965 M FCFA sur 108 opportunités, stable depuis le 13 août. Le taux de victoire ressort à 65,5 % en nombre et 63,5 % en valeur.\n\nLes 108 affaires encore dans les temps pour 10965 M FCFA n'ont enregistré aucun mouvement depuis plus de quinze jours, ce qui signifie que la totalité du pipeline actif est en attente de relance. La situation la plus préoccupante est Enterprise Network Refresh 20 country chez Agencecipme, suivi par M. BADO : 2400 M FCFA, échéance au 31 décembre 2026, mais 142 jours de silence — un dossier de cette taille sans interaction depuis près de cinq mois expose directement la fiabilité du forecast. Par ailleurs, 14 opportunités totalisant 1885 M FCFA arrivent à échéance dans moins de soixante jours, dont Acquisition 16 serveurs pour AGL CI Terminal dont l'échéance est fixée au 31 août 2026, soit dans les tout prochains jours. Sur la concentration clients, le top 3 pèse 37 % des 6128 M FCFA commandés depuis janvier et le top 5 atteint 45 %, avec CORIS HOLDING BURKINA FASO seul à 17 % : le seuil de vigilance est fixé à 50 % pour le top 5, la marge est étroite.\n\nTrois décisions s'imposent aujourd'hui. Première : obtenir avant ce soir un point de situation sur Acquisition 16 serveurs AGL CI Terminal, dont l'échéance du 31 août 2026 est imminente — si la commande ne peut pas être confirmée, l'opportunité doit être requalifiée ou clôturée pour ne pas fausser le pipeline actif. Deuxième : demander à M. BADO un compte rendu écrit sur Enterprise Network Refresh 20 country d'ici vendredi — 142 jours sans mouvement sur 2400 M FCFA est le signal",
+      "generated_at": "2026-08-27T08:15:54.021172+00:00",
+      "triggered_by": "manual"
+    },
+    "dir_financier": {
+      "facts": {
+        "marge_definitive_moyenne_pct": 44.5,
+        "marge_promise_pct": 27.4,
+        "marge_constatee_pct": 44.5,
+        "marge_ecart_points": 17.1,
+        "echeancier_30j_xof": 12750126443,
+        "echeancier_60j_xof": 0,
+        "echeancier_90j_xof": 0,
+        "echeancier_nb_fournisseurs": 10,
+        "balance_total_xof": 11175359249.496511,
+        "balance_nb_factures": 847,
+        "balance_a_echoir_xof": 77836746.0,
+        "balance_0_30_xof": 335024282.0,
+        "balance_30_60_xof": 367678399.76115483,
+        "balance_60_90_xof": 531778479.06378,
+        "balance_90_plus_xof": 9863041342.671576,
+        "balance_contentieux_xof": 9863041342.671576,
+        "balance_contentieux_pct": 88.3,
+        "balance_contentieux_jours": 90,
+        "balance_intragroupe_xof": 97738.0,
+        "relances_nb_clients": 289,
+        "relances_montant_xof": 10762498221.49651,
+        "relances_retard_min_jours": 30,
+        "relances_top": [
+          {
+            "client": "Banque Africaine de Développement (BAD)",
+            "nb_factures": 24,
+            "montant_xof": 2303700016.3818765,
+            "retard_max_jours": 1413,
+            "intragroupe": false
+          },
+          {
+            "client": "Orange LIBERIA",
+            "nb_factures": 57,
+            "montant_xof": 1860738344.131656,
+            "retard_max_jours": 2688,
+            "intragroupe": false
+          },
+          {
+            "client": "ORANGE COTE D'IVOIRE ",
+            "nb_factures": 24,
+            "montant_xof": 649796973.0,
+            "retard_max_jours": 1709,
+            "intragroupe": false
+          },
+          {
+            "client": "MTN CI",
+            "nb_factures": 9,
+            "montant_xof": 417922297.0,
+            "retard_max_jours": 280,
+            "intragroupe": false
+          },
+          {
+            "client": "BICICI",
+            "nb_factures": 9,
+            "montant_xof": 371005686.0,
+            "retard_max_jours": 512,
+            "intragroupe": false
+          }
+        ],
+        "dso_jours": 112.3,
+        "dso_precedent_jours": 70.3,
+        "dso_ecart_jours": 42.0,
+        "dso_nb_factures": 179,
+        "dso_robuste": true,
+        "facture_mois_xof": 11210000.0,
+        "facture_ytd_xof": 3358418322.39007,
+        "encaisse_mois_xof": 0.0,
+        "commande_ytd_xof": 6128017275.50181,
+        "objectif_saisi": false,
+        "attente_facturation_xof": 9174705450.742947,
+        "attente_facturation_mois": 22.2,
+        "questions_couvertes": 7,
+        "questions_sans_reponse": [
+          {
+            "question": "Quelle est ma position de trésorerie ?",
+            "cause": "les paiements et relevés bancaires ne sont pas synchronisés"
+          },
+          {
+            "question": "Ai-je des engagements réceptionnés non facturés ?",
+            "cause": "les lignes de commande d'achat ne sont pas synchronisées"
+          },
+          {
+            "question": "Où en est le facturé face à l'objectif ?",
+            "cause": "le facturé est mesuré, mais aucun objectif n'est saisi en base"
+          }
+        ]
+      },
+      "bullets": [
+        "Balance âgée : 11175 M FCFA dus sur 847 factures — 78 M à échoir, 335 M à 0-30 j, 368 M à 30-60 j, 532 M à 60-90 j et 9863 M au-delà de 90 j, soit 88% du total. Réserve : 43 % des factures portent une échéance égale à leur date d'émission — le retard réel est sous-estimé sur cette part du portefeuille.",
+        "DSO sur 12 mois glissants : 112 j, mesuré sur 179 règlements — dégradation de 42 j face aux 70 j de la période précédente.",
+        "CA facturé : 11 M FCFA sur le mois (stable vs hier), 3358 M FCFA depuis janvier contre 6128 M FCFA commandés sur la même période ; aucun règlement enregistré ce mois-ci. Aucun objectif n'étant saisi en base, il n'y a pas de taux d'atteinte ; et les avoirs ne sont pas déduits.",
+        "En attente de facturation : 9175 M FCFA vendus non facturés, soit 22.2 mois au rythme de facturation actuel (414 M FCFA par mois). Les temps non facturés n'y entrent pas, aucune saisie des temps n'étant synchronisée.",
+        "Marge définitive : 44.5% du CA définitif constaté.",
+        "Échéancier fournisseurs sur les 10 premiers : 12750 M FCFA à 30 j, 0 M FCFA à 60 j, 0 M FCFA à 90 j.",
+        "Marge annoncée à l'ouverture 27.4% du CA contre 44.5% constatés à l'arrêté, soit 17.1 point(s) de mieux que promis.",
+        "Relances du jour : 289 clients portent 10762 M FCFA échus depuis plus de 30 j — les trois premiers : Banque Africaine de Développement (BAD) (2304 M FCFA sur 24 factures, jusqu'à 1413 j de retard); Orange LIBERIA (1861 M FCFA sur 57 factures, jusqu'à 2688 j de retard); ORANGE COTE D'IVOIRE  (650 M FCFA sur 24 factures, jusqu'à 1709 j de retard).",
+        "3 question(s) du briefing restent sans réponse aujourd'hui : « Quelle est ma position de trésorerie ? » — les paiements et relevés bancaires ne sont pas synchronisés ; « Ai-je des engagements réceptionnés non facturés ? » — les lignes de commande d'achat ne sont pas synchronisées ; « Où en est le facturé face à l'objectif ? » — le facturé est mesuré, mais aucun objectif n'est saisi en base."
+      ],
+      "action": null,
+      "resume": [
+        "La créance totale atteint 11175 M FCFA sur 847 factures, dont 9863 M FCFA au-delà de 90 jours, soit 88 % du total.",
+        "Le DSO glissant sur 12 mois s'établit à 112 jours, en dégradation de 42 jours par rapport aux 70 jours de la période précédente.",
+        "Le CA facturé depuis janvier atteint 3358 M FCFA contre 6128 M FCFA commandés, sans aucun règlement enregistré ce mois-ci.",
+        "Les 10 premiers fournisseurs appellent 12750 M FCFA à 30 jours, sans aucun décaissement prévu à 60 ou 90 jours.",
+        "289 clients portent 10762 M FCFA échus depuis plus de 30 jours, dont BAD à 2304 M FCFA, Orange Liberia à 1861 M FCFA et Orange Côte d'Ivoire à 650 M FCFA."
+      ],
+      "analysis": "La balance âgée s'établit à 11 175 M FCFA sur 847 factures, dont 9 863 M FCFA — soit 88 % du total — ont plus de 90 jours d'ancienneté. Ce chiffre est lui-même sous-estimé : 43 % des factures portent une échéance identique à leur date d'émission, ce qui signifie qu'une fraction significative du portefeuille est classée en retard plus tard qu'elle ne l'est réellement. Le DSO sur 12 mois glissants atteint 112 jours, mesuré sur 179 règlements, contre 70 jours sur la période précédente — une dégradation de 42 jours. Le CA facturé du mois est stable à 11 M FCFA, aucun règlement n'ayant été enregistré ce mois-ci ; depuis janvier, 3 358 M FCFA ont été facturés sur 6 128 M FCFA commandés, mais ce ratio ne peut pas être rapporté à un objectif, aucun n'étant saisi en base, et les avoirs ne sont pas déduits. Le stock en attente de facturation représente 9 175 M FCFA, soit 22,2 mois au rythme actuel de 414 M FCFA par mois — les temps non facturés n'y entrent pas, aucune saisie des temps n'étant synchronisée. La marge définitive constatée est de 44,5 % du CA définitif.\n\nDeux exceptions méritent une attention immédiate. Côté fournisseurs, les 10 premiers créanciers concentrent 12 750 M FCFA à échéance 30 jours et rien au-delà : la totalité de l'engagement fournisseur court terme est ramassée sur une seule tranche, ce qui crée un risque de sortie de trésorerie concentrée sans que la position bancaire soit connue — les relevés et paiements n'étant pas synchronisés. Côté marge, l'écart entre la marge annoncée à l'ouverture des dossiers (27,4 %) et la marge définitive constatée (44,5 %) est de 17,1 points en faveur de l'entreprise ; cet écart systématique suggère que les devis sont construits avec une hypothèse de coût significativement plus prudente que le réalisé, ce qui est une bonne nouvelle opérationnelle mais un signal à analyser avant de l'utiliser comme base de pricing ou de commissionnement.\n\nTrois décisions peuvent être prises aujourd'hui à partir des faits disponibles. Premièrement, engager aujourd'hui même une relance formelle sur la Banque Africaine de Développement : 2 304 M FCFA sur 24 factures, avec des retards allant jusqu'à 1 413 jours — c'est le premier poste échu du portefeuille et l'",
+      "generated_at": "2026-08-27T08:15:54.021172+00:00",
+      "triggered_by": "manual"
+    },
+    "dir_operations": {
+      "facts": {
+        "nb_dossiers": 2392,
+        "marge_provisoire_moyenne_pct": 27.4,
+        "marge_definitive_moyenne_pct": 44.5,
+        "backlog_total_xof": 9174705450.742947,
+        "fournisseurs_restant_xof": 18001454231.0,
+        "fiabilite_nb_fournisseurs": 6,
+        "fiabilite_pire_fournisseur": "HIPERDIST LIMITED",
+        "fiabilite_pire_retard_jours": 79.5,
+        "concentration_fournisseur_top": "HDF SAS",
+        "concentration_fournisseur_top_pct": 15.5,
+        "concentration_dossiers_source_unique": 0,
+        "derive_nb_dossiers": 654,
+        "derive_seuil_pct": 90,
+        "derive_depense_engagee_xof": 13415802181.23416,
+        "derive_top": [
+          {
+            "ref": "DC/2024/0046",
+            "client": "SOCIETE GENERALE COTE D'IVOIRE",
+            "ca_provisoire_xof": 591510852.0,
+            "depense_provisoire_xof": 441430233.0,
+            "ca_definitif_xof": 591510854.0,
+            "depense_definitive_xof": 556300478.0,
+            "marge_prevue_pct": 17.8,
+            "marge_constatee_pct": 6.0,
+            "consommation_pct": 126.0
+          },
+          {
+            "ref": "DC/2024/0193",
+            "client": "MTN CI",
+            "ca_provisoire_xof": 535706808.0,
+            "depense_provisoire_xof": 414581922.0,
+            "ca_definitif_xof": 535706808.0,
+            "depense_definitive_xof": 545022887.0,
+            "marge_prevue_pct": 14.9,
+            "marge_constatee_pct": -1.7,
+            "consommation_pct": 131.5
+          },
+          {
+            "ref": "DC/2024/0320",
+            "client": "ORANGE COTE D'IVOIRE",
+            "ca_provisoire_xof": 553000000.0,
+            "depense_provisoire_xof": 431226351.0,
+            "ca_definitif_xof": 536325126.0,
+            "depense_definitive_xof": 516281810.0,
+            "marge_prevue_pct": 15.5,
+            "marge_constatee_pct": 3.7,
+            "consommation_pct": 119.7
+          },
+          {
+            "ref": "DC/2023/0307",
+            "client": "Orange LIBERIA",
+            "ca_provisoire_xof": 1115668.0,
+            "depense_provisoire_xof": 538297386.0,
+            "ca_definitif_xof": 1618560729.0,
+            "depense_definitive_xof": 494165459.0,
+            "marge_prevue_pct": 17.1,
+            "marge_constatee_pct": 69.5,
+            "consommation_pct": 91.8
+          },
+          {
+            "ref": "DC/2024/0357",
+            "client": "MTN CI",
+            "ca_provisoire_xof": 504500000.0,
+            "depense_provisoire_xof": 425402873.0,
+            "ca_definitif_xof": 504500001.0,
+            "depense_definitive_xof": 489540636.0,
+            "marge_prevue_pct": 12.4,
+            "marge_constatee_pct": 3.0,
+            "consommation_pct": 115.1
+          }
+        ],
+        "sous_traitance_nb_dossiers": 972,
+        "sous_traitance_engagement_xof": 17132806816.789627,
+        "sous_traitance_couverture_pct": 71.3,
+        "sous_traitance_orphelins": 613,
+        "sous_traitance_depassements": 60,
+        "sous_traitance_top": [
+          {
+            "ref": "DC/2024/0232",
+            "client": "Banque Africaine de Développement (BAD)",
+            "nb_achats": 9,
+            "engagement_xof": 662577441.9469875,
+            "ca_reference_xof": 1810008628.0,
+            "base_ca": "définitif",
+            "marge_provisoire_pct": -34346.7,
+            "poids_sur_ca_pct": 36.6,
+            "engagement_depasse_ca": false
+          },
+          {
+            "ref": "DC/2025/0284",
+            "client": "ORANGE BURKINA FASO",
+            "nb_achats": 2,
+            "engagement_xof": 660280183.7270341,
+            "ca_reference_xof": 900000000.0,
+            "base_ca": "provisoire",
+            "marge_provisoire_pct": 26.4,
+            "poids_sur_ca_pct": 73.4,
+            "engagement_depasse_ca": false
+          },
+          {
+            "ref": "DC/2025/0148",
+            "client": "ORANGE BF",
+            "nb_achats": 4,
+            "engagement_xof": 549685271.2596122,
+            "ca_reference_xof": 847859003.0,
+            "base_ca": "provisoire",
+            "marge_provisoire_pct": 30.2,
+            "poids_sur_ca_pct": 64.8,
+            "engagement_depasse_ca": false
+          },
+          {
+            "ref": "DC/2024/0388",
+            "client": "Banque Africaine de Développement (BAD)",
+            "nb_achats": 13,
+            "engagement_xof": 506414492.51968503,
+            "ca_reference_xof": 1335712593.0,
+            "base_ca": "définitif",
+            "marge_provisoire_pct": -48190.5,
+            "poids_sur_ca_pct": 37.9,
+            "engagement_depasse_ca": false
+          },
+          {
+            "ref": "DC/2024/0046",
+            "client": "SOCIETE GENERALE COTE D'IVOIRE",
+            "nb_achats": 4,
+            "engagement_xof": 411241462.84376836,
+            "ca_reference_xof": 591510854.0,
+            "base_ca": "définitif",
+            "marge_provisoire_pct": 25.4,
+            "poids_sur_ca_pct": 69.5,
+            "engagement_depasse_ca": false
+          }
+        ],
+        "questions_couvertes": 7,
+        "questions_sans_reponse": [
+          {
+            "question": "Qui est en intercontrat, quel est mon taux d'occupation ?",
+            "cause": "aucune saisie des temps n'est synchronisée, et l'activité ne se fait pas en régie"
+          },
+          {
+            "question": "Quelles missions se terminent bientôt ?",
+            "cause": "la date de fin n'est renseignée que sur 9 dossiers sur 2 392"
+          },
+          {
+            "question": "Le consommé dépasse-t-il le vendu, ligne à ligne ?",
+            "cause": "les quantités livrées et facturées valent zéro sur les 19 510 lignes du miroir"
+          }
+        ],
+        "commandes_recentes_nb": 5,
+        "commandes_recentes_montant_xof": 17057969.0
+      },
+      "bullets": [
+        "Backlog non facturé : 9175 M FCFA (▲ 4 M FCFA depuis le 13/08). Fournisseurs restant à payer : 18001 M FCFA.",
+        "2392 dossiers en base — marge provisoire 27.4% du CA provisoire, marge définitive 44.5% du CA définitif.",
+        "5 dernières commandes entrées pour 17 M FCFA — la plus récente : CLIENT19082026 (4 M FCFA).",
+        "654 dossiers ont consommé au moins 90% de leur budget de dépense, pour 13416 M FCFA engagés — le plus exposé : DC/2024/0046 (SOCIETE GENERALE COTE D'IVOIRE) à 126% de consommation, marge passée de 17.8% annoncés à 6.0% constatés (-11.8 point(s)). Réserve : la dérive se mesure sur la dépense du dossier — les quantités livrées des lignes de commande valent 0 dans tout le miroir.",
+        "Sous-traitance : 17133 M FCFA engagés sur 972 dossiers — en tête DC/2024/0232 (Banque Africaine de Développement (BAD), 663 M FCFA, soit 37% du CA définitif du dossier). 60 dossier(s) ont engagé plus d'achats que le CA qu'ils rapportent. Le rattachement couvre 71% des commandes d'achat, 613 restant imputées à aucun dossier.",
+        "Fiabilité fournisseurs sur 6 suivis : HIPERDIST LIMITED est le moins ponctuel avec 80 j de retard moyen.",
+        "Concentration fournisseur : HDF SAS porte 16% des achats.",
+        "3 question(s) du briefing restent sans réponse aujourd'hui : « Qui est en intercontrat, quel est mon taux d'occupation ? » — aucune saisie des temps n'est synchronisée, et l'activité ne se fait pas en régie ; « Quelles missions se terminent bientôt ? » — la date de fin n'est renseignée que sur 9 dossiers sur 2 392 ; « Le consommé dépasse-t-il le vendu, ligne à ligne ? » — les quantités livrées et facturées valent zéro sur les 19 510 lignes du miroir."
+      ],
+      "action": null,
+      "resume": [
+        "Le backlog non facturé atteint 9 175 M FCFA, en hausse de 4 M FCFA depuis le 13/08 ; les fournisseurs restent à payer à hauteur de 18 001 M FCFA.",
+        "Sur 2 392 dossiers, la marge provisoire ressort à 27,4 % du CA provisoire contre 44,5 % du CA définitif.",
+        "Les 5 dernières commandes totalisent 17 M FCFA, dont CLIENT19082026 en tête pour 4 M FCFA.",
+        "654 dossiers ont consommé au moins 90 % de leur budget ; DC/2024/0046 (Société Générale Côte d'Ivoire) affiche 126 % de consommation et une marge tombée de 17,8 % à 6,0 %, soit -11,8 point.",
+        "17 133 M FCFA sont engagés en sous-traitance sur 972 dossiers ; 60 dossiers ont engagé plus d'achats que leur CA, et 613 commandes d'achat restent sans rattachement à un dossier."
+      ],
+      "analysis": "Le backlog non facturé atteint 9 175 M FCFA au jour d'aujourd'hui, soit une progression de 4 M FCFA depuis le 13 août — mouvement marginal qui confirme que la base ne se décharge pas au rythme attendu. Les fournisseurs restent à payer pour 18 001 M FCFA, soit près du double du backlog, ce qui signale une exposition nette sur la trésorerie sortante. Sur 2 392 dossiers, la marge provisoire s'établit à 27,4 % du CA provisoire contre 44,5 % en définitif : l'écart de 17 points entre les deux lectures indique que la reconnaissance de marge dépend fortement de la transformation du provisoire en définitif, et que tout glissement dans cette bascule comprime directement le résultat. Les cinq dernières commandes entrées totalisent 17 M FCFA, dont la plus récente, CLIENT19082026, pour 4 M FCFA.\n\nDeux signaux sortent de l'ordinaire et appellent une attention immédiate. DC/2024/0046, porté par Société Générale Côte d'Ivoire, a consommé 126 % de son budget de dépense : la marge annoncée à 17,8 % est tombée à 6,0 % constatés, soit une dérive de 11,8 points. Cette mesure repose uniquement sur la dépense du dossier — les quantités livrées valant zéro sur l'ensemble du miroir, la dérive réelle est probablement sous-estimée, pas surestimée. Ce dossier est le cas le plus exposé parmi 654 dossiers ayant consommé au moins 90 % de leur budget, pour 13 416 M FCFA engagés au total. Par ailleurs, 60 dossiers ont engagé plus d'achats que le CA qu'ils rapportent, et 613 commandes d'achat — sur un rattachement qui ne couvre que 71 % des commandes — ne sont imputées à aucun dossier : toute la sous-traitance non rattachée échappe au suivi de marge, ce qui rend les 17 133 M FCFA engagés en sous-traitance partiellement aveugles. HIPERDIST LIMITED affiche 80 jours de retard moyen sur les 6 fournisseurs suivis, et HDF SAS concentre 16 % des achats totaux — deux positions qui créent chacune un risque de blocage projet si l'un ou l'autre défaille.\n\nTrois décisions peuvent être prises aujourd'hui sur la base de ces faits. Premièrement, ouvrir avant fin de journée un point de revue contradictoire sur DC/2024/0046 avec le chef de projet et le contrôleur de gestion : l'objectif est de poser un chiffre fiable sur le reste à dépenser et de décider si une renégociation de",
+      "generated_at": "2026-08-27T08:15:54.021172+00:00",
+      "triggered_by": "manual"
+    },
+    "commercial": {
+      "facts": {
+        "nb_opportunites_ouvertes": 3969,
+        "forecast_realiste_xof": 37249720020,
+        "taux_victoire_nb_pct": 65.5,
+        "echeances_fenetre_jours": 30,
+        "echeances_nb": 5,
+        "echeances_montant_xof": 935244472,
+        "echeances_prochaine": {
+          "opportunite": "Acquisition 16 serveurs",
+          "client": "AGL (CI TERMINAL)",
+          "deadline": "2026-08-31",
+          "revenu_attendu_xof": 723760000
+        },
+        "silencieux_nb_comptes": 6,
+        "silencieux_top": {
+          "client": "SOCIETE GENERALE COTE D'IVOIRE",
+          "client_id": "118",
+          "nb_commandes": 25,
+          "intervalle_median_jours": 22,
+          "jours_silence": 93,
+          "ratio_silence": 4.23,
+          "derniere_commande": "2026-05-26",
+          "ca_fenetre_xof": 2808062481.0,
+          "ca_annuel_moyen_xof": 936020827.0,
+          "ca_ytd_xof": 25055766.0,
+          "impaye_xof": 362484099.0,
+          "nb_factures_impayees": 18,
+          "retard_max_jours": 1699,
+          "croise_impaye": true,
+          "classe": "recuperable"
+        },
+        "impayes_exposition_xof": 17850032562.89664,
+        "impayes_top_debiteur": {
+          "client": "Banque Africaine de Développement (BAD)",
+          "nb_factures": 27,
+          "montant_total_xof": 3816360724.1870885,
+          "retard_max_jours": 1413
+        },
+        "mouvements_depuis": "2026-08-20",
+        "mouvements_jusqu_a": "2026-08-27",
+        "mouvements_nb_commandes": 0,
+        "mouvements_commandes_xof": 0,
+        "mouvements_nb_factures": 0,
+        "mouvements_nb_reglements": 0,
+        "mouvements_reglements_xof": 0,
+        "mouvements_nb_achats": 1,
+        "mouvements_achats_xof": 250000.0,
+        "hygiene_seuil_jours": 15,
+        "hygiene_a_relancer_nb": 108,
+        "hygiene_a_relancer_xof": 10965381228.954865,
+        "hygiene_a_assainir_nb": 3015,
+        "hygiene_a_assainir_xof": 107881026444.05005,
+        "hygiene_sans_echeance_nb": 225,
+        "questions_couvertes": 7,
+        "questions_sans_reponse": [
+          {
+            "question": "Quels devis dois-je relancer ?",
+            "cause": "aucun devis n'est synchronisé"
+          },
+          {
+            "question": "Où en est mon portefeuille à moi ?",
+            "cause": "les sources ne sont pas filtrables par commercial — 32 orthographes distinctes de vendeur"
+          }
+        ]
+      },
+      "bullets": [
+        "Pipeline ouvert : 3969 opportunités, 37250 M FCFA pondérés (scénario réaliste).",
+        "Taux de victoire en nombre : 65.5%.",
+        "Depuis le 20/08/2026 : 1 commande(s) d'achat engagée(s) pour moins de 1 M FCFA.",
+        "108 affaire(s) encore dans les temps pour 10965 M FCFA n'ont pas bougé depuis plus de 15 j — la première : Enterprise Network Refresh (20 country) (Agencecipme, M. BADO, 2400 M FCFA, échéance le 31/12/2026, 142 j de silence). En regard, 3015 opportunité(s) restées ouvertes pour 107881 M FCFA ont une échéance déjà dépassée : tant qu'elles ne sont pas clôturées, tout montant de pipeline publié les inclut.",
+        "5 opportunité(s) ouverte(s) à échéance sous 30 j pour 935 M FCFA — la plus proche : Acquisition 16 serveurs (AGL (CI TERMINAL)) le 31/08/2026.",
+        "6 comptes ont décroché sur l'ensemble du portefeuille S2I — SOCIETE GENERALE COTE D'IVOIRE en tête, silencieux depuis 93 j (936 M FCFA/an historiques).",
+        "Impayés en cours sur le portefeuille S2I : 17850 M FCFA, Banque Africaine de Développement (BAD) en tête à 3816 M FCFA (1413 j de retard).",
+        "2 question(s) du briefing restent sans réponse aujourd'hui : « Quels devis dois-je relancer ? » — aucun devis n'est synchronisé ; « Où en est mon portefeuille à moi ? » — les sources ne sont pas filtrables par commercial — 32 orthographes distinctes de vendeur."
+      ],
+      "action": null,
+      "resume": [
+        "Le pipeline ouvert compte 3 969 opportunités pour 37 250 M FCFA pondérés en scénario réaliste.",
+        "Le taux de victoire en nombre atteint 65,5 %.",
+        "Depuis le 20/08/2026, une seule commande d'achat a été engagée pour moins de 1 M FCFA.",
+        "108 affaires dans les temps, dont Enterprise Network Refresh (2 400 M FCFA, échéance 31/12/2026), sont silencieuses depuis plus de 15 jours ; 3 015 opportunités échues pour 107 881 M FCFA gonflent encore le pipeline sans être clôturées.",
+        "5 opportunités arrivent à échéance sous 30 jours pour 935 M FCFA, la plus urgente étant Acquisition 16 serveurs (AGL CI TERMINAL) le 31/08/2026."
+      ],
+      "analysis": "Le pipeline affiche 3 969 opportunités pour 37 250 M FCFA pondérés en scénario réaliste, avec un taux de victoire en nombre de 65,5 % — mais ce chiffre doit être lu avec une réserve majeure : 3 015 opportunités à échéance dépassée, représentant 107 881 M FCFA, restent ouvertes dans le système et sont incluses dans tout montant de pipeline publié, ce chiffre de 37 250 M FCFA compris. Depuis le 20/08/2026, une seule commande d'achat a été engagée, pour moins de 1 M FCFA : le rythme de transformation est à l'arrêt.\n\nDeux signaux demandent une réaction immédiate. D'abord, 108 affaires encore dans les temps pour 10 965 M FCFA n'ont pas bougé depuis plus de 15 jours — la plus ancienne est Enterprise Network Refresh (20 country) chez Agencecipme, portée par M. BADO, 2 400 M FCFA, échéance au 31/12/2026, 142 jours de silence : une affaire de cette taille avec cette échéance ne peut pas rester sans contact. Ensuite, 5 opportunités arrivent à échéance dans moins de 30 jours pour 935 M FCFA au total, dont la plus urgente est l'acquisition de 16 serveurs chez AGL (CI Terminal), dont l'échéance tombe le 31/08/2026 — soit dans les tout prochains jours. Sur le plan des comptes, 6 comptes ont décroché sur l'ensemble du portefeuille S2I ; Société Générale Côte d'Ivoire est silencieuse depuis 93 jours avec 936 M FCFA de revenus annuels historiques. Les impayés atteignent 17 850 M FCFA — la BAD seule représente 3 816 M FCFA avec 1 413 jours de retard ; ces montants sont bruts, les avoirs n'étant pas déduits, le chiffre réel peut différer.\n\nTrois décisions à prendre aujourd'hui. Première : contacter AGL (CI Terminal) avant le 31/08/2026 pour qualifier l'état réel de l'opportunité 16 serveurs — une échéance à moins de 30 jours sans mouvement signifie soit une commande imminente à sécuriser, soit une affaire à clôturer pour assainir le pipeline. Deuxième : déclencher un contact avec M. BADO chez Agencecipme cette semaine sur Enterprise Network Refresh — 142 jours de silence sur 2 400 M FCFA à échéance fin décembre, c'est le délai maximum avant que l'affaire devienne irrécupérable. Troisième : initier une prise de contact avec Société Générale Côte d",
+      "generated_at": "2026-08-27T08:15:54.021172+00:00",
+      "triggered_by": "manual"
+    }
+  },
+  "sections_en_echec": []
+}

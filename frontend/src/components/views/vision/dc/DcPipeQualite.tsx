@@ -1,5 +1,5 @@
 import { getQualitePipe } from "@/lib/api/commercial";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { ScreenNotes } from "@/components/ui/screen-notes";
@@ -53,7 +53,7 @@ export async function DcPipeQualite() {
           aide="Les affaires proches de la signature, dont le dossier est complet. C'est là que l'effort commercial rapporte le plus vite."
           value={formatNumber(t.nb_a_closer)}
           unit="opportunités"
-          reading={`${formatMFcfa(t.montant_a_closer_xof)} M FCFA en jeu${t.nb_prioritaires > 0 ? ` · ${formatNumber(t.nb_prioritaires)} avec dossier incomplet` : ""}`}
+          reading={`${formatFcfa(t.montant_a_closer_xof)} FCFA en jeu${t.nb_prioritaires > 0 ? ` · ${formatNumber(t.nb_prioritaires)} avec dossier incomplet` : ""}`}
           readingVariant={t.nb_prioritaires > 0 ? "neg" : "pos"}
           detail={{
             kicker: "Indicateur · finalisation en cours",
@@ -61,7 +61,7 @@ export async function DcPipeQualite() {
             tag: `${formatNumber(t.nb_a_closer)} affaires`,
             tagVariant: "a",
             body: [
-              `${formatNumber(t.nb_a_closer)} opportunités sont en étape de finalisation ou à moins de ${qualite.regle.horizon_closer_jours} jours de leur échéance, pour ${formatMFcfa(t.montant_a_closer_xof)} M FCFA.`,
+              `${formatNumber(t.nb_a_closer)} opportunités sont en étape de finalisation ou à moins de ${qualite.regle.horizon_closer_jours} jours de leur échéance, pour ${formatFcfa(t.montant_a_closer_xof)} FCFA.`,
               `Les deux critères sont acceptés volontairement : sur ce pipe, l'étape est souvent moins à jour que la date. Étapes reconnues comme finales : ${qualite.regle.motifs_etape_closer.join(", ")}.`,
               t.nb_prioritaires > 0
                 ? `${formatNumber(t.nb_prioritaires)} de ces affaires arrivent à la signature avec un dossier incomplet. C'est le cas le plus urgent de l'écran : le montant est acquis à court terme, l'information manque.`
@@ -69,7 +69,7 @@ export async function DcPipeQualite() {
             ],
             kv: [
               ["Opportunités à closer", formatNumber(t.nb_a_closer)],
-              ["Montant en jeu", `${formatMFcfa(t.montant_a_closer_xof)} M FCFA`],
+              ["Montant en jeu", `${formatFcfa(t.montant_a_closer_xof)} FCFA`],
               ["Dont dossier incomplet", formatNumber(t.nb_prioritaires)],
               ["Horizon retenu", `${qualite.regle.horizon_closer_jours} jours`],
             ],
@@ -81,7 +81,7 @@ export async function DcPipeQualite() {
           aide="Les affaires auxquelles il manque une information pour avancer : montant, échéance, interlocuteur. Le travail à faire est de saisie, pas de négociation."
           value={formatNumber(t.nb_a_completer)}
           unit="opportunités"
-          reading={`${formatPct(t.part_a_completer_pct, 0)} % du pipe ouvert · ${formatMFcfa(t.montant_a_completer_xof)} M FCFA`}
+          reading={`${formatPct(t.part_a_completer_pct, 0)} % du pipe ouvert · ${formatFcfa(t.montant_a_completer_xof)} FCFA`}
           readingVariant="wat"
           detail={{
             kicker: "Indicateur · complétude du dossier",
@@ -89,14 +89,14 @@ export async function DcPipeQualite() {
             tag: `${formatPct(t.part_montant_a_completer_pct, 0)} % du montant ouvert`,
             tagVariant: "w",
             body: [
-              `${formatNumber(t.nb_a_completer)} opportunités ouvertes sur ${formatNumber(t.nb_ouvertes)} présentent au moins un champ manquant parmi les quatre qui les rendent pilotables, pour ${formatMFcfa(t.montant_a_completer_xof)} M FCFA.`,
+              `${formatNumber(t.nb_a_completer)} opportunités ouvertes sur ${formatNumber(t.nb_ouvertes)} présentent au moins un champ manquant parmi les quatre qui les rendent pilotables, pour ${formatFcfa(t.montant_a_completer_xof)} FCFA.`,
               "Aucune règle de complétude n'existe aujourd'hui dans l'équipe : celle appliquée ici est une proposition, et elle est affichée pour être discutée plutôt qu'imposée.",
               `${formatNumber(t.nb_sans_commercial)} opportunités n'ont aucun commercial rattaché. Ce défaut est compté à part : il se corrige dans le référentiel, pas dans le dossier.`,
             ],
             kv: [
               ["À compléter", formatNumber(t.nb_a_completer)],
               ["Part du pipe ouvert", `${formatPct(t.part_a_completer_pct, 0)} %`],
-              ["Montant concerné", `${formatMFcfa(t.montant_a_completer_xof)} M FCFA`],
+              ["Montant concerné", `${formatFcfa(t.montant_a_completer_xof)} FCFA`],
               ["Sans commercial", formatNumber(t.nb_sans_commercial)],
             ],
           }}
@@ -112,18 +112,18 @@ export async function DcPipeQualite() {
           detail={{
             kicker: "Indicateur · fiabilité des dates",
             title: "Opportunités dont l'échéance est passée",
-            tag: `${formatMFcfa(t.montant_a_requalifier_xof)} M FCFA`,
+            tag: `${formatFcfa(t.montant_a_requalifier_xof)} FCFA`,
             tagVariant: "r",
             body: [
-              `${formatNumber(t.nb_a_requalifier)} opportunités ouvertes portent une date de clôture déjà passée, pour ${formatMFcfa(t.montant_a_requalifier_xof)} M FCFA — soit ${formatPct(t.part_montant_a_requalifier_pct, 0)} % du montant ouvert.`,
+              `${formatNumber(t.nb_a_requalifier)} opportunités ouvertes portent une date de clôture déjà passée, pour ${formatFcfa(t.montant_a_requalifier_xof)} FCFA — soit ${formatPct(t.part_montant_a_requalifier_pct, 0)} % du montant ouvert.`,
               "Une date dépassée n'est pas une affaire perdue : c'est une affaire dont la date n'a pas été tenue à jour. Tant qu'elle n'est pas requalifiée, elle gonfle le forecast du trimestre en cours.",
               "Ce panier est séparé de la complétude à dessein : les fusionner produirait un indicateur qui signale la quasi-totalité du pipe, donc une liste de travail inutilisable.",
             ],
             kv: [
               ["À requalifier", formatNumber(t.nb_a_requalifier)],
-              ["Montant concerné", `${formatMFcfa(t.montant_a_requalifier_xof)} M FCFA`],
+              ["Montant concerné", `${formatFcfa(t.montant_a_requalifier_xof)} FCFA`],
               ["Part du montant ouvert", `${formatPct(t.part_montant_a_requalifier_pct, 0)} %`],
-              ["Pipe ouvert total", `${formatMFcfa(t.montant_ouvert_xof)} M FCFA`],
+              ["Pipe ouvert total", `${formatFcfa(t.montant_ouvert_xof)} FCFA`],
             ],
           }}
         />
@@ -143,7 +143,7 @@ export async function DcPipeQualite() {
                 items={qualite.a_closer.map((o) => ({
                   title: o.name,
                   sub: `${o.client} · ${o.stage} · ${o.commercial || "commercial non renseigné"} · ${o.motif_closer}`,
-                  tag: o.prioritaire ? "dossier incomplet" : `${formatMFcfa(o.montant_xof)} M`,
+                  tag: o.prioritaire ? "dossier incomplet" : `${formatFcfa(o.montant_xof)}`,
                   tagVariant: o.prioritaire ? ("r" as const) : ("a" as const),
                   detail: {
                     kicker: `Opportunité · ${o.motif_closer}`,
@@ -151,7 +151,7 @@ export async function DcPipeQualite() {
                     tag: o.prioritaire ? "à compléter avant signature" : "en finalisation",
                     tagVariant: o.prioritaire ? ("r" as const) : ("a" as const),
                     body: [
-                      `${o.client} · ${o.stage} · ${formatMFcfa(o.montant_xof)} M FCFA à ${formatPct(o.probabilite_pct, 0)} % de probabilité déclarée. Échéance le ${formatDate(o.deadline)}${o.jours_avant_echeance !== null ? `, dans ${formatNumber(o.jours_avant_echeance)} jour(s)` : ""}.`,
+                      `${o.client} · ${o.stage} · ${formatFcfa(o.montant_xof)} FCFA à ${formatPct(o.probabilite_pct, 0)} % de probabilité déclarée. Échéance le ${formatDate(o.deadline)}${o.jours_avant_echeance !== null ? `, dans ${formatNumber(o.jours_avant_echeance)} jour(s)` : ""}.`,
                       o.prioritaire
                         ? `Le dossier arrive à la signature avec des informations manquantes : ${o.defauts_libelles.join(", ")}.`
                         : "Le dossier est complet au regard des quatre champs suivis.",
@@ -164,7 +164,7 @@ export async function DcPipeQualite() {
                       ["Client", o.client],
                       ["Commercial", o.commercial || "non renseigné"],
                       ["Étape", o.stage],
-                      ["Montant", `${formatMFcfa(o.montant_xof)} M FCFA`],
+                      ["Montant", `${formatFcfa(o.montant_xof)} FCFA`],
                       ["Probabilité déclarée", `${formatPct(o.probabilite_pct, 0)} %`],
                       ["Échéance", formatDate(o.deadline)],
                       ["Défauts", o.defauts_libelles.join(", ") || "aucun"],
@@ -225,7 +225,7 @@ export async function DcPipeQualite() {
               items={qualite.a_completer.map((o) => ({
                 title: o.name,
                 sub: `${o.client} · ${o.stage} · ${o.defauts_libelles.join(", ")}`,
-                tag: `${formatMFcfa(o.montant_xof)} M`,
+                tag: `${formatFcfa(o.montant_xof)}`,
                 tagVariant: o.gravite >= 5 ? ("r" as const) : ("w" as const),
                 detail: {
                   kicker: "Opportunité · dossier incomplet",
@@ -233,7 +233,7 @@ export async function DcPipeQualite() {
                   tag: `gravité ${o.gravite}`,
                   tagVariant: o.gravite >= 5 ? ("r" as const) : ("w" as const),
                   body: [
-                    `${o.client} · ${o.stage} · ${formatMFcfa(o.montant_xof)} M FCFA. Informations manquantes : ${o.defauts_libelles.join(", ")}.`,
+                    `${o.client} · ${o.stage} · ${formatFcfa(o.montant_xof)} FCFA. Informations manquantes : ${o.defauts_libelles.join(", ")}.`,
                     "La gravité additionne les poids des défauts constatés : elle sert à trier la liste de travail, pas à juger le commercial.",
                     o.commercial ? `Affaire portée par ${o.commercial}.` : "Aucun commercial n'est rattaché à cette affaire.",
                   ],
@@ -241,7 +241,7 @@ export async function DcPipeQualite() {
                     ["Client", o.client],
                     ["Commercial", o.commercial || "non renseigné"],
                     ["Étape", o.stage],
-                    ["Montant", `${formatMFcfa(o.montant_xof)} M FCFA`],
+                    ["Montant", `${formatFcfa(o.montant_xof)} FCFA`],
                     ["Échéance", formatDate(o.deadline)],
                     ["Défauts", o.defauts_libelles.join(", ")],
                     ["Gravité", String(o.gravite)],
@@ -265,7 +265,7 @@ export async function DcPipeQualite() {
               items={qualite.a_requalifier.map((o) => ({
                 title: o.name,
                 sub: `${o.client} · ${o.stage} · ${o.jours_de_retard !== null ? `${formatNumber(o.jours_de_retard)} jours de retard` : "échéance passée"}`,
-                tag: `${formatMFcfa(o.montant_xof)} M`,
+                tag: `${formatFcfa(o.montant_xof)}`,
                 tagVariant: "r" as const,
                 detail: {
                   kicker: "Opportunité · échéance dépassée",
@@ -273,14 +273,14 @@ export async function DcPipeQualite() {
                   tag: "à requalifier",
                   tagVariant: "r" as const,
                   body: [
-                    `${o.client} · ${o.stage} · ${formatMFcfa(o.montant_xof)} M FCFA. Échéance du ${formatDate(o.deadline)}, dépassée de ${o.jours_de_retard !== null ? formatNumber(o.jours_de_retard) : "?"} jour(s).`,
+                    `${o.client} · ${o.stage} · ${formatFcfa(o.montant_xof)} FCFA. Échéance du ${formatDate(o.deadline)}, dépassée de ${o.jours_de_retard !== null ? formatNumber(o.jours_de_retard) : "?"} jour(s).`,
                     "Ce montant continue de peser dans le forecast tant que la date n'est pas révisée ou l'affaire close. C'est la première cause d'un chiffre annoncé plus haut que la réalité.",
                   ],
                   kv: [
                     ["Client", o.client],
                     ["Commercial", o.commercial || "non renseigné"],
                     ["Étape", o.stage],
-                    ["Montant", `${formatMFcfa(o.montant_xof)} M FCFA`],
+                    ["Montant", `${formatFcfa(o.montant_xof)} FCFA`],
                     ["Échéance", formatDate(o.deadline)],
                     ["Retard", o.jours_de_retard !== null ? `${formatNumber(o.jours_de_retard)} jours` : "—"],
                   ],
