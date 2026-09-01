@@ -59,7 +59,13 @@ def _opp(name, *, client="ACME", client_id="acme", stage="2-Proposition", montan
 
 
 def _cpt(nom, *, ca=1_000 * M, nb=10, opp_nb=0, opp_mnt=0.0, derniere="2026-07-01",
-         premiere="2019-03-01", commercial="Diallo", impaye=0.0):
+         premiere="2019-03-01", commercial="Diallo", impaye=0.0,
+         ca_ex=None, nb_ex=None):
+    # `build_top_comptes` classe sur l'EXERCICE (`ca_exercice_xof`), et sert le
+    # cumul historique en contexte. Par défaut les deux coïncident : les tests de
+    # classement portent sur la mesure affichée, pas sur l'écart entre les deux.
+    # `ca_ex`/`nb_ex` permettent de les dissocier quand c'est justement l'objet
+    # du test — un compte à long passé mais muet cette année doit sortir.
     return {
         "compte": nom,
         "client_id": nom.lower().replace(" ", "_"),
@@ -67,6 +73,9 @@ def _cpt(nom, *, ca=1_000 * M, nb=10, opp_nb=0, opp_mnt=0.0, derniere="2026-07-0
         "premiere_commande": premiere,
         "nb_commandes": nb,
         "ca_total_xof": ca,
+        "annee_exercice": 2026,
+        "ca_exercice_xof": ca if ca_ex is None else ca_ex,
+        "nb_commandes_exercice": nb if nb_ex is None else nb_ex,
         "commercial": commercial,
         "nb_impayes": 1 if impaye else 0,
         "impaye_xof": impaye,
@@ -147,6 +156,47 @@ def test_lecture_divergente_entre_quantite_et_montant():
     assert par_nom["GROS TICKET"]["indice_montant"] > par_nom["GROS TICKET"]["indice_quantite"]
     assert par_nom["VOLUME"]["indice_quantite"] > par_nom["VOLUME"]["indice_montant"]
     assert res["totaux"]["nb_lectures_divergentes"] >= 2
+
+
+def test_le_classement_porte_sur_l_exercice_pas_sur_l_historique():
+    """Le cockpit répond à « où en est-on cette année ».
+
+    Le classement lisait le cumul depuis 2019 : 69 031 M FCFA sur 8 exercices,
+    dont 6 128 pour l'année en cours. Un compte énorme mais muet cette année
+    tenait donc le haut du tableau, et le total affiché ne disait rien de
+    l'exercice. Le cumul reste servi, mais en contexte (`ca_historique_xof`).
+    """
+    comptes = [
+        _cpt("ACTIF 2026", ca=2_000 * M, nb=40, ca_ex=500 * M, nb_ex=6),
+        # Gros passé, aucune commande cette année et aucun pipe : hors exercice.
+        _cpt("MUET DEPUIS 2024", ca=9_000 * M, nb=120, ca_ex=0, nb_ex=0,
+             derniere="2024-05-02"),
+    ]
+    res = build_top_comptes(comptes, [], today=TODAY)
+
+    assert [c["compte"] for c in res["comptes"]] == ["ACTIF 2026"]
+    assert res["totaux"]["nb_comptes_classes"] == 1
+    # Le total porte l'exercice, pas les 11 000 M cumulés des deux comptes.
+    assert res["totaux"]["ca_realise_xof"] == 500 * M
+    # Le cumul du compte retenu reste disponible pour situer la relation.
+    assert res["totaux"]["ca_historique_xof"] == 2_000 * M
+    assert res["comptes"][0]["ca_historique_xof"] == 2_000 * M
+    assert res["annee"] == 2026
+
+
+def test_un_compte_muet_mais_avec_du_pipe_reste_classe():
+    """Sans commande cette année mais avec une affaire en cours, le compte
+    concerne bien l'exercice : c'est précisément celui qu'il faut aller
+    chercher. Seul le compte sans commande ET sans pipe sort."""
+    comptes = [_cpt("PROSPECT CHAUD", ca=800 * M, nb=12, ca_ex=0, nb_ex=0)]
+    opps = [_opp("Renouvellement", client="PROSPECT CHAUD", client_id="prospect_chaud",
+                 deadline="2026-12-01", montant=400 * M)]
+
+    res = build_top_comptes(comptes, opps, today=TODAY)
+
+    assert res["totaux"]["nb_comptes_classes"] == 1
+    assert res["comptes"][0]["ca_realise_xof"] == 0
+    assert res["comptes"][0]["pipe_a_venir_xof"] == 400 * M
 
 
 def test_opportunites_echues_ne_comptent_pas_dans_le_a_venir():

@@ -2,7 +2,7 @@ import { getBriefing } from "@/lib/api/briefing";
 import { getClientPortfolio } from "@/lib/api/clients";
 import { getKpis, getMargins, getMarginsAnalysis } from "@/lib/api/dashboard";
 import { getPartnersAnalysis, getSupplierIntelligence } from "@/lib/api/partners";
-import { formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct, signedFcfa } from "@/lib/format";
 import { Bars, Bento, Brief, /* FootNote, */ HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
@@ -47,8 +47,12 @@ export async function DoVision() {
     .sort((a, b) => b.taux_dependance_pct - a.taux_dependance_pct)
     .slice(0, 5);
 
-  const tauxMaterialisation = margins.stats.ca_provisoire_total
-    ? (margins.stats.ca_definitif_total / margins.stats.ca_provisoire_total) * 100
+  // Taux de matérialisation du BACKLOG, donc calculé sur la même population que
+  // lui : tous exercices. Le rapporter au seul CA de l'exercice mélangerait un
+  // stock cumulé à un flux de quelques mois — en janvier, le taux exploserait
+  // sans que rien n'ait bougé dans la livraison.
+  const tauxMaterialisation = margins.stats.ca_provisoire_tous_exercices
+    ? (margins.stats.ca_definitif_tous_exercices / margins.stats.ca_provisoire_tous_exercices) * 100
     : 0;
 
   const topSupplierAmount = suppliers?.[0]?.montant_total_xof ?? 0;
@@ -70,17 +74,19 @@ export async function DoVision() {
     <>
       <Brief
         kicker="Livraison · backlog et fournisseurs"
-        headline={`${formatMFcfa(margins.stats.backlog_total)} M FCFA de backlog à consommer sur ${formatNumber(margins.stats.nb_dossiers)} dossiers.`}
+        headline={`${formatFcfa(margins.stats.backlog_total)} FCFA de backlog à consommer sur ${formatNumber(margins.stats.nb_dossiers_tous_exercices)} dossiers.`}
         lines={briefLines}
         paragraphs={
           briefLines.length
             ? undefined
             : [
-                `Le backlog représente ${formatMFcfa(margins.stats.backlog_total)} M FCFA, pour un taux de matérialisation du CA de ${formatPct(tauxMaterialisation, 0)} %. Le briefing du jour n'est pas encore généré pour ce profil.`,
+                `Le backlog représente ${formatFcfa(margins.stats.backlog_total)} FCFA, pour un taux de matérialisation du CA de ${formatPct(tauxMaterialisation, 0)} %. Le briefing du jour n'est pas encore généré pour ce profil.`,
               ]
         }
         pills={[
-          { label: `${formatNumber(margins.stats.nb_dossiers)} dossiers actifs` },
+          // Le backlog porte sur tous les exercices : le nombre de dossiers qui
+          // l'accompagne doit compter la même population, pas celle de l'année.
+          { label: `${formatNumber(margins.stats.nb_dossiers_tous_exercices)} dossiers actifs` },
           { label: `Matérialisation ${formatPct(tauxMaterialisation, 0)} %`, hot: tauxMaterialisation < 60 },
           {
             label:
@@ -96,24 +102,30 @@ export async function DoVision() {
           span={4}
           label="Backlog à consommer"
           aide="Le travail déjà vendu qui reste à réaliser. C'est votre carnet de commandes : de l'activité assurée, pas encore exécutée."
-          value={formatMFcfa(margins.stats.backlog_total)}
-          unit="M FCFA"
-          reading={`${formatNumber(margins.stats.nb_dossiers)} dossiers actifs`}
+          value={formatFcfa(margins.stats.backlog_total)}
+          unit="FCFA"
+          reading={`${formatNumber(margins.stats.nb_dossiers_tous_exercices)} dossiers actifs`}
           detail={{
             kicker: "Indicateur · backlog",
-            title: "Backlog restant à consommer",
-            tag: `${formatNumber(margins.stats.nb_dossiers)} dossiers`,
+            title: "Backlog restant à consommer (tous exercices)",
+            tag: `${formatNumber(margins.stats.nb_dossiers_tous_exercices)} dossiers`,
             tagVariant: "a",
             body: [
-              `Le backlog correspond à l'écart entre le CA provisoire des dossiers (${formatMFcfa(margins.stats.ca_provisoire_total)} M FCFA) et ce qui a déjà été facturé (${formatMFcfa(margins.stats.ca_definitif_total)} M FCFA).`,
+              // Toute cette tuile parle du STOCK : les trois montants et le
+              // compteur viennent de la même population, tous exercices. Les
+              // mélanger avec le CA de l'exercice ferait un écart qui ne tombe
+              // pas sur le backlog affiché juste au-dessus.
+              `Le backlog correspond à l'écart entre le CA provisoire des dossiers (${formatFcfa(margins.stats.ca_provisoire_tous_exercices)} FCFA) et ce qui a déjà été facturé (${formatFcfa(margins.stats.ca_definitif_tous_exercices)} FCFA).`,
               `Sur cette base, ${formatPct(tauxMaterialisation, 0)} % de la valeur engagée s'est matérialisée en facturation. Le reste est du travail vendu qui n'a pas encore produit de facture.`,
+              `Le carnet ne se borne pas à l'exercice : un dossier ouvert avant ${margins.stats.annee} et encore en cours de livraison reste du travail à réaliser aujourd'hui.`,
             ],
             kv: [
-              ["CA provisoire", `${formatMFcfa(margins.stats.ca_provisoire_total)} M FCFA`],
-              ["CA définitif", `${formatMFcfa(margins.stats.ca_definitif_total)} M FCFA`],
-              ["Backlog", `${formatMFcfa(margins.stats.backlog_total)} M FCFA`],
+              ["CA provisoire (tous exercices)", `${formatFcfa(margins.stats.ca_provisoire_tous_exercices)} FCFA`],
+              ["CA définitif (tous exercices)", `${formatFcfa(margins.stats.ca_definitif_tous_exercices)} FCFA`],
+              ["Backlog", `${formatFcfa(margins.stats.backlog_total)} FCFA`],
               ["Taux de matérialisation", `${formatPct(tauxMaterialisation, 0)} %`],
-              ["Dossiers", formatNumber(margins.stats.nb_dossiers)],
+              ["Dossiers", formatNumber(margins.stats.nb_dossiers_tous_exercices)],
+              [`Dont ouverts en ${margins.stats.annee}`, formatNumber(margins.stats.nb_dossiers)],
             ],
             // note: "Le CA provisoire est la valorisation initiale du dossier commercial, le définitif la valeur réellement facturée à date.",
           }}
@@ -139,13 +151,13 @@ export async function DoVision() {
             tagVariant: moisVisibilite !== null && moisVisibilite < 3 ? "r" : "s",
             body: [
               moisVisibilite !== null
-                ? `Le backlog de ${formatMFcfa(margins.stats.backlog_total)} M FCFA rapporté au rythme de facturation mensuel moyen (${formatMFcfa(avgMonthlyRevenue)} M FCFA) donne ${formatPct(moisVisibilite, 1)} mois de visibilité.`
+                ? `Le backlog de ${formatFcfa(margins.stats.backlog_total)} FCFA rapporté au rythme de facturation mensuel moyen (${formatFcfa(avgMonthlyRevenue)} FCFA) donne ${formatPct(moisVisibilite, 1)} mois de visibilité.`
                 : "Le rythme de facturation mensuel moyen n'est pas calculable sur la période disponible.",
               "Proxy assumé : sans feuilles de temps dans le miroir, la charge réelle des équipes n'est pas mesurable. Ce chiffre mesure la couverture du carnet, pas l'occupation des consultants.",
             ],
             kv: [
-              ["Backlog", `${formatMFcfa(margins.stats.backlog_total)} M FCFA`],
-              ["CA mensuel moyen", `${formatMFcfa(avgMonthlyRevenue)} M FCFA`],
+              ["Backlog", `${formatFcfa(margins.stats.backlog_total)} FCFA`],
+              ["CA mensuel moyen", `${formatFcfa(avgMonthlyRevenue)} FCFA`],
               ["Visibilité", moisVisibilite !== null ? `${formatPct(moisVisibilite, 1)} mois` : "—"],
               ["Seuil interne", "3,0 mois"],
             ],
@@ -156,23 +168,23 @@ export async function DoVision() {
           span={4}
           label="Reste fournisseurs à payer"
           aide="Ce que vous devez encore régler à vos sous-traitants et fournisseurs sur les chantiers en cours."
-          value={formatMFcfa(margins.stats.fournisseurs_restant)}
-          unit="M FCFA"
+          value={formatFcfa(margins.stats.fournisseurs_restant)}
+          unit="FCFA"
           reading={`${formatNumber(suppliers?.length ?? 0)} fournisseurs suivis`}
           readingVariant="wat"
           detail={{
             kicker: "Indicateur · engagement fournisseur",
             title: "Reste à payer aux fournisseurs",
-            tag: `${formatMFcfa(margins.stats.fournisseurs_restant)} M FCFA`,
+            tag: `${formatFcfa(margins.stats.fournisseurs_restant)} FCFA`,
             tagVariant: "w",
             body: [
-              `Les commandes d'achat engagées laissent ${formatMFcfa(margins.stats.fournisseurs_restant)} M FCFA à régler.`,
-              `À mettre en regard du reste à encaisser client (${formatMFcfa(margins.stats.reste_a_encaisser)} M FCFA) : c'est l'écart entre les deux qui détermine si la livraison se finance elle-même.`,
+              `Les commandes d'achat engagées laissent ${formatFcfa(margins.stats.fournisseurs_restant)} FCFA à régler.`,
+              `À mettre en regard du reste à encaisser client (${formatFcfa(margins.stats.reste_a_encaisser)} FCFA) : c'est l'écart entre les deux qui détermine si la livraison se finance elle-même.`,
             ],
             kv: [
-              ["Reste fournisseurs", `${formatMFcfa(margins.stats.fournisseurs_restant)} M FCFA`],
-              ["Reste à encaisser client", `${formatMFcfa(margins.stats.reste_a_encaisser)} M FCFA`],
-              ["Déjà encaissé", `${formatMFcfa(margins.stats.total_encaisse)} M FCFA`],
+              ["Reste fournisseurs", `${formatFcfa(margins.stats.fournisseurs_restant)} FCFA`],
+              ["Reste à encaisser client", `${formatFcfa(margins.stats.reste_a_encaisser)} FCFA`],
+              ["Déjà encaissé", `${formatFcfa(margins.stats.total_encaisse)} FCFA`],
             ],
             // note: "Montants issus des commandes d'achat et factures du miroir Odoo.",
           }}
@@ -197,36 +209,41 @@ export async function DoVision() {
           kick="du devis à l'encaissement"
           aide="Le parcours d'une affaire, du devis jusqu'à l'encaissement, avec ce qui se perd à chaque étape. Montre où la valeur s'évapore."
         >
+          {/* Entonnoir CUMULÉ, comme le disent les libellés : les quatre barres
+              se lisent en part du CA provisoire de la même population. Deux
+              d'entre elles (encaissé, reste à encaisser) sont des stocks tous
+              exercices ; les rapporter au CA du seul exercice donnerait des
+              parts au-delà de 100 % sans que rien ne soit anormal. */}
           <Bars
             rows={[
               {
                 name: "CA provisoire cumulé",
                 sub: "valorisation initiale des dossiers",
-                value: `${formatMFcfa(margins.stats.ca_provisoire_total)} M`,
+                value: `${formatFcfa(margins.stats.ca_provisoire_tous_exercices)}`,
                 pct: 100,
               },
               {
                 name: "CA définitif cumulé",
                 sub: `${formatPct(tauxMaterialisation, 0)} % matérialisé`,
-                value: `${formatMFcfa(margins.stats.ca_definitif_total)} M`,
+                value: `${formatFcfa(margins.stats.ca_definitif_tous_exercices)}`,
                 pct: tauxMaterialisation,
                 variant: tauxMaterialisation < 60 ? ("w" as const) : ("s" as const),
               },
               {
                 name: "Déjà encaissé",
                 sub: "règlements reçus",
-                value: `${formatMFcfa(margins.stats.total_encaisse)} M`,
-                pct: margins.stats.ca_provisoire_total
-                  ? (margins.stats.total_encaisse / margins.stats.ca_provisoire_total) * 100
+                value: `${formatFcfa(margins.stats.total_encaisse)}`,
+                pct: margins.stats.ca_provisoire_tous_exercices
+                  ? (margins.stats.total_encaisse / margins.stats.ca_provisoire_tous_exercices) * 100
                   : 0,
                 variant: "s" as const,
               },
               {
                 name: "Reste à encaisser",
                 sub: "facturé non réglé",
-                value: `${formatMFcfa(margins.stats.reste_a_encaisser)} M`,
-                pct: margins.stats.ca_provisoire_total
-                  ? (margins.stats.reste_a_encaisser / margins.stats.ca_provisoire_total) * 100
+                value: `${formatFcfa(margins.stats.reste_a_encaisser)}`,
+                pct: margins.stats.ca_provisoire_tous_exercices
+                  ? (margins.stats.reste_a_encaisser / margins.stats.ca_provisoire_tous_exercices) * 100
                   : 0,
                 variant: "r" as const,
               },
@@ -258,12 +275,12 @@ export async function DoVision() {
                       tag: "dérive de facturation",
                       tagVariant: "r" as const,
                       body: [
-                        `Le dossier « ${d.projet} » a été valorisé à ${formatMFcfa(d.ca_provisoire)} M FCFA mais seuls ${formatMFcfa(d.ca_definitif)} M FCFA ont été facturés, soit ${formatPct(avancement, 0)} % de la valeur engagée.`,
+                        `Le dossier « ${d.projet} » a été valorisé à ${formatFcfa(d.ca_provisoire)} FCFA mais seuls ${formatFcfa(d.ca_definitif)} FCFA ont été facturés, soit ${formatPct(avancement, 0)} % de la valeur engagée.`,
                         `La marge passe de ${formatPct(d.perc_marge_prov, 1)} % prévue à ${formatPct(d.perc_marge_def, 1)} % constatée. Un écart de cette ampleur relève soit d'un retard de facturation, soit d'une réduction de périmètre non répercutée au contrat.`,
                       ],
                       kv: [
-                        ["CA provisoire", `${formatMFcfa(d.ca_provisoire)} M FCFA`],
-                        ["CA définitif", `${formatMFcfa(d.ca_definitif)} M FCFA`],
+                        ["CA provisoire", `${formatFcfa(d.ca_provisoire)} FCFA`],
+                        ["CA définitif", `${formatFcfa(d.ca_definitif)} FCFA`],
                         ["Avancement facturé", `${formatPct(avancement, 0)} %`],
                         ["Marge prévue", `${formatPct(d.perc_marge_prov, 1)} %`],
                         ["Marge constatée", `${formatPct(d.perc_marge_def, 1)} %`],
@@ -283,7 +300,7 @@ export async function DoVision() {
           <Tile
             span={12}
             title="Clients qui portent le plus de backlog"
-            kick={`${formatMFcfa(backlogTotalClients)} M à livrer · ${formatNumber(avecBacklog.length)} comptes concernés`}
+            kick={`${formatFcfa(backlogTotalClients)} à livrer · ${formatNumber(avecBacklog.length)} comptes concernés`}
             aide="Le travail déjà vendu qui reste à livrer, regroupé par client. Le reste de l'écran raisonne par dossier ; ici on voit à qui l'on doit le plus, ce qui est l'interlocuteur réel quand un délai glisse."
           >
             <HintLine>Cliquez un compte pour sa charge de livraison</HintLine>
@@ -297,7 +314,7 @@ export async function DoVision() {
                     `${formatPct(part, 0)} % du backlog`,
                     c.secteur ?? "secteur non renseigné",
                   ].join(" · "),
-                  value: `${formatMFcfa(c.backlog_xof)} M`,
+                  value: `${formatFcfa(c.backlog_xof)}`,
                   pct: maxBacklogClient ? (c.backlog_xof / maxBacklogClient) * 100 : 0,
                   variant: part > 20 ? ("r" as const) : part > 10 ? ("w" as const) : undefined,
                   detail: {
@@ -307,20 +324,20 @@ export async function DoVision() {
                       part > 20 ? "concentration forte" : part > 10 ? "à surveiller" : "charge répartie",
                     tagVariant: part > 20 ? ("r" as const) : part > 10 ? ("w" as const) : ("n" as const),
                     body: [
-                      `${c.client} porte ${formatMFcfa(c.backlog_xof)} M FCFA de travail vendu non encore livré, réparti sur ${formatNumber(c.nb_dossiers)} dossier(s), soit ${formatPct(part, 0)} % du backlog total.`,
+                      `${c.client} porte ${formatFcfa(c.backlog_xof)} FCFA de travail vendu non encore livré, réparti sur ${formatNumber(c.nb_dossiers)} dossier(s), soit ${formatPct(part, 0)} % du backlog total.`,
                       part > 20
                         ? "Un cinquième du carnet dépend de ce seul compte : un décalage de planning chez lui déplace directement la charge de l'ensemble des équipes."
                         : "La charge de ce compte reste absorbable au regard du carnet global.",
                       c.reste_a_encaisser_xof > 0
-                        ? `Ce compte laisse par ailleurs ${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA facturés non réglés — livrer davantage augmente l'exposition tant que ce reste n'est pas encaissé.`
+                        ? `Ce compte laisse par ailleurs ${formatFcfa(c.reste_a_encaisser_xof)} FCFA facturés non réglés — livrer davantage augmente l'exposition tant que ce reste n'est pas encaissé.`
                         : "Ce compte n'a aucun reste à encaisser : livrer ne crée pas d'exposition financière supplémentaire.",
                     ],
                     kv: [
-                      ["Backlog à livrer", `${formatMFcfa(c.backlog_xof)} M FCFA`],
+                      ["Backlog à livrer", `${formatFcfa(c.backlog_xof)} FCFA`],
                       ["Part du backlog", `${formatPct(part, 0)} %`],
                       ["Dossiers", formatNumber(c.nb_dossiers)],
-                      ["CA total", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
-                      ["Reste à encaisser", `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA`],
+                      ["CA total", `${formatFcfa(c.ca_total_xof)} FCFA`],
+                      ["Reste à encaisser", `${formatFcfa(c.reste_a_encaisser_xof)} FCFA`],
                       ["Secteur", c.secteur ?? "non renseigné"],
                     ],
                   },
@@ -331,7 +348,7 @@ export async function DoVision() {
               affiches={parBacklog.length}
               total={avecBacklog.length}
               nom="comptes avec backlog"
-              ou={`${formatMFcfa(backlogTotalClients)} M FCFA au total`}
+              ou={`${formatFcfa(backlogTotalClients)} FCFA au total`}
             />
             <Note style={{ marginTop: 14 }}>
               Backlog issu des dossiers (CA provisoire moins ce qui est déjà facturé), agrégé par client sur
@@ -361,7 +378,7 @@ export async function DoVision() {
               rows={suppliers.slice(0, 6).map((s) => ({
                 name: s.name,
                 sub: `${formatPct(s.taux_dependance_pct, 1)} % des achats · retard moyen ${s.retard_moyen_jours !== null ? `${formatNumber(s.retard_moyen_jours)} j` : "non mesuré"}`,
-                value: `${formatMFcfa(s.montant_total_xof)} M`,
+                value: `${formatFcfa(s.montant_total_xof)}`,
                 pct: topSupplierAmount ? (s.montant_total_xof / topSupplierAmount) * 100 : 0,
                 variant:
                   s.taux_dependance_pct > 20
@@ -385,13 +402,13 @@ export async function DoVision() {
                         ? ("r" as const)
                         : ("n" as const),
                   body: [
-                    `${s.name} représente ${formatMFcfa(s.montant_total_xof)} M FCFA d'achats, soit ${formatPct(s.taux_dependance_pct, 1)} % du total, sur ${formatNumber(s.nb_dossiers_lies)} dossier(s) lié(s).`,
+                    `${s.name} représente ${formatFcfa(s.montant_total_xof)} FCFA d'achats, soit ${formatPct(s.taux_dependance_pct, 1)} % du total, sur ${formatNumber(s.nb_dossiers_lies)} dossier(s) lié(s).`,
                     s.dossiers_a_risque_fournisseur_unique > 0
                       ? `${formatNumber(s.dossiers_a_risque_fournisseur_unique)} dossier(s) dépendent de ce seul fournisseur : une rupture de sa part bloque directement la livraison client, sans solution de repli identifiée dans le miroir.`
                       : "Aucun dossier ne dépend exclusivement de ce fournisseur, ce qui limite le risque de rupture.",
                   ],
                   kv: [
-                    ["Montant acheté", `${formatMFcfa(s.montant_total_xof)} M FCFA`],
+                    ["Montant acheté", `${formatFcfa(s.montant_total_xof)} FCFA`],
                     ["Dépendance", `${formatPct(s.taux_dependance_pct, 1)} %`],
                     ["Dossiers liés", formatNumber(s.nb_dossiers_lies)],
                     ["Dossiers mono-source", formatNumber(s.dossiers_a_risque_fournisseur_unique)],
@@ -399,7 +416,7 @@ export async function DoVision() {
                       "Retard moyen",
                       s.retard_moyen_jours !== null ? `${formatNumber(s.retard_moyen_jours)} jours` : "non mesuré",
                     ],
-                    ["Marge de sous-traitance", `${signed(mFcfa(s.marge_sous_traitance_xof))} M FCFA`],
+                    ["Marge de sous-traitance", `${signedFcfa(s.marge_sous_traitance_xof)} FCFA`],
                   ],
                   // note: "Calculé sur les commandes d'achat réelles. Le retard n'est mesurable que si la date de réception est renseignée.",
                 },
@@ -418,7 +435,7 @@ export async function DoVision() {
             <Lst
               items={risquesSousTraitance.map((s) => ({
                 title: s.name,
-                sub: `${formatNumber(s.nb_dossiers_lies)} dossier(s) · marge ${signed(mFcfa(s.marge_sous_traitance_xof))} M`,
+                sub: `${formatNumber(s.nb_dossiers_lies)} dossier(s) · marge ${signedFcfa(s.marge_sous_traitance_xof)}`,
                 tag: s.dossiers_a_risque_fournisseur_unique > 0 ? "mono-source" : "à surveiller",
                 tagVariant: s.dossiers_a_risque_fournisseur_unique > 0 ? ("r" as const) : ("n" as const),
                 detail: {
@@ -427,7 +444,7 @@ export async function DoVision() {
                   tag: s.dossiers_a_risque_fournisseur_unique > 0 ? "mono-source" : "dépendance élevée",
                   tagVariant: s.dossiers_a_risque_fournisseur_unique > 0 ? ("r" as const) : ("w" as const),
                   body: [
-                    `Ce fournisseur porte ${formatPct(s.taux_dependance_pct, 1)} % des achats sur ${formatNumber(s.nb_dossiers_lies)} dossier(s), pour une marge de sous-traitance de ${signed(mFcfa(s.marge_sous_traitance_xof))} M FCFA.`,
+                    `Ce fournisseur porte ${formatPct(s.taux_dependance_pct, 1)} % des achats sur ${formatNumber(s.nb_dossiers_lies)} dossier(s), pour une marge de sous-traitance de ${signedFcfa(s.marge_sous_traitance_xof)} FCFA.`,
                     s.dossiers_a_risque_fournisseur_unique > 0
                       ? "Sans second fournisseur référencé sur ces dossiers, la continuité de livraison repose sur lui seul. Une clause de continuité ou un fournisseur alternatif est la parade habituelle."
                       : "La dépendance dépasse le seuil de 10 % des achats sans être mono-source : le risque est financier plus que technique.",
@@ -436,7 +453,7 @@ export async function DoVision() {
                     ["Dépendance", `${formatPct(s.taux_dependance_pct, 1)} %`],
                     ["Dossiers liés", formatNumber(s.nb_dossiers_lies)],
                     ["Dossiers mono-source", formatNumber(s.dossiers_a_risque_fournisseur_unique)],
-                    ["Marge de sous-traitance", `${signed(mFcfa(s.marge_sous_traitance_xof))} M FCFA`],
+                    ["Marge de sous-traitance", `${signedFcfa(s.marge_sous_traitance_xof)} FCFA`],
                   ],
                   // note: "Seuil de dépendance retenu : 10 % des achats, ou présence d'au moins un dossier mono-source.",
                 },

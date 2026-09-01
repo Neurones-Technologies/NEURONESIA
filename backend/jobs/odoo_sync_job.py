@@ -783,7 +783,10 @@ async def run_odoo_sync(force_full: bool = False):
             )
 
         # ─── 4. Achats (montants convertis en XOF) ───────────────────────────
-        purchase_orders = await odoo.get_all_purchase_orders(limit=2000, since=since)
+        # Sans plafond : l'adaptateur pagine jusqu'à épuisement. Le `limit=2000`
+        # d'avant tronquait à un quart des achats confirmés d'Odoo, sans erreur
+        # ni journal — le miroir en portait déjà 2 134, donc au-delà du plafond.
+        purchase_orders = await odoo.get_all_purchase_orders(since=since)
         async with AsyncSessionLocal() as session:
             new_po = 0
             for po in purchase_orders:

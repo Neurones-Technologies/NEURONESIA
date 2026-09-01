@@ -174,7 +174,7 @@ export function StatTile({
   readingVariant?: "pos" | "neg" | "wat";
   spark?: number[];
   sparkAxis?: string[];
-  /** Libellé au survol de chaque barre (« Juil : 12 M FCFA ») — même ordre que
+  /** Libellé au survol de chaque barre (« Juil : 12 FCFA ») — même ordre que
    *  `spark`. Les hauteurs sont des indices relatifs au meilleur point : sans
    *  cette lecture, la valeur d'une barre est indevinable. */
   sparkLabels?: string[];
@@ -190,7 +190,7 @@ export function StatTile({
   fill?: boolean;
 }) {
   // Un montant négatif se lit d'abord au signe, pas à la ligne de lecture
-  // dessous : « -1712 M FCFA » en encre neutre se lisait comme un montant
+  // dessous : « -1712 FCFA » en encre neutre se lisait comme un montant
   // ordinaire. La règle ne vaut que pour le vrai signe moins d'un nombre.
   const negatif = !signeNeutre && /^-\s*\d/.test(value.trim());
   // Une valeur TEXTUELLE (nom d'axe, libellé) n'est pas un montant : au corps

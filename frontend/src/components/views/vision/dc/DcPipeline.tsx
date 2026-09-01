@@ -4,7 +4,7 @@ import {
   getForecastPipelineWeighted,
   getPerformanceSummary,
 } from "@/lib/api/dashboard";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { Note } from "@/components/ui/primitives";
@@ -77,8 +77,8 @@ export async function DcPipeline() {
             rang="principal"
             label="Portefeuille en sommeil"
             aide="La part de vos clients qui n'ont rien commandé depuis longtemps. Ils restent au fichier mais ne contribuent plus : c'est le réservoir à réveiller."
-            value={formatMFcfa(dormance.sommeil.ca_historique_xof)}
-            unit="M FCFA historiques"
+            value={formatFcfa(dormance.sommeil.ca_historique_xof)}
+            unit="FCFA historiques"
             reading={`${formatNumber(dormance.sommeil.nb_comptes)} comptes sans commande depuis plus de 12 mois`}
             readingVariant="neg"
             detail={{
@@ -87,18 +87,18 @@ export async function DcPipeline() {
               tag: `${formatPct(dormance.sommeil.part_ca_pct, 0)} % du CA historique`,
               tagVariant: "r",
               body: [
-                `${formatNumber(dormance.sommeil.nb_comptes)} comptes n'ont plus commandé depuis plus de 12 mois. Ils représentent ${formatMFcfa(dormance.sommeil.ca_historique_xof)} M FCFA de chiffre d'affaires cumulé sur toute leur histoire, soit ${formatPct(dormance.sommeil.part_ca_pct, 0)} % du CA historique du portefeuille.`,
-                `Ce montant est un CUMUL HISTORIQUE, pas un manque à gagner de l'exercice : il mesure ce que ces comptes ont pesé au total, pas ce qu'ils auraient rapporté cette année. Le chiffre à suivre pour le pilotage est plutôt les ${formatMFcfa(dormance.totaux.ca_a_risque_xof)} M FCFA des ${formatNumber(dormance.totaux.nb_decroches)} comptes qui viennent de décrocher (6 à 24 mois de silence) — eux sont encore récupérables.`,
+                `${formatNumber(dormance.sommeil.nb_comptes)} comptes n'ont plus commandé depuis plus de 12 mois. Ils représentent ${formatFcfa(dormance.sommeil.ca_historique_xof)} FCFA de chiffre d'affaires cumulé sur toute leur histoire, soit ${formatPct(dormance.sommeil.part_ca_pct, 0)} % du CA historique du portefeuille.`,
+                `Ce montant est un CUMUL HISTORIQUE, pas un manque à gagner de l'exercice : il mesure ce que ces comptes ont pesé au total, pas ce qu'ils auraient rapporté cette année. Le chiffre à suivre pour le pilotage est plutôt les ${formatFcfa(dormance.totaux.ca_a_risque_xof)} FCFA des ${formatNumber(dormance.totaux.nb_decroches)} comptes qui viennent de décrocher (6 à 24 mois de silence) — eux sont encore récupérables.`,
                 dormance.dormants_avec_impaye.nb_comptes > 0
-                  ? `${formatNumber(dormance.dormants_avec_impaye.nb_comptes)} de ces comptes silencieux portent un impayé échu (${formatMFcfa(dormance.dormants_avec_impaye.impaye_xof)} M FCFA au total). Une relance commerciale sur ces comptes se prépare avec la Direction Financière, pas seule.`
+                  ? `${formatNumber(dormance.dormants_avec_impaye.nb_comptes)} de ces comptes silencieux portent un impayé échu (${formatFcfa(dormance.dormants_avec_impaye.impaye_xof)} FCFA au total). Une relance commerciale sur ces comptes se prépare avec la Direction Financière, pas seule.`
                   : "Aucun de ces comptes silencieux ne porte d'impayé échu.",
               ],
               kv: [
-                ["CA en sommeil", `${formatMFcfa(dormance.sommeil.ca_historique_xof)} M FCFA`],
+                ["CA en sommeil", `${formatFcfa(dormance.sommeil.ca_historique_xof)} FCFA`],
                 ["Part du CA historique", `${formatPct(dormance.sommeil.part_ca_pct, 0)} %`],
                 ["Comptes concernés", formatNumber(dormance.sommeil.nb_comptes)],
                 ["Dont avec impayé échu", formatNumber(dormance.dormants_avec_impaye.nb_comptes)],
-                ["CA récupérable (6-24 mois)", `${formatMFcfa(dormance.totaux.ca_a_risque_xof)} M FCFA`],
+                ["CA récupérable (6-24 mois)", `${formatFcfa(dormance.totaux.ca_a_risque_xof)} FCFA`],
                 ["Observé au", formatDate(dormance.as_of)],
               ],
               // note: "Le silence se mesure sur les commandes signées. Le détail par facture des impayés est réservé aux profils financiers.",
@@ -120,7 +120,7 @@ export async function DcPipeline() {
             body: [
               `Sur l'ensemble de l'historique disponible, ${formatPct(performance?.win_rate.taux_valeur_pct ?? null, 0)} % de la valeur engagée dans le pipeline s'est transformée en commande.`,
               performance
-                ? `Les affaires perdues représentent ${formatNumber(performance.lost_deals.nb_total)} opportunités pour ${formatMFcfa(performance.lost_deals.montant_total_xof)} M FCFA — le détail par client est dans l'onglet « Transformation ».`
+                ? `Les affaires perdues représentent ${formatNumber(performance.lost_deals.nb_total)} opportunités pour ${formatFcfa(performance.lost_deals.montant_total_xof)} FCFA — le détail par client est dans l'onglet « Transformation ».`
                 : "Le détail des affaires perdues n'est pas accessible depuis ce profil.",
             ],
             kv: [
@@ -128,7 +128,7 @@ export async function DcPipeline() {
               ...(performance
                 ? [
                     ["Affaires perdues", formatNumber(performance.lost_deals.nb_total)],
-                    ["Valeur perdue", `${formatMFcfa(performance.lost_deals.montant_total_xof)} M FCFA`],
+                    ["Valeur perdue", `${formatFcfa(performance.lost_deals.montant_total_xof)} FCFA`],
                   ]
                 : []),
             ],
@@ -141,7 +141,7 @@ export async function DcPipeline() {
           aide="Les affaires en cours qui montrent des signes de décrochage : plus de mouvement, échéance passée, ou trop longtemps au même stade."
           value={formatNumber(nbAtRisk)}
           unit="échéance dépassée"
-          reading={`${formatMFcfa(atRiskTotal)} M FCFA pondérés concernés`}
+          reading={`${formatFcfa(atRiskTotal)} FCFA pondérés concernés`}
           readingVariant={nbAtRisk > 0 ? "neg" : undefined}
           detail={{
             kicker: "Indicateur · fiabilité des dates",
@@ -150,13 +150,13 @@ export async function DcPipeline() {
             tagVariant: nbAtRisk > 0 ? "r" : "s",
             body: [
               nbAtRisk > 0
-                ? `${formatNumber(nbAtRisk)} opportunités portent une date de clôture déjà passée, pour ${formatMFcfa(atRiskTotal)} M FCFA pondérés encore comptés dans le forecast.`
+                ? `${formatNumber(nbAtRisk)} opportunités portent une date de clôture déjà passée, pour ${formatFcfa(atRiskTotal)} FCFA pondérés encore comptés dans le forecast.`
                 : "Aucune opportunité ouverte ne porte de date de clôture dépassée.",
               "Une date dépassée n'est pas une affaire perdue : c'est une affaire dont la date n'a pas été tenue à jour. Tant qu'elle n'est pas requalifiée, elle gonfle le forecast du trimestre en cours.",
             ],
             kv: [
               ["Opportunités concernées", formatNumber(nbAtRisk)],
-              ["Valeur pondérée", `${formatMFcfa(atRiskTotal)} M FCFA`],
+              ["Valeur pondérée", `${formatFcfa(atRiskTotal)} FCFA`],
             ],
             // note: "Comparaison entre la date de clôture prévue dans Odoo et la date du jour.",
           }}
@@ -181,7 +181,7 @@ export async function DcPipeline() {
                   return {
                     name: s.stage,
                     sub: `${formatNumber(stageCounts[s.stage] ?? 0)} opportunités · ${formatPct(part, 0)} % du forecast`,
-                    value: `${formatMFcfa(s.weighted_xof)} M`,
+                    value: `${formatFcfa(s.weighted_xof)}`,
                     pct: topStageValue ? (s.weighted_xof / topStageValue) * 100 : 0,
                     variant: part > 40 ? ("w" as const) : undefined,
                     detail: {
@@ -190,13 +190,13 @@ export async function DcPipeline() {
                       tag: `${formatPct(part, 0)} % du forecast`,
                       tagVariant: part > 40 ? ("w" as const) : ("a" as const),
                       body: [
-                        `L'étape « ${s.stage} » regroupe ${formatNumber(stageCounts[s.stage] ?? 0)} opportunités pour ${formatMFcfa(s.weighted_xof)} M FCFA pondérés, soit ${formatPct(part, 0)} % du forecast réaliste.`,
+                        `L'étape « ${s.stage} » regroupe ${formatNumber(stageCounts[s.stage] ?? 0)} opportunités pour ${formatFcfa(s.weighted_xof)} FCFA pondérés, soit ${formatPct(part, 0)} % du forecast réaliste.`,
                         part > 40
                           ? "Cette étape porte à elle seule plus de 40 % du forecast : si sa probabilité moyenne est mal calibrée, c'est tout le chiffre annoncé qui bouge."
                           : "Le poids de cette étape reste réparti, ce qui limite l'effet d'une erreur de calibrage sur une seule phase du cycle.",
                       ],
                       kv: [
-                        ["Valeur pondérée", `${formatMFcfa(s.weighted_xof)} M FCFA`],
+                        ["Valeur pondérée", `${formatFcfa(s.weighted_xof)} FCFA`],
                         ["Opportunités", formatNumber(stageCounts[s.stage] ?? 0)],
                         ["Part du forecast", `${formatPct(part, 0)} %`],
                       ],
@@ -222,7 +222,7 @@ export async function DcPipeline() {
               items={atRisk.map((o) => ({
                 title: String(o.name),
                 sub: `${o.client} · ${o.stage} · ${o.commercial}`,
-                tag: `${formatMFcfa(o.weighted_xof)} M`,
+                tag: `${formatFcfa(o.weighted_xof)}`,
                 tagVariant: "r" as const,
                 detail: {
                   kicker: "Opportunité · échéance dépassée",
@@ -230,14 +230,14 @@ export async function DcPipeline() {
                   tag: "à requalifier",
                   tagVariant: "r" as const,
                   body: [
-                    `Cette opportunité chez ${o.client} est portée par ${o.commercial}, à l'étape « ${o.stage} », pour ${formatMFcfa(o.weighted_xof)} M FCFA pondérés.`,
+                    `Cette opportunité chez ${o.client} est portée par ${o.commercial}, à l'étape « ${o.stage} », pour ${formatFcfa(o.weighted_xof)} FCFA pondérés.`,
                     "Sa date de clôture prévue est déjà passée. Elle continue de peser dans le forecast tant que la date n'est pas révisée ou l'affaire close.",
                   ],
                   kv: [
                     ["Client", o.client],
                     ["Commercial", o.commercial],
                     ["Étape", o.stage],
-                    ["Valeur pondérée", `${formatMFcfa(o.weighted_xof)} M FCFA`],
+                    ["Valeur pondérée", `${formatFcfa(o.weighted_xof)} FCFA`],
                   ],
                   // note: "Requalifier la date dans Odoo met à jour le forecast au prochain instantané. Le cockpit n'écrit jamais.",
                 },
@@ -256,7 +256,7 @@ export async function DcPipeline() {
         <Tile
           span={12}
           title="Affaires à conclure en priorité"
-          kick={`${formatNumber(conclurables.length)} affaires à 50 % et plus · ${formatMFcfa(aConclureTotal)} M pondérés`}
+          kick={`${formatNumber(conclurables.length)} affaires à 50 % et plus · ${formatFcfa(aConclureTotal)} pondérés`}
           aide="Les affaires en cours les plus proches d'être signées, classées par ce qu'elles rapportent réellement une fois la probabilité prise en compte. C'est là que l'effort de la semaine a le plus d'effet."
         >
           {aConclure.length > 0 ? (
@@ -271,7 +271,7 @@ export async function DcPipeline() {
                     `${formatPct(o.probability_pct, 0)} % de chances`,
                     o.deadline ? `échéance ${formatDate(o.deadline)}` : "sans échéance",
                   ].join(" · "),
-                  tag: `${formatMFcfa(o.weighted_xof)} M pondérés`,
+                  tag: `${formatFcfa(o.weighted_xof)} pondérés`,
                   tagVariant: o.probability_pct >= 75 ? ("s" as const) : ("w" as const),
                   detail: {
                     kicker: "Opportunité · à conclure",
@@ -279,7 +279,7 @@ export async function DcPipeline() {
                     tag: `${formatPct(o.probability_pct, 0)} % de chances`,
                     tagVariant: o.probability_pct >= 75 ? ("s" as const) : ("w" as const),
                     body: [
-                      `Affaire chez ${o.client}, portée par ${o.commercial} à l'étape « ${o.stage} » : ${formatMFcfa(o.value_xof)} M FCFA de valeur brute, ramenés à ${formatMFcfa(o.weighted_xof)} M FCFA une fois la probabilité de ${formatPct(o.probability_pct, 0)} % appliquée.`,
+                      `Affaire chez ${o.client}, portée par ${o.commercial} à l'étape « ${o.stage} » : ${formatFcfa(o.value_xof)} FCFA de valeur brute, ramenés à ${formatFcfa(o.weighted_xof)} FCFA une fois la probabilité de ${formatPct(o.probability_pct, 0)} % appliquée.`,
                       o.deadline
                         ? `Clôture annoncée au ${formatDate(o.deadline)}, encore devant nous. L'affaire est ouverte depuis ${formatNumber(o.age_days)} jours.`
                         : `Aucune date de clôture n'est renseignée : l'affaire ne peut pas être rattachée à un mois du forecast. Elle est ouverte depuis ${formatNumber(o.age_days)} jours.`,
@@ -289,8 +289,8 @@ export async function DcPipeline() {
                       ["Client", o.client],
                       ["Commercial", o.commercial],
                       ["Étape", o.stage],
-                      ["Valeur brute", `${formatMFcfa(o.value_xof)} M FCFA`],
-                      ["Valeur pondérée", `${formatMFcfa(o.weighted_xof)} M FCFA`],
+                      ["Valeur brute", `${formatFcfa(o.value_xof)} FCFA`],
+                      ["Valeur pondérée", `${formatFcfa(o.weighted_xof)} FCFA`],
                       ["Probabilité", `${formatPct(o.probability_pct, 0)} %`],
                       ["Échéance", o.deadline ? formatDate(o.deadline) : "non renseignée"],
                       ["Ouverte depuis", `${formatNumber(o.age_days)} jours`],
@@ -302,7 +302,7 @@ export async function DcPipeline() {
                 affiches={aConclure.length}
                 total={conclurables.length}
                 nom="affaires"
-                ou={`${formatMFcfa(aConclureTotal)} M FCFA pondérés au total`}
+                ou={`${formatFcfa(aConclureTotal)} FCFA pondérés au total`}
               />
             </>
           ) : (

@@ -1,6 +1,6 @@
 import { getBriefing } from "@/lib/api/briefing";
 import { getDso, getMargins, getMarginsAnalysis, getUnpaid, getUnpaidAnalysis } from "@/lib/api/dashboard";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, Brief, /* FootNote, */ HintLine, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
@@ -36,19 +36,32 @@ export async function DfVision() {
       ? dso.delai_moyen_recouvrement_reel_jours - dso.delai_moyen_accorde_jours
       : null;
 
-  const margeEcart = margins.stats.perc_marge_definitive_moyen - margins.stats.perc_marge_provisoire_moyen;
+  // Taux AGRÉGÉS (`taux_marge_*`, ratio des totaux) et non `perc_marge_*_moyen`,
+  // qui sont des moyennes non pondérées de pourcentages par dossier : sur ce
+  // miroir la provisoire y vaut -745 %, un chiffre que l'écran affichait tel quel.
+  const tauxProv = margins.stats.taux_marge_provisoire_pct;
+  const tauxDef = margins.stats.taux_marge_definitive_pct;
+  // Un dossier sans dépense imputée affiche 100 % de marge par construction. Le
+  // taux définitif n'est donc publiable que si l'imputation couvre une part
+  // suffisante du CA de l'exercice ; en dessous du seuil, la tuile annonce la
+  // couverture À LA PLACE du chiffre plutôt qu'un « 99,99 % » flatteur et faux.
+  const margeExploitable = margins.stats.marge_definitive_exploitable;
+  const couvertureMarge = margins.stats.couverture_marge_definitive_pct;
+  const margeEcart =
+    margeExploitable && tauxDef !== null && tauxProv !== null ? tauxDef - tauxProv : null;
+  const margeErodee = margeEcart !== null && margeEcart < 0;
 
   return (
     <>
       <Brief
         kicker="Cash · encaissement et marge"
-        headline={`${formatMFcfa(exposition)} M FCFA d'encours client, dont ${formatMFcfa(retard90)} M échus depuis plus de 90 jours.`}
+        headline={`${formatFcfa(exposition)} FCFA d'encours client, dont ${formatFcfa(retard90)} échus depuis plus de 90 jours.`}
         lines={briefLines}
         paragraphs={
           briefLines.length
             ? undefined
             : [
-                `L'encours client atteint ${formatMFcfa(exposition)} M FCFA sur ${formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)} factures impayées. Le briefing du jour n'est pas encore généré pour ce profil.`,
+                `L'encours client atteint ${formatFcfa(exposition)} FCFA sur ${formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)} factures impayées. Le briefing du jour n'est pas encore généré pour ce profil.`,
               ]
         }
         pills={[
@@ -61,7 +74,12 @@ export async function DfVision() {
                 : `DSO approché ${formatNumber(dso?.dso_approx_jours ?? 0)} j`,
             hot: ecartDelai !== null && ecartDelai > 0,
           },
-          { label: `Marge définitive ${formatPct(margins.stats.perc_marge_definitive_moyen)} %`, hot: margeEcart < 0 },
+          {
+            label: margeExploitable
+              ? `Marge définitive ${formatPct(tauxDef, 1)} %`
+              : `Marge définitive non exploitable (couverture ${formatPct(couvertureMarge, 1)} %)`,
+            hot: margeErodee,
+          },
         ]}
       />
 
@@ -74,8 +92,8 @@ export async function DfVision() {
           rang="principal"
           label="Encours client"
           aide="Le total de ce que vos clients vous doivent à ce jour, factures émises et non encore réglées."
-          value={formatMFcfa(exposition)}
-          unit="M FCFA"
+          value={formatFcfa(exposition)}
+          unit="FCFA"
           reading={`${formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)} factures impayées`}
           readingVariant="neg"
           detail={{
@@ -84,13 +102,13 @@ export async function DfVision() {
             tag: `${formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)} factures`,
             tagVariant: "r",
             body: [
-              `L'encours total impayé s'élève à ${formatMFcfa(exposition)} M FCFA, réparti sur ${formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)} factures.`,
-              `${formatMFcfa(retard90)} M FCFA, soit ${formatPct(part90, 0)} % de cet encours, sont échus depuis plus de 90 jours. Au-delà de ce seuil, le recouvrement amiable devient rarement suffisant.`,
+              `L'encours total impayé s'élève à ${formatFcfa(exposition)} FCFA, réparti sur ${formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)} factures.`,
+              `${formatFcfa(retard90)} FCFA, soit ${formatPct(part90, 0)} % de cet encours, sont échus depuis plus de 90 jours. Au-delà de ce seuil, le recouvrement amiable devient rarement suffisant.`,
             ],
             kv: [
-              ["Encours total", `${formatMFcfa(exposition)} M FCFA`],
+              ["Encours total", `${formatFcfa(exposition)} FCFA`],
               ["Factures impayées", formatNumber(unpaid?.exposure.nb_factures_impayees ?? 0)],
-              ["Échu > 90 jours", `${formatMFcfa(retard90)} M FCFA`],
+              ["Échu > 90 jours", `${formatFcfa(retard90)} FCFA`],
               ["Part > 90 jours", `${formatPct(part90, 0)} %`],
             ],
             // note: "Factures non réglées du miroir Odoo, hors litiges déclarés.",
@@ -114,15 +132,23 @@ export async function DfVision() {
           readingVariant={ecartDelai !== null && ecartDelai > 0 ? "neg" : "wat"}
           detail={{
             kicker: "Indicateur · délai de règlement",
-            title: "Délai moyen de recouvrement",
+            title: dso?.exercice_delais
+              ? `Délai moyen de recouvrement — règlements ${dso.exercice_delais}`
+              : "Délai moyen de recouvrement",
             tag: ecartDelai !== null && ecartDelai > 0 ? "au-delà du contractuel" : "à fiabiliser",
             tagVariant: ecartDelai !== null && ecartDelai > 0 ? "r" : "w",
             body: [
               dso?.delai_moyen_recouvrement_reel_jours != null
                 ? `Le délai réel constaté est de ${formatNumber(dso.delai_moyen_recouvrement_reel_jours)} jours, contre ${dso.delai_moyen_accorde_jours != null ? `${formatNumber(dso.delai_moyen_accorde_jours)} jours` : "un délai non renseigné"} accordé contractuellement.`
                 : `Les dates de paiement réelles ne sont pas encore synchronisées : le chiffre affiché (${formatNumber(dso?.dso_approx_jours ?? 0)} j) est une approximation calculée sur l'encours rapporté au CA.`,
+              // Sur quoi la moyenne est mesurée : le nombre de règlements est ce
+              // qui dit si elle est solide. Un exercice à peine entamé en porte
+              // peu, et le lecteur doit le voir plutôt que de le supposer.
+              dso?.nb_factures_avec_date_paiement
+                ? `Mesuré sur ${formatNumber(dso.nb_factures_avec_date_paiement)} facture(s) encaissée(s)${dso.exercice_delais ? ` en ${dso.exercice_delais}` : ""}, quelle que soit leur année d'émission — borner sur l'émission ne retiendrait que les factures déjà réglées la même année, donc les payeurs les plus rapides.`
+                : "Aucun règlement daté sur l'exercice : le chiffre affiché retombe sur l'approximation bilancielle.",
               ecartDelai !== null && ecartDelai > 0
-                ? `L'écart de ${formatNumber(ecartDelai)} jours est systémique, pas le fait de quelques comptes isolés : il porte sur l'ensemble des factures suivies et pèse directement sur le besoin en trésorerie.`
+                ? `L'écart de ${formatNumber(ecartDelai)} jours est systémique, pas le fait de quelques comptes isolés : il porte sur l'ensemble des factures encaissées sur la période et pèse directement sur le besoin en trésorerie.`
                 : "Ce chiffre reste à fiabiliser dès que la synchronisation des règlements sera complète.",
             ],
             kv: [
@@ -136,9 +162,13 @@ export async function DfVision() {
                   ? `${formatNumber(dso.delai_moyen_recouvrement_reel_jours)} j`
                   : "non calculable",
               ],
-              ["Taux de recouvrement", `${formatPct(dso?.taux_recouvrement_pct ?? null, 1)} %`],
-              ["Montant en attente", `${formatMFcfa(dso?.montant_en_attente_xof)} M FCFA`],
-              ["Factures suivies", formatNumber(dso?.total_factures ?? 0)],
+              // Les deux délais ci-dessus portent sur les règlements de
+              // l'exercice ; ces trois lignes sont des cumuls sur tout le
+              // miroir. Deux portées dans un même tableau doivent être écrites,
+              // sinon la colonne se lit comme un seul exercice.
+              ["Taux de recouvrement (cumul)", `${formatPct(dso?.taux_recouvrement_pct ?? null, 1)} %`],
+              ["Montant en attente (tous exercices)", `${formatFcfa(dso?.montant_en_attente_xof)} FCFA`],
+              ["Factures suivies (tous exercices)", formatNumber(dso?.total_factures ?? 0)],
             ],
             // note: dso?.note ?? "Calculé sur les factures et règlements du miroir Odoo.",
           }}
@@ -147,27 +177,47 @@ export async function DfVision() {
           span={4}
           label="Marge définitive moyenne"
           aide="Ce que vous gardez en moyenne sur un dossier une fois tout facturé et payé. C'est la marge réellement constatée, pas celle espérée au devis."
-          value={`${formatPct(margins.stats.perc_marge_definitive_moyen)}`}
-          unit="%"
-          reading={`${margeEcart >= 0 ? "+" : ""}${formatPct(margeEcart, 1)} pts vs provisoire`}
-          readingVariant={margeEcart < 0 ? "neg" : "pos"}
+          value={margeExploitable ? `${formatPct(tauxDef, 1)}` : "—"}
+          unit={margeExploitable ? "%" : ""}
+          reading={
+            margeExploitable
+              ? `${margeEcart !== null && margeEcart >= 0 ? "+" : ""}${formatPct(margeEcart, 1)} pts vs provisoire`
+              : `dépense imputée sur ${formatPct(couvertureMarge, 1)} % du CA — non exploitable`
+          }
+          readingVariant={margeErodee ? "neg" : margeExploitable ? "pos" : "wat"}
           detail={{
             kicker: "Indicateur · marge",
-            title: "Marge définitive contre marge prévue",
-            tag: margeEcart < 0 ? "érosion constatée" : "marge tenue",
-            tagVariant: margeEcart < 0 ? "r" : "s",
+            title: `Marge définitive contre marge prévue — exercice ${margins.stats.annee}`,
+            tag: margeExploitable ? (margeErodee ? "érosion constatée" : "marge tenue") : "non exploitable",
+            tagVariant: margeExploitable ? (margeErodee ? "r" : "s") : "w",
             body: [
-              `La marge prévue à la valorisation initiale des dossiers était de ${formatPct(margins.stats.perc_marge_provisoire_moyen)} %. La marge constatée sur ce qui a été réellement facturé ressort à ${formatPct(margins.stats.perc_marge_definitive_moyen)} %, sur ${formatNumber(margins.stats.nb_dossiers)} dossiers.`,
-              margeEcart < 0
-                ? `L'écart de ${formatPct(Math.abs(margeEcart), 1)} points se lit comme une érosion : ce qui a été vendu rapporte moins que prévu au devis. Le détail des lignes d'achat, qui permettrait d'isoler l'effet ciseau, n'est pas accessible depuis ce profil.`
-                : "La marge réalisée tient la prévision du devis, ce qui indique un chiffrage initial fiable.",
+              margeExploitable
+                ? `La marge prévue à la valorisation initiale des dossiers était de ${formatPct(tauxProv, 1)} %. La marge constatée sur ce qui a été réellement facturé ressort à ${formatPct(tauxDef, 1)} %, mesurée sur les ${formatNumber(margins.stats.nb_dossiers_marge_imputee)} dossiers dont la dépense est imputée.`
+                : `La marge définitive n'est pas mesurable sur l'exercice ${margins.stats.annee} : la dépense n'est imputée que sur ${formatNumber(margins.stats.nb_dossiers_marge_imputee)} dossier(s), soit ${formatPct(couvertureMarge, 1)} % du CA facturé, très en dessous du seuil de ${formatPct(margins.stats.seuil_couverture_marge_pct, 0)} % retenu.`,
+              margeExploitable
+                ? (margeErodee
+                    ? `L'écart de ${formatPct(Math.abs(margeEcart ?? 0), 1)} points se lit comme une érosion : ce qui a été vendu rapporte moins que prévu au devis. Le détail des lignes d'achat, qui permettrait d'isoler l'effet ciseau, n'est pas accessible depuis ce profil.`
+                    : "La marge réalisée tient la prévision du devis, ce qui indique un chiffrage initial fiable.")
+                : "Un dossier sans dépense imputée affiche 100 % de marge par construction : publier la moyenne donnerait un taux flatteur et faux. La marge provisoire ci-dessous, elle, reste mesurée sur l'ensemble de l'exercice.",
+              // Le taux provisoire n'a pas la même condition de validité : il
+              // repose sur la valorisation du devis, renseignée dès l'ouverture.
+              `Marge provisoire de l'exercice : ${formatPct(tauxProv, 1)} % sur ${formatNumber(margins.stats.nb_dossiers)} dossiers.`,
             ],
             kv: [
-              ["Marge provisoire", `${formatPct(margins.stats.perc_marge_provisoire_moyen)} %`],
-              ["Marge définitive", `${formatPct(margins.stats.perc_marge_definitive_moyen)} %`],
-              ["Écart", `${margeEcart >= 0 ? "+" : ""}${formatPct(margeEcart, 1)} pts`],
-              ["Dossiers", formatNumber(margins.stats.nb_dossiers)],
-              ["Reste fournisseurs à payer", `${formatMFcfa(margins.stats.fournisseurs_restant)} M FCFA`],
+              ["Marge provisoire", `${formatPct(tauxProv, 1)} %`],
+              [
+                "Marge définitive",
+                margeExploitable ? `${formatPct(tauxDef, 1)} %` : "non exploitable",
+              ],
+              ["Écart", margeEcart !== null ? `${margeEcart >= 0 ? "+" : ""}${formatPct(margeEcart, 1)} pts` : "—"],
+              [
+                "Couverture de la dépense imputée",
+                `${formatPct(couvertureMarge, 1)} % du CA (seuil ${formatPct(margins.stats.seuil_couverture_marge_pct, 0)} %)`,
+              ],
+              [`Dossiers ouverts en ${margins.stats.annee}`, formatNumber(margins.stats.nb_dossiers)],
+              // Stock : dette fournisseur à ce jour, tous exercices confondus —
+              // la borner à l'exercice en ferait disparaître l'essentiel.
+              ["Reste fournisseurs à payer (tous exercices)", `${formatFcfa(margins.stats.fournisseurs_restant)} FCFA`],
             ],
             // note: "Proxy assumé : comparaison provisoire/définitif, faute d'accès au détail des lignes de commandes fournisseurs depuis ce profil.",
           }}
@@ -191,7 +241,7 @@ export async function DfVision() {
                   return {
                     name: d.client,
                     sub: `${formatNumber(d.nb_factures)} facture(s) · retard max ${formatNumber(d.retard_max_jours)} j · ${formatPct(part, 0)} % de l'encours`,
-                    value: `${formatMFcfa(d.montant_total_xof)} M`,
+                    value: `${formatFcfa(d.montant_total_xof)}`,
                     pct: topDebtorAmount ? (d.montant_total_xof / topDebtorAmount) * 100 : 0,
                     variant: d.retard_max_jours > 90 ? ("r" as const) : ("w" as const),
                     detail: {
@@ -200,13 +250,13 @@ export async function DfVision() {
                       tag: d.retard_max_jours > 90 ? "au-delà de 90 jours" : "retard modéré",
                       tagVariant: d.retard_max_jours > 90 ? ("r" as const) : ("w" as const),
                       body: [
-                        `${d.client} porte ${formatMFcfa(d.montant_total_xof)} M FCFA d'impayés sur ${formatNumber(d.nb_factures)} facture(s), avec un retard maximal de ${formatNumber(d.retard_max_jours)} jours.`,
+                        `${d.client} porte ${formatFcfa(d.montant_total_xof)} FCFA d'impayés sur ${formatNumber(d.nb_factures)} facture(s), avec un retard maximal de ${formatNumber(d.retard_max_jours)} jours.`,
                         d.retard_max_jours > 90
                           ? "Au-delà de 90 jours, la relance commerciale simple a généralement déjà échoué. La question devient celle de l'escalade : mise en demeure, blocage des livraisons, ou étalement négocié si le compte reste stratégique."
                           : "Le retard reste dans une zone où une relance commerciale ferme suffit habituellement à débloquer le règlement.",
                       ],
                       kv: [
-                        ["Montant impayé", `${formatMFcfa(d.montant_total_xof)} M FCFA`],
+                        ["Montant impayé", `${formatFcfa(d.montant_total_xof)} FCFA`],
                         ["Factures concernées", formatNumber(d.nb_factures)],
                         ["Retard maximal", `${formatNumber(d.retard_max_jours)} jours`],
                         ["Part de l'encours", `${formatPct(part, 0)} %`],
@@ -249,15 +299,15 @@ export async function DfVision() {
                         detail={{
                           kicker: "Facture impayée",
                           title: String(inv.client),
-                          tag: `${formatMFcfa(Number(inv.montant_xof))} M FCFA`,
+                          tag: `${formatFcfa(Number(inv.montant_xof))} FCFA`,
                           tagVariant: "w",
                           body: [
-                            `Facture de ${formatMFcfa(Number(inv.montant_xof))} M FCFA au nom de ${String(inv.client)}, d'échéance ${String(inv["échéance"] ?? "non renseignée")} et de statut « ${String(inv.statut)} ».`,
-                            `Elle fait partie des plus gros encours ouverts, qui totalisent ${formatMFcfa(totalTopInvoices)} M FCFA. À vérifier avant la prochaine clôture, en particulier si l'échéance est déjà dépassée.`,
+                            `Facture de ${formatFcfa(Number(inv.montant_xof))} FCFA au nom de ${String(inv.client)}, d'échéance ${String(inv["échéance"] ?? "non renseignée")} et de statut « ${String(inv.statut)} ».`,
+                            `Elle fait partie des plus gros encours ouverts, qui totalisent ${formatFcfa(totalTopInvoices)} FCFA. À vérifier avant la prochaine clôture, en particulier si l'échéance est déjà dépassée.`,
                           ],
                           kv: [
                             ["Client", String(inv.client)],
-                            ["Montant", `${formatMFcfa(Number(inv.montant_xof))} M FCFA`],
+                            ["Montant", `${formatFcfa(Number(inv.montant_xof))} FCFA`],
                             ["Échéance", String(inv["échéance"] ?? "—")],
                             ["Statut", String(inv.statut)],
                           ],
@@ -265,7 +315,7 @@ export async function DfVision() {
                         }}
                       >
                         <td>{String(inv.client)}</td>
-                        <td className="r mono">{formatMFcfa(Number(inv.montant_xof))} M</td>
+                        <td className="r mono">{formatFcfa(Number(inv.montant_xof))} M</td>
                         <td className="mono">{String(inv["échéance"] ?? "—")}</td>
                         <td>
                           <Tag variant="w">{String(inv.statut)}</Tag>
@@ -276,7 +326,7 @@ export async function DfVision() {
                 </table>
               </div>
               {/* <FootNote>
-                Ces {formatNumber(topInvoices.length)} factures représentent {formatMFcfa(totalTopInvoices)} M FCFA
+                Ces {formatNumber(topInvoices.length)} factures représentent {formatFcfa(totalTopInvoices)} FCFA
                 d&apos;encours. La détection d&apos;anomalies fines (doublons, écarts commande/facture) reste à
                 construire côté backend.
               </FootNote> */}

@@ -1,5 +1,5 @@
 import { getMarcheDc } from "@/lib/api/commercial";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { SourceNote, sourceKick } from "./source";
@@ -147,7 +147,7 @@ export async function DcSecteurs() {
               ]
                 .filter(Boolean)
                 .join(" · "),
-              value: `${formatMFcfa(s.ca_xof)} M`,
+              value: `${formatFcfa(s.ca_xof)}`,
               pct: (s.ca_xof / maxSecteur) * 100,
               variant: s.croissance_pct < 0 ? ("r" as const) : undefined,
               detail: {
@@ -156,18 +156,18 @@ export async function DcSecteurs() {
                 tag: "donnée statique",
                 tagVariant: "n" as const,
                 body: [
-                  `Le gabarit pose ${formatMFcfa(s.ca_xof)} M FCFA de CA sur ${formatNumber(s.nb_clients)} clients pour ce secteur, soit ${formatPct(s.part_ca_pct, 0)} % du CA, avec une croissance de ${formatPct(s.croissance_pct, 1)} %.`,
+                  `Le gabarit pose ${formatFcfa(s.ca_xof)} FCFA de CA sur ${formatNumber(s.nb_clients)} clients pour ce secteur, soit ${formatPct(s.part_ca_pct, 0)} % du CA, avec une croissance de ${formatPct(s.croissance_pct, 1)} %.`,
                   s.part_marche_pct !== null
-                    ? `Rapporté à une taille de marché supposée de ${formatMFcfa(s.taille_marche_xof)} M FCFA, cela donnerait une part de marché de ${formatPct(s.part_marche_pct, 2)} %. Cette taille de marché est un ordre de grandeur de travail, à remplacer par une étude ou des données publiques.`
+                    ? `Rapporté à une taille de marché supposée de ${formatFcfa(s.taille_marche_xof)} FCFA, cela donnerait une part de marché de ${formatPct(s.part_marche_pct, 2)} %. Cette taille de marché est un ordre de grandeur de travail, à remplacer par une étude ou des données publiques.`
                     : "Aucune taille de marché n'est associée à ce secteur.",
                   secteurs.raison,
                 ],
                 kv: [
-                  ["CA (gabarit)", `${formatMFcfa(s.ca_xof)} M FCFA`],
+                  ["CA (gabarit)", `${formatFcfa(s.ca_xof)} FCFA`],
                   ["Clients (gabarit)", formatNumber(s.nb_clients)],
                   ["Part du CA", `${formatPct(s.part_ca_pct, 0)} %`],
                   ["Croissance", `${formatPct(s.croissance_pct, 1)} %`],
-                  ["Taille de marché supposée", `${formatMFcfa(s.taille_marche_xof)} M FCFA`],
+                  ["Taille de marché supposée", `${formatFcfa(s.taille_marche_xof)} FCFA`],
                   ["Part de marché supposée", s.part_marche_pct !== null ? `${formatPct(s.part_marche_pct, 2)} %` : "—"],
                 ],
               },

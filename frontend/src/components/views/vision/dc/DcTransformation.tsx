@@ -3,7 +3,7 @@ import {
   getPerformanceSummary,
   getRevenueBySalesperson,
 } from "@/lib/api/dashboard";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { AnalysisSlot } from "@/components/ui/analysis-slot";
 import { DcMixOffreTuiles } from "./DcMixOffre";
@@ -18,8 +18,16 @@ import { DcMixOffreTuiles } from "./DcMixOffre";
 export async function DcTransformation() {
   const [performance, salespeople] = await Promise.all([
     getPerformanceSummary(),
+    // Sans argument, l'endpoint sert l'exercice en cours (cf. `_annee` dans
+    // api/v1/dashboard.py). C'est la même borne que le débrief DG, qui demandait
+    // déjà l'année : les deux écrans disent désormais le même CA par commercial.
     getRevenueBySalesperson(),
   ]);
+  // Le taux de victoire et les affaires perdues ci-dessus restent HISTORIQUES
+  // (`/performance/summary` n'a pas de borne, par construction : un taux de
+  // transformation se mesure sur la durée). Les deux portées cohabitent sur
+  // l'écran, donc chacune est écrite là où elle s'affiche.
+  const exercice = new Date().getFullYear();
 
   const topSalespeople = (salespeople ?? [])
     .slice()
@@ -66,7 +74,7 @@ export async function DcTransformation() {
             tagVariant: ecartWin !== null && ecartWin > 10 ? "r" : "a",
             body: win
               ? [
-                  `${formatNumber(win.gagnees_nb)} affaires gagnées sur ${formatNumber(win.gagnees_nb + win.perdues_nb)} closes, soit ${formatPct(win.taux_nb_pct, 0)} % en nombre. En valeur, ${formatMFcfa(win.gagnees_valeur_xof)} M FCFA gagnés contre ${formatMFcfa(win.perdues_valeur_xof)} M perdus, soit ${formatPct(win.taux_valeur_pct, 0)} %.`,
+                  `${formatNumber(win.gagnees_nb)} affaires gagnées sur ${formatNumber(win.gagnees_nb + win.perdues_nb)} closes, soit ${formatPct(win.taux_nb_pct, 0)} % en nombre. En valeur, ${formatFcfa(win.gagnees_valeur_xof)} FCFA gagnés contre ${formatFcfa(win.perdues_valeur_xof)} perdus, soit ${formatPct(win.taux_valeur_pct, 0)} %.`,
                   ecartWin !== null && ecartWin > 0
                     ? "Gagner en nombre plus qu'en valeur, c'est remporter les petits dossiers et perdre les gros. Ce n'est pas un problème de volume commercial : c'est un problème de qualification ou de prix sur les grandes opportunités."
                     : "Le taux en valeur suit le taux en nombre : la taille du dossier ne dégrade pas la transformation.",
@@ -79,8 +87,8 @@ export async function DcTransformation() {
                   ["Taux en valeur", `${formatPct(win.taux_valeur_pct, 0)} %`],
                   ["Affaires gagnées", formatNumber(win.gagnees_nb)],
                   ["Affaires perdues", formatNumber(win.perdues_nb)],
-                  ["Valeur gagnée", `${formatMFcfa(win.gagnees_valeur_xof)} M FCFA`],
-                  ["Valeur perdue", `${formatMFcfa(win.perdues_valeur_xof)} M FCFA`],
+                  ["Valeur gagnée", `${formatFcfa(win.gagnees_valeur_xof)} FCFA`],
+                  ["Valeur perdue", `${formatFcfa(win.perdues_valeur_xof)} FCFA`],
                 ]
               : [],
           }}
@@ -89,11 +97,11 @@ export async function DcTransformation() {
           span={4}
           label="Valeur perdue"
           aide="Le montant total des affaires que vous n'avez pas remportées. C'est le manque à gagner sur lequel travailler, pas une fatalité."
-          value={performance ? formatMFcfa(performance.lost_deals.montant_total_xof) : "—"}
-          unit="M FCFA"
+          value={performance ? formatFcfa(performance.lost_deals.montant_total_xof) : "—"}
+          unit="FCFA"
           reading={
             performance
-              ? `${formatNumber(performance.lost_deals.nb_total)} affaires${perteMoyenne !== null ? ` · ${formatMFcfa(perteMoyenne)} M en moyenne` : ""}`
+              ? `${formatNumber(performance.lost_deals.nb_total)} affaires${perteMoyenne !== null ? ` · ${formatFcfa(perteMoyenne)} en moyenne` : ""}`
               : "indisponible"
           }
           readingVariant="neg"
@@ -104,16 +112,16 @@ export async function DcTransformation() {
             tagVariant: "r",
             body: performance
               ? [
-                  `${formatMFcfa(performance.lost_deals.montant_total_xof)} M FCFA perdus sur ${formatNumber(performance.lost_deals.nb_total)} opportunités closes en échec${perteMoyenne !== null ? `, soit ${formatMFcfa(perteMoyenne)} M FCFA par dossier raté` : ""}.`,
+                  `${formatFcfa(performance.lost_deals.montant_total_xof)} FCFA perdus sur ${formatNumber(performance.lost_deals.nb_total)} opportunités closes en échec${perteMoyenne !== null ? `, soit ${formatFcfa(perteMoyenne)} FCFA par dossier raté` : ""}.`,
                   "Le bloc « Où se concentrent les pertes » ventile ce montant par client : une concentration sur un même compte interroge le positionnement, pas la performance individuelle.",
                   "Le motif de perte n'est exploitable que s'il a été renseigné dans Odoo — le cockpit ne le devine pas.",
                 ]
               : ["Les affaires perdues ne sont pas accessibles depuis ce profil."],
             kv: performance
               ? [
-                  ["Valeur perdue", `${formatMFcfa(performance.lost_deals.montant_total_xof)} M FCFA`],
+                  ["Valeur perdue", `${formatFcfa(performance.lost_deals.montant_total_xof)} FCFA`],
                   ["Affaires perdues", formatNumber(performance.lost_deals.nb_total)],
-                  ["Perte moyenne", perteMoyenne !== null ? `${formatMFcfa(perteMoyenne)} M FCFA` : "—"],
+                  ["Perte moyenne", perteMoyenne !== null ? `${formatFcfa(perteMoyenne)} FCFA` : "—"],
                   ["Clients concernés", formatNumber(performance.lost_deals.by_client.length)],
                 ]
               : [],
@@ -132,24 +140,24 @@ export async function DcTransformation() {
           }
           readingVariant={partPremier !== null && partPremier > 40 ? "wat" : undefined}
           detail={{
-            kicker: "Indicateur · dépendance commerciale",
+            kicker: `Indicateur · dépendance commerciale · exercice ${exercice}`,
             title: premier ? premier.commercial : "Premier contributeur",
             tag: partPremier !== null ? `${formatPct(partPremier, 0)} % du CA équipe` : "—",
             tagVariant: partPremier !== null && partPremier > 40 ? "w" : "a",
             body: premier
               ? [
-                  `${premier.commercial} a réalisé ${formatMFcfa(topSalesCa)} M FCFA, soit ${formatPct(partPremier ?? 0, 0)} % des ${formatMFcfa(totalCaEquipe)} M FCFA de l'équipe.`,
+                  `${premier.commercial} a réalisé ${formatFcfa(topSalesCa)} FCFA sur l'exercice ${exercice}, soit ${formatPct(partPremier ?? 0, 0)} % des ${formatFcfa(totalCaEquipe)} FCFA de l'équipe.`,
                   partPremier !== null && partPremier > 40
                     ? "Au-delà de 40 %, la performance devient une dépendance : l'absence de cette personne déplacerait le résultat commercial."
                     : "Le poids du premier portefeuille reste dans la moyenne de l'équipe.",
                   "Le bloc « Coaching de portefeuille » détaille la répartition complète.",
                 ]
-              : ["Aucun commercial rattaché sur la période."],
+              : [`Aucun commercial rattaché sur l'exercice ${exercice}.`],
             kv: premier
               ? [
-                  ["CA réalisé", `${formatMFcfa(topSalesCa)} M FCFA`],
+                  [`CA réalisé (${exercice})`, `${formatFcfa(topSalesCa)} FCFA`],
                   ["Part du CA équipe", partPremier !== null ? `${formatPct(partPremier, 0)} %` : "—"],
-                  ["CA de l'équipe", `${formatMFcfa(totalCaEquipe)} M FCFA`],
+                  [`CA de l'équipe (${exercice})`, `${formatFcfa(totalCaEquipe)} FCFA`],
                   ["Commerciaux", formatNumber(topSalespeople.length)],
                 ]
               : [],
@@ -181,20 +189,20 @@ export async function DcTransformation() {
                   return {
                     name: c.client,
                     sub: `${formatPct(part, 0)} % de la valeur perdue`,
-                    value: `${formatMFcfa(c.montant_xof)} M`,
+                    value: `${formatFcfa(c.montant_xof)}`,
                     pct: part,
                     variant: "r" as const,
                     detail: {
                       kicker: "Client · affaires perdues",
                       title: c.client,
-                      tag: `${formatMFcfa(c.montant_xof)} M perdus`,
+                      tag: `${formatFcfa(c.montant_xof)} perdus`,
                       tagVariant: "r" as const,
                       body: [
-                        `${c.client} concentre ${formatMFcfa(c.montant_xof)} M FCFA d'affaires perdues, soit ${formatPct(part, 0)} % de la valeur perdue totale.`,
+                        `${c.client} concentre ${formatFcfa(c.montant_xof)} FCFA d'affaires perdues, soit ${formatPct(part, 0)} % de la valeur perdue totale.`,
                         "Une concentration de pertes sur un même compte se lit rarement comme un problème de prix isolé : elle interroge le positionnement sur ce client ou la qualification en amont.",
                       ],
                       kv: [
-                        ["Valeur perdue", `${formatMFcfa(c.montant_xof)} M FCFA`],
+                        ["Valeur perdue", `${formatFcfa(c.montant_xof)} FCFA`],
                         ["Part du total perdu", `${formatPct(part, 0)} %`],
                       ],
                       // note: "Opportunités marquées perdues dans Odoo, historique complet du miroir.",
@@ -214,21 +222,21 @@ export async function DcTransformation() {
                 items={performance.lost_deals.top_deals.slice(0, 5).map((d) => ({
                   title: String(d.name),
                   sub: `${d.client} · ${d.commercial}`,
-                  tag: `${formatMFcfa(Number(d.montant_xof))} M`,
+                  tag: `${formatFcfa(Number(d.montant_xof))}`,
                   tagVariant: "r" as const,
                   detail: {
                     kicker: "Affaire perdue",
                     title: String(d.name),
-                    tag: `${formatMFcfa(Number(d.montant_xof))} M FCFA`,
+                    tag: `${formatFcfa(Number(d.montant_xof))} FCFA`,
                     tagVariant: "r" as const,
                     body: [
-                      `Affaire chez ${d.client}, portée par ${d.commercial}, perdue pour un montant de ${formatMFcfa(Number(d.montant_xof))} M FCFA.`,
+                      `Affaire chez ${d.client}, portée par ${d.commercial}, perdue pour un montant de ${formatFcfa(Number(d.montant_xof))} FCFA.`,
                       "Le motif de perte n'est exploitable que s'il a été renseigné dans Odoo — le cockpit ne le devine pas.",
                     ],
                     kv: [
                       ["Client", d.client],
                       ["Commercial", String(d.commercial)],
-                      ["Montant", `${formatMFcfa(Number(d.montant_xof))} M FCFA`],
+                      ["Montant", `${formatFcfa(Number(d.montant_xof))} FCFA`],
                     ],
                     // note: "Opportunité close en perte dans le miroir Odoo.",
                   },
@@ -242,8 +250,8 @@ export async function DcTransformation() {
           <Tile
             span={12}
             title="Coaching de portefeuille"
-            kick="CA par commercial"
-            aide="Le poids de chaque commercial dans le chiffre d'affaires. Sert à repérer qui aurait besoin d'appui, et si l'activité tient sur trop peu de personnes."
+            kick={`CA par commercial · exercice ${exercice}`}
+            aide={`Le poids de chaque commercial dans le chiffre d'affaires de l'exercice ${exercice}. Sert à repérer qui aurait besoin d'appui, et si l'activité tient sur trop peu de personnes.`}
           >
             <HintLine>Cliquez un commercial pour son portefeuille</HintLine>
             <Bars
@@ -252,8 +260,8 @@ export async function DcTransformation() {
                 const part = totalCaEquipe ? (ca / totalCaEquipe) * 100 : 0;
                 return {
                   name: s.commercial,
-                  sub: `${formatNumber(Number(s.nb_commandes))} commandes · ${formatNumber(Number(s.nb_clients_distincts))} clients · panier ${formatMFcfa(Number(s.panier_moyen_xof))} M`,
-                  value: `${formatMFcfa(ca)} M`,
+                  sub: `${formatNumber(Number(s.nb_commandes))} commandes · ${formatNumber(Number(s.nb_clients_distincts))} clients · panier ${formatFcfa(Number(s.panier_moyen_xof))}`,
+                  value: `${formatFcfa(ca)}`,
                   pct: topSalesCa ? (ca / topSalesCa) * 100 : 0,
                   variant: part > 40 ? ("w" as const) : undefined,
                   detail: {
@@ -262,17 +270,17 @@ export async function DcTransformation() {
                     tag: `${formatPct(part, 0)} % du CA équipe`,
                     tagVariant: part > 40 ? ("w" as const) : ("a" as const),
                     body: [
-                      `${s.commercial} a réalisé ${formatMFcfa(ca)} M FCFA sur ${formatNumber(Number(s.nb_commandes))} commandes auprès de ${formatNumber(Number(s.nb_clients_distincts))} clients distincts, pour un panier moyen de ${formatMFcfa(Number(s.panier_moyen_xof))} M FCFA.`,
+                      `${s.commercial} a réalisé ${formatFcfa(ca)} FCFA sur ${formatNumber(Number(s.nb_commandes))} commandes auprès de ${formatNumber(Number(s.nb_clients_distincts))} clients distincts, pour un panier moyen de ${formatFcfa(Number(s.panier_moyen_xof))} FCFA.`,
                       part > 40
                         ? "Ce commercial porte plus de 40 % du chiffre de l'équipe. C'est une performance, et simultanément une dépendance : son départ ou son absence déplacerait le résultat commercial."
                         : "Le poids de ce portefeuille reste dans la moyenne de l'équipe.",
                     ],
                     kv: [
-                      ["CA réalisé", `${formatMFcfa(ca)} M FCFA`],
+                      ["CA réalisé", `${formatFcfa(ca)} FCFA`],
                       ["Part du CA équipe", `${formatPct(part, 0)} %`],
                       ["Commandes", formatNumber(Number(s.nb_commandes))],
                       ["Clients distincts", formatNumber(Number(s.nb_clients_distincts))],
-                      ["Panier moyen", `${formatMFcfa(Number(s.panier_moyen_xof))} M FCFA`],
+                      ["Panier moyen", `${formatFcfa(Number(s.panier_moyen_xof))} FCFA`],
                     ],
                     // note: "CA rattaché au commercial renseigné sur la commande Odoo.",
                   },

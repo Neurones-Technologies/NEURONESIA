@@ -1,5 +1,5 @@
 import { getObjectifs, Periode } from "@/lib/api/commercial";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { PeriodeNav } from "./periode-nav";
@@ -58,8 +58,8 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           span={4}
           label={`Objectif ${gap.annee}`}
           aide="La cible de chiffre d'affaires de l'année. Tant qu'elle n'est pas saisie dans le référentiel, le cockpit en propose une, calculée sur l'exercice précédent."
-          value={formatMFcfa(equipe.objectif_annuel_xof)}
-          unit="M FCFA"
+          value={formatFcfa(equipe.objectif_annuel_xof)}
+          unit="FCFA"
           reading={gap.source === "reel" ? "objectif saisi" : "gabarit · non validé"}
           readingVariant={gap.source === "reel" ? undefined : "wat"}
           detail={{
@@ -68,16 +68,16 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             tag: gap.source === "reel" ? "saisi" : "gabarit",
             tagVariant: gap.source === "reel" ? "s" : "w",
             body: [
-              `L'objectif retenu pour ${gap.annee} est de ${formatMFcfa(equipe.objectif_annuel_xof)} M FCFA. Origine : ${gap.origine_objectifs}.`,
+              `L'objectif retenu pour ${gap.annee} est de ${formatFcfa(equipe.objectif_annuel_xof)} FCFA. Origine : ${gap.origine_objectifs}.`,
               gap.regle_gabarit ??
                 "Cet objectif est celui saisi dans le référentiel de pilotage : il fait foi et sert de base au calcul de l'écart.",
-              `Le CA signé de l'exercice précédent s'est établi à ${formatMFcfa(equipe.realise_annee_precedente_xof)} M FCFA.`,
+              `Le CA signé de l'exercice précédent s'est établi à ${formatFcfa(equipe.realise_annee_precedente_xof)} FCFA.`,
             ],
             kv: [
-              ["Objectif annuel", `${formatMFcfa(equipe.objectif_annuel_xof)} M FCFA`],
-              ["Réalisé N-1", `${formatMFcfa(equipe.realise_annee_precedente_xof)} M FCFA`],
+              ["Objectif annuel", `${formatFcfa(equipe.objectif_annuel_xof)} FCFA`],
+              ["Réalisé N-1", `${formatFcfa(equipe.realise_annee_precedente_xof)} FCFA`],
               ["Origine", gap.source === "reel" ? "référentiel de pilotage" : "gabarit"],
-              ["Somme des objectifs individuels", `${formatMFcfa(couverture.somme_objectifs_individuels_xof)} M FCFA`],
+              ["Somme des objectifs individuels", `${formatFcfa(couverture.somme_objectifs_individuels_xof)} FCFA`],
             ],
           }}
         />
@@ -85,8 +85,8 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           span={4}
           label="Réalisé à date"
           aide="Ce qui a effectivement été signé depuis le début de l'année. Ce sont des commandes fermes, pas des affaires en cours."
-          value={formatMFcfa(equipe.realise_xof)}
-          unit="M FCFA signés"
+          value={formatFcfa(equipe.realise_xof)}
+          unit="FCFA signés"
           reading={
             equipe.part_ecoulee_annee_pct !== null
               ? `${formatPct(equipe.part_ecoulee_annee_pct, 0)} % de l'exercice écoulé`
@@ -98,14 +98,14 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             tag: "mesuré",
             tagVariant: "s",
             body: [
-              `${formatMFcfa(equipe.realise_xof)} M FCFA de commandes signées sur ${gap.annee}, dont ${formatMFcfa(couverture.realise_nominatif_xof)} M FCFA portés par un commercial nommé (${formatPct(couverture.part_nominative_pct, 0)} %).`,
+              `${formatFcfa(equipe.realise_xof)} FCFA de commandes signées sur ${gap.annee}, dont ${formatFcfa(couverture.realise_nominatif_xof)} FCFA portés par un commercial nommé (${formatPct(couverture.part_nominative_pct, 0)} %).`,
               couverture.nb_porteurs_non_nominatifs > 0
                 ? `Le reste est porté par ${formatNumber(couverture.nb_porteurs_non_nominatifs)} entité(s) non nominative(s) — un CA réel, mais imputable à aucune personne. C'est pourquoi la somme des lignes individuelles ne fait jamais le total de l'équipe.`
                 : "La totalité du CA est rattachée à un commercial nommé.",
             ],
             kv: [
-              ["Réalisé", `${formatMFcfa(equipe.realise_xof)} M FCFA`],
-              ["Dont nominatif", `${formatMFcfa(couverture.realise_nominatif_xof)} M FCFA`],
+              ["Réalisé", `${formatFcfa(equipe.realise_xof)} FCFA`],
+              ["Dont nominatif", `${formatFcfa(couverture.realise_nominatif_xof)} FCFA`],
               ["Part nominative", `${formatPct(couverture.part_nominative_pct, 0)} %`],
               ["Commerciaux suivis", formatNumber(couverture.nb_commerciaux)],
             ],
@@ -122,8 +122,8 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
           signeNeutre
           label="Gap vendu / objectif"
           aide="Ce qui reste à vendre pour tenir l'objectif de l'année. À rapprocher du temps qui reste : l'écart seul ne dit pas s'il est rattrapable."
-          value={`${equipe.ecart_xof > 0 ? "+" : ""}${formatMFcfa(equipe.ecart_xof)}`}
-          unit="M FCFA"
+          value={`${equipe.ecart_xof > 0 ? "+" : ""}${formatFcfa(equipe.ecart_xof)}`}
+          unit="FCFA"
           reading={
             equipe.taux_pct !== null
               ? `${formatPct(equipe.taux_pct, 0)} % de l'objectif annuel`
@@ -136,7 +136,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             tag: enRetard ? "en retard" : "au-dessus",
             tagVariant: enRetard ? "r" : "s",
             body: [
-              `L'écart à date est de ${formatMFcfa(equipe.ecart_xof)} M FCFA, soit ${formatPct(equipe.taux_pct, 0)} % de l'objectif annuel atteint.`,
+              `L'écart à date est de ${formatFcfa(equipe.ecart_xof)} FCFA, soit ${formatPct(equipe.taux_pct, 0)} % de l'objectif annuel atteint.`,
               equipe.part_ecoulee_annee_pct !== null
                 ? `L'exercice est écoulé à ${formatPct(equipe.part_ecoulee_annee_pct, 0)} % : un objectif annuel comparé à un exercice incomplet produit mécaniquement un retard. La lecture à date comparable se fait période par période, dans le tableau ci-dessous.`
                 : "L'exercice est complet : l'écart se lit sans correction.",
@@ -145,7 +145,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                 : "",
             ].filter(Boolean),
             kv: [
-              ["Écart", `${formatMFcfa(equipe.ecart_xof)} M FCFA`],
+              ["Écart", `${formatFcfa(equipe.ecart_xof)} FCFA`],
               ["Taux d'atteinte", equipe.taux_pct !== null ? `${formatPct(equipe.taux_pct, 0)} %` : "—"],
               ["Part de l'exercice écoulée", equipe.part_ecoulee_annee_pct !== null ? `${formatPct(equipe.part_ecoulee_annee_pct, 0)} %` : "—"],
             ],
@@ -171,7 +171,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
               x: p.libelle,
               y: p.realise_xof / 1_000_000,
               attenue: p.statut === "a_venir",
-              info: `${p.libelle} · réalisé ${formatMFcfa(p.realise_xof)} M FCFA sur un objectif de ${formatMFcfa(p.objectif_xof)} M FCFA${
+              info: `${p.libelle} · réalisé ${formatFcfa(p.realise_xof)} FCFA sur un objectif de ${formatFcfa(p.objectif_xof)} FCFA${
                 p.taux_pct !== null ? ` (${formatPct(p.taux_pct, 0)} %)` : ""
               }`,
             }))}
@@ -195,7 +195,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
               return {
                 name: p.libelle,
                 sub: [
-                  `objectif ${formatMFcfa(p.objectif_xof)} M`,
+                  `objectif ${formatFcfa(p.objectif_xof)}`,
                   p.statut === "a_venir"
                     ? "période à venir"
                     : p.taux_pct !== null
@@ -205,7 +205,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                 ]
                   .filter(Boolean)
                   .join(" · "),
-                value: `${formatMFcfa(p.realise_xof)} M`,
+                value: `${formatFcfa(p.realise_xof)}`,
                 pct: (p.realise_xof / maxPeriode) * 100,
                 variant: p.statut === "a_venir" ? undefined : atteint ? ("s" as const) : ("r" as const),
                 detail: {
@@ -224,7 +224,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                         : "objectif non défini",
                   tagVariant: p.statut === "a_venir" ? "n" : atteint ? "s" : "r",
                   body: [
-                    `Objectif de la période : ${formatMFcfa(p.objectif_xof)} M FCFA. Réalisé : ${formatMFcfa(p.realise_xof)} M FCFA sur ${formatNumber(p.nb_commandes)} commande(s), soit un écart de ${formatMFcfa(p.ecart_xof)} M FCFA.`,
+                    `Objectif de la période : ${formatFcfa(p.objectif_xof)} FCFA. Réalisé : ${formatFcfa(p.realise_xof)} FCFA sur ${formatNumber(p.nb_commandes)} commande(s), soit un écart de ${formatFcfa(p.ecart_xof)} FCFA.`,
                     p.statut === "a_venir"
                       ? "Aucun taux d'atteinte n'est publié sur une période non commencée : il afficherait 0 % et se lirait comme un échec."
                       : p.part_ecoulee_pct !== null
@@ -235,9 +235,9 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                       : "",
                   ].filter(Boolean),
                   kv: [
-                    ["Objectif", `${formatMFcfa(p.objectif_xof)} M FCFA`],
-                    ["Réalisé", `${formatMFcfa(p.realise_xof)} M FCFA`],
-                    ["Écart", `${formatMFcfa(p.ecart_xof)} M FCFA`],
+                    ["Objectif", `${formatFcfa(p.objectif_xof)} FCFA`],
+                    ["Réalisé", `${formatFcfa(p.realise_xof)} FCFA`],
+                    ["Écart", `${formatFcfa(p.ecart_xof)} FCFA`],
                     ["Commandes", formatNumber(p.nb_commandes)],
                     ["Statut", p.statut === "en_cours" ? "en cours" : p.statut === "a_venir" ? "à venir" : "révolue"],
                   ],
@@ -262,7 +262,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                   const atteint = (c.taux_pct ?? 0) >= 100;
                   return {
                     title: c.display_name,
-                    sub: `objectif ${formatMFcfa(c.objectif_xof)} M · réalisé ${formatMFcfa(c.realise_xof)} M · ${formatNumber(c.nb_commandes)} commandes`,
+                    sub: `objectif ${formatFcfa(c.objectif_xof)} · réalisé ${formatFcfa(c.realise_xof)} · ${formatNumber(c.nb_commandes)} commandes`,
                     tag: c.taux_pct !== null ? `${formatPct(c.taux_pct, 0)} %` : "—",
                     tagVariant: atteint ? ("s" as const) : ("r" as const),
                     detail: {
@@ -271,16 +271,16 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                       tag: c.taux_pct !== null ? `${formatPct(c.taux_pct, 0)} % de son objectif` : "objectif non défini",
                       tagVariant: atteint ? ("s" as const) : ("r" as const),
                       body: [
-                        `${c.display_name} a signé ${formatMFcfa(c.realise_xof)} M FCFA sur ${formatNumber(c.nb_commandes)} commande(s) en ${gap.annee}, pour un objectif de ${formatMFcfa(c.objectif_xof)} M FCFA — un écart de ${formatMFcfa(c.ecart_xof)} M FCFA.`,
+                        `${c.display_name} a signé ${formatFcfa(c.realise_xof)} FCFA sur ${formatNumber(c.nb_commandes)} commande(s) en ${gap.annee}, pour un objectif de ${formatFcfa(c.objectif_xof)} FCFA — un écart de ${formatFcfa(c.ecart_xof)} FCFA.`,
                         `Son portefeuille représente ${formatPct(c.part_ca_equipe_pct, 0)} % du CA de l'équipe sur l'exercice.`,
                         gap.source !== "reel"
                           ? "Son objectif est issu du gabarit (prorata de son réalisé de l'exercice précédent) : il n'a pas été négocié avec lui."
                           : "",
                       ].filter(Boolean),
                       kv: [
-                        ["Objectif", `${formatMFcfa(c.objectif_xof)} M FCFA`],
-                        ["Réalisé", `${formatMFcfa(c.realise_xof)} M FCFA`],
-                        ["Écart", `${formatMFcfa(c.ecart_xof)} M FCFA`],
+                        ["Objectif", `${formatFcfa(c.objectif_xof)} FCFA`],
+                        ["Réalisé", `${formatFcfa(c.realise_xof)} FCFA`],
+                        ["Écart", `${formatFcfa(c.ecart_xof)} FCFA`],
                         ["Part du CA équipe", `${formatPct(c.part_ca_equipe_pct, 0)} %`],
                         ["Commandes", formatNumber(c.nb_commandes)],
                       ],
@@ -311,7 +311,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             <Lst
               items={sansObjectif.slice(0, 6).map((c) => ({
                 title: c.display_name,
-                sub: `${formatMFcfa(c.realise_xof)} M FCFA signés · ${formatNumber(c.nb_commandes)} commandes`,
+                sub: `${formatFcfa(c.realise_xof)} FCFA signés · ${formatNumber(c.nb_commandes)} commandes`,
                 tag: "objectif à saisir",
                 tagVariant: "w" as const,
                 detail: {
@@ -320,13 +320,13 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                   tag: "objectif à saisir",
                   tagVariant: "w" as const,
                   body: [
-                    `${c.display_name} a signé ${formatMFcfa(c.realise_xof)} M FCFA en ${gap.annee}, mais aucun objectif ne lui est attribué.`,
+                    `${c.display_name} a signé ${formatFcfa(c.realise_xof)} FCFA en ${gap.annee}, mais aucun objectif ne lui est attribué.`,
                     c.motif_objectif_absent ??
                       "La règle du gabarit ne permet pas de lui en calculer un : il doit être saisi.",
                     "Lui affecter un objectif de zéro aurait produit un taux d'atteinte sans signification — c'est pourquoi il apparaît ici et non dans le classement.",
                   ],
                   kv: [
-                    ["Réalisé", `${formatMFcfa(c.realise_xof)} M FCFA`],
+                    ["Réalisé", `${formatFcfa(c.realise_xof)} FCFA`],
                     ["Commandes", formatNumber(c.nb_commandes)],
                     ["Part du CA équipe", `${formatPct(c.part_ca_equipe_pct, 0)} %`],
                   ],
@@ -352,7 +352,7 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
               rows={gap.porteurs_non_nominatifs.map((p) => ({
                 name: p.display_name,
                 sub: `${p.nature === "technique" ? "compte technique de l'ERP" : "entité collective"} · ${formatNumber(p.nb_commandes)} commandes`,
-                value: `${formatMFcfa(p.realise_xof)} M`,
+                value: `${formatFcfa(p.realise_xof)}`,
                 pct: p.part_ca_equipe_pct,
                 variant: p.nature === "technique" ? ("r" as const) : ("w" as const),
                 detail: {
@@ -361,13 +361,13 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
                   tag: `${formatPct(p.part_ca_equipe_pct, 0)} % du CA équipe`,
                   tagVariant: p.nature === "technique" ? ("r" as const) : ("w" as const),
                   body: [
-                    `${p.display_name} porte ${formatMFcfa(p.realise_xof)} M FCFA sur ${formatNumber(p.nb_commandes)} commande(s), soit ${formatPct(p.part_ca_equipe_pct, 0)} % du CA de l'exercice.`,
+                    `${p.display_name} porte ${formatFcfa(p.realise_xof)} FCFA sur ${formatNumber(p.nb_commandes)} commande(s), soit ${formatPct(p.part_ca_equipe_pct, 0)} % du CA de l'exercice.`,
                     p.nature === "technique"
                       ? "C'est un compte technique de l'ERP, pas un vendeur : sa présence signale des commandes saisies sans commercial rattaché. Le CA est réel, l'attribution est à corriger dans Odoo."
                       : "C'est une entité collective : le CA existe bel et bien, mais il n'est attribuable à aucune personne. L'exclure du classement individuel est correct ; l'exclure du total de l'équipe ne le serait pas.",
                   ],
                   kv: [
-                    ["CA porté", `${formatMFcfa(p.realise_xof)} M FCFA`],
+                    ["CA porté", `${formatFcfa(p.realise_xof)} FCFA`],
                     ["Part du CA équipe", `${formatPct(p.part_ca_equipe_pct, 0)} %`],
                     ["Commandes", formatNumber(p.nb_commandes)],
                     ["Nature", p.nature === "technique" ? "compte technique" : "entité collective"],
@@ -378,8 +378,8 @@ export async function DcObjectifs({ periode, annee }: { periode: Periode; annee?
             <Note style={{ marginTop: 14 }}>
               Ce CA est mesuré et compté dans le total de l&apos;équipe, mais il ne peut entrer dans aucun
               classement individuel. C&apos;est la raison pour laquelle la somme des objectifs individuels
-              ({formatMFcfa(couverture.somme_objectifs_individuels_xof)} M FCFA) reste inférieure à
-              l&apos;objectif d&apos;équipe ({formatMFcfa(equipe.objectif_annuel_xof)} M FCFA).
+              ({formatFcfa(couverture.somme_objectifs_individuels_xof)} FCFA) reste inférieure à
+              l&apos;objectif d&apos;équipe ({formatFcfa(equipe.objectif_annuel_xof)} FCFA).
             </Note>
           </Tile>
         )}

@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import type { DetailCard } from "@/components/ui/detail";
 import { DetailButton } from "@/components/ui/detail";
 import { Tag } from "@/components/ui/primitives";
-import { formatNumber } from "@/lib/format";
+import { formatFcfaDepuisM, formatNumber } from "@/lib/format";
 import { Variant } from "@/lib/types";
 
 /** Une ligne de la file de travail. Tout est déjà mis en forme côté serveur :
@@ -186,8 +186,8 @@ export function Worklist({
                       <span className={`tag tag--${it.payeurVariant}`}>{it.payeurLabel}</span>
                     </span>
                     <span className="arb-item-m">
-                      <i>impayé</i> {formatNumber(it.impayeM)} M<em>·</em>
-                      <i>enjeu</i> {formatNumber(it.enjeuM)} M<em>·</em>
+                      <i>impayé</i> {formatFcfaDepuisM(it.impayeM)}<em>·</em>
+                      <i>enjeu</i> {formatFcfaDepuisM(it.enjeuM)}<em>·</em>
                       <i>mandat</i> {it.mandatCourt}
                     </span>
                     <span className="arb-item-s">{it.trajectoire}</span>

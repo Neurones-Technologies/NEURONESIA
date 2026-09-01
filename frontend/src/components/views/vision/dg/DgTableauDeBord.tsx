@@ -6,7 +6,7 @@ import {
   getTopClients,
   getTopOrders,
 } from "@/lib/api/dashboard";
-import { formatDate, formatMFcfa, formatNumber, formatPct, mFcfa, signed } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct, signedFcfa } from "@/lib/format";
 import { Bars, Bento, Brief, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Section } from "@/components/ui/primitives";
 import { MOIS_ABREV, toSpark } from "./commun";
@@ -84,7 +84,7 @@ export async function DgTableauDeBord() {
             : "Briefing de direction"
         }
         headline={
-          `Exercice ${year} au ${formatDate(dateArret)} — ${formatMFcfa(caArrete)} M FCFA commandés`
+          `Exercice ${year} au ${formatDate(dateArret)} — ${formatFcfa(caArrete)} FCFA commandés`
           + (revenueDeltaPct !== null
             ? `, ${revenueDeltaPct >= 0 ? "+" : ""}${formatPct(revenueDeltaPct, 0)} % vs ${year - 1} à date comparable`
             : "")
@@ -114,8 +114,8 @@ export async function DgTableauDeBord() {
           fill
           label={`CA commandé ${year} au ${formatDate(dateArret)}`}
           aide="Ce que vos clients ont commandé depuis le 1er janvier. Ce sont des commandes fermes, pas des factures : l'argent n'est pas encore encaissé."
-          value={formatMFcfa(kpis.ytd.revenue_xof)}
-          unit="M FCFA"
+          value={formatFcfa(kpis.ytd.revenue_xof)}
+          unit="FCFA"
           reading={
             revenueDeltaPct === null
               ? "pas de référence N-1"
@@ -126,7 +126,7 @@ export async function DgTableauDeBord() {
           sparkAxis={monthLabels}
           sparkLabels={kpis.monthly.map(
             (m) =>
-              `${MOIS_ABREV[m.mois - 1] ?? m.mois} : ${formatMFcfa(m.ca_xof)} M FCFA (${formatNumber(m.nb_commandes)} commande(s))`
+              `${MOIS_ABREV[m.mois - 1] ?? m.mois} : ${formatFcfa(m.ca_xof)} FCFA (${formatNumber(m.nb_commandes)} commande(s))`
           )}
           detail={{
             kicker: "Indicateur · chiffre d'affaires",
@@ -134,14 +134,14 @@ export async function DgTableauDeBord() {
             tag: revenueDeltaPct === null ? "sans référence" : revenueDeltaPct >= 0 ? "en hausse" : "en baisse",
             tagVariant: revenueDeltaPct === null ? "n" : revenueDeltaPct >= 0 ? "s" : "r",
             body: [
-              `Cumul commandé au ${formatDate(dateArret)} : ${formatMFcfa(kpis.ytd.revenue_xof)} M FCFA, sur ${formatNumber(kpis.ytd.orders_count)} commandes et ${formatNumber(kpis.ytd.clients_with_orders)} clients ayant commandé.`,
+              `Cumul commandé au ${formatDate(dateArret)} : ${formatFcfa(kpis.ytd.revenue_xof)} FCFA, sur ${formatNumber(kpis.ytd.orders_count)} commandes et ${formatNumber(kpis.ytd.clients_with_orders)} clients ayant commandé.`,
               revenueDeltaPct === null
                 ? "Aucun exercice précédent comparable dans le miroir, la variation ne peut pas être calculée."
-                : `À la même date en ${year - 1}, le cumul était de ${formatMFcfa(kpis.previous_ytd.revenue_xof)} M FCFA, soit un écart de ${signed(mFcfa(kpis.ytd.revenue_xof - kpis.previous_ytd.revenue_xof))} M FCFA.`,
+                : `À la même date en ${year - 1}, le cumul était de ${formatFcfa(kpis.previous_ytd.revenue_xof)} FCFA, soit un écart de ${signedFcfa(kpis.ytd.revenue_xof - kpis.previous_ytd.revenue_xof)} FCFA.`,
             ],
             kv: [
-              ["CA commandé", `${formatMFcfa(kpis.ytd.revenue_xof)} M FCFA`],
-              [`${year - 1} à date comparable`, `${formatMFcfa(kpis.previous_ytd.revenue_xof)} M FCFA`],
+              ["CA commandé", `${formatFcfa(kpis.ytd.revenue_xof)} FCFA`],
+              [`${year - 1} à date comparable`, `${formatFcfa(kpis.previous_ytd.revenue_xof)} FCFA`],
               ["Commandes", formatNumber(kpis.ytd.orders_count)],
               ["Clients actifs", formatNumber(kpis.ytd.clients_with_orders)],
             ],
@@ -152,12 +152,12 @@ export async function DgTableauDeBord() {
           fill
           label="Pipeline pondéré (réaliste)"
           aide="Ce que les affaires encore ouvertes devraient rapporter, en tenant compte de leurs chances d'aboutir. Les affaires gagnées, perdues ou abandonnées n'y entrent pas."
-          value={formatMFcfa(forecast.scenarios.realiste_xof)}
-          unit="M FCFA"
+          value={formatFcfa(forecast.scenarios.realiste_xof)}
+          unit="FCFA"
           reading={
             `probabilité moyenne ${formatPct(forecast.scenarios.avg_probability_pct, 0)} %` +
             (pondereEchu > 0
-              ? ` · dont ${formatMFcfa(pondereEchu)} M à échéance dépassée (${formatNumber(oppsEchues.length)} opportunités à requalifier)`
+              ? ` · dont ${formatFcfa(pondereEchu)} à échéance dépassée (${formatNumber(oppsEchues.length)} opportunités à requalifier)`
               : "")
           }
           readingVariant={
@@ -171,19 +171,19 @@ export async function DgTableauDeBord() {
             tag: `${formatNumber(forecast.scenarios.nb_opportunites)} opportunités ouvertes`,
             tagVariant: "a",
             body: [
-              `Le pipeline ouvert totalise ${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA non pondérés. Pondéré par la probabilité déclarée sur chaque opportunité, il ressort à ${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA.`,
-              `Le scénario bas (${formatMFcfa(forecast.scenarios.pessimiste_xof)} M) exclut les opportunités dont l'échéance est déjà dépassée ; le scénario haut (${formatMFcfa(forecast.scenarios.optimiste_xof)} M) retient l'ensemble des opportunités ouvertes.`,
+              `Le pipeline ouvert totalise ${formatFcfa(forecast.scenarios.total_pipeline_xof)} FCFA non pondérés. Pondéré par la probabilité déclarée sur chaque opportunité, il ressort à ${formatFcfa(forecast.scenarios.realiste_xof)} FCFA.`,
+              `Le scénario bas (${formatFcfa(forecast.scenarios.pessimiste_xof)}) exclut les opportunités dont l'échéance est déjà dépassée ; le scénario haut (${formatFcfa(forecast.scenarios.optimiste_xof)}) retient l'ensemble des opportunités ouvertes.`,
               pondereEchu > 0
-                ? `${formatNumber(oppsEchues.length)} opportunités encore ouvertes ont une échéance déjà dépassée, pour ${formatMFcfa(pondereEchu)} M FCFA pondérés. Ce ne sont pas des affaires vivantes tant qu'elles ne sont pas requalifiées dans Odoo : les compter sans le dire gonflerait le carnet.`
+                ? `${formatNumber(oppsEchues.length)} opportunités encore ouvertes ont une échéance déjà dépassée, pour ${formatFcfa(pondereEchu)} FCFA pondérés. Ce ne sont pas des affaires vivantes tant qu'elles ne sont pas requalifiées dans Odoo : les compter sans le dire gonflerait le carnet.`
                 : "",
             ].filter(Boolean),
             kv: [
-              ["Pipeline non pondéré", `${formatMFcfa(forecast.scenarios.total_pipeline_xof)} M FCFA`],
-              ["Scénario bas", `${formatMFcfa(forecast.scenarios.pessimiste_xof)} M FCFA`],
-              ["Scénario réaliste", `${formatMFcfa(forecast.scenarios.realiste_xof)} M FCFA`],
-              ["Scénario haut", `${formatMFcfa(forecast.scenarios.optimiste_xof)} M FCFA`],
+              ["Pipeline non pondéré", `${formatFcfa(forecast.scenarios.total_pipeline_xof)} FCFA`],
+              ["Scénario bas", `${formatFcfa(forecast.scenarios.pessimiste_xof)} FCFA`],
+              ["Scénario réaliste", `${formatFcfa(forecast.scenarios.realiste_xof)} FCFA`],
+              ["Scénario haut", `${formatFcfa(forecast.scenarios.optimiste_xof)} FCFA`],
               ["Probabilité moyenne", `${formatPct(forecast.scenarios.avg_probability_pct, 0)} %`],
-              ["À échéance dépassée", `${formatMFcfa(pondereEchu)} M FCFA (${formatNumber(oppsEchues.length)} opp.)`],
+              ["À échéance dépassée", `${formatFcfa(pondereEchu)} FCFA (${formatNumber(oppsEchues.length)} opp.)`],
             ],
           }}
         />
@@ -209,7 +209,7 @@ export async function DgTableauDeBord() {
             tagVariant: top5Pct !== null && top5Pct > 50 ? "r" : "w",
             body: [
               top1 && top1Pct !== null
-                ? `${top1.client} pèse à lui seul ${formatPct(top1Pct, 0)} % du CA commandé de l'exercice, pour ${formatMFcfa(top1.ca_total_xof)} M FCFA sur ${formatNumber(top1.nb_commandes)} commandes.`
+                ? `${top1.client} pèse à lui seul ${formatPct(top1Pct, 0)} % du CA commandé de l'exercice, pour ${formatFcfa(top1.ca_total_xof)} FCFA sur ${formatNumber(top1.nb_commandes)} commandes.`
                 : "Aucun client n'a commandé sur l'exercice.",
               top5Pct !== null && top5Pct > 50
                 ? "Plus de la moitié du chiffre d'affaires dépend de cinq comptes. À ce niveau, la perte d'un seul client déplace l'atterrissage de l'exercice : c'est une exposition à arbitrer, pas une statistique à consulter."
@@ -224,7 +224,7 @@ export async function DgTableauDeBord() {
               ["Top 1", top1Pct !== null ? `${formatPct(top1Pct, 0)} %` : "—"],
               ["Top 5 cumulé", top5Pct !== null ? `${formatPct(top5Pct, 0)} %` : "—"],
               ["Top 10 cumulé", top10Pct !== null ? `${formatPct(top10Pct, 0)} %` : "—"],
-              ["Base de calcul", `${formatMFcfa(totalRevenue)} M FCFA commandés`],
+              ["Base de calcul", `${formatFcfa(totalRevenue)} FCFA commandés`],
             ],
           }}
         />
@@ -245,7 +245,7 @@ export async function DgTableauDeBord() {
               return {
                 name: c.client,
                 sub: `${c.pays} · ${formatNumber(c.nb_commandes)} commandes · ${formatPct(part, 0)} % du CA`,
-                value: `${formatMFcfa(c.ca_total_xof)} M`,
+                value: `${formatFcfa(c.ca_total_xof)}`,
                 pct: top1 ? (c.ca_total_xof / top1.ca_total_xof) * 100 : 0,
                 variant: part > 20 ? ("r" as const) : part > 10 ? ("w" as const) : undefined,
                 detail: {
@@ -254,13 +254,13 @@ export async function DgTableauDeBord() {
                   tag: part > 20 ? "dépendance forte" : part > 10 ? "à surveiller" : "exposition mesurée",
                   tagVariant: part > 20 ? ("r" as const) : part > 10 ? ("w" as const) : ("n" as const),
                   body: [
-                    `${c.client} a commandé pour ${formatMFcfa(c.ca_total_xof)} M FCFA sur l'exercice, réparti sur ${formatNumber(c.nb_commandes)} commandes, soit ${formatPct(part, 0)} % du chiffre d'affaires total.`,
+                    `${c.client} a commandé pour ${formatFcfa(c.ca_total_xof)} FCFA sur l'exercice, réparti sur ${formatNumber(c.nb_commandes)} commandes, soit ${formatPct(part, 0)} % du chiffre d'affaires total.`,
                     part > 20
                       ? "À ce niveau de poids, ce compte n'est plus un client parmi d'autres : son renouvellement conditionne l'atterrissage. Toute négociation le concernant est un arbitrage de direction, pas une décision commerciale."
                       : "Le poids de ce compte reste absorbable, mais il entre dans le calcul de concentration du top 5 suivi en tableau de bord.",
                   ],
                   kv: [
-                    ["CA commandé", `${formatMFcfa(c.ca_total_xof)} M FCFA`],
+                    ["CA commandé", `${formatFcfa(c.ca_total_xof)} FCFA`],
                     ["Part du CA", `${formatPct(part, 0)} %`],
                     ["Commandes", formatNumber(c.nb_commandes)],
                     ["Pays", c.pays],
@@ -293,7 +293,7 @@ export async function DgTableauDeBord() {
                     o.pays,
                     `${formatPct(part, 1)} % du CA de l'exercice`,
                   ].join(" · "),
-                  tag: `${formatMFcfa(o.montant_xof)} M`,
+                  tag: `${formatFcfa(o.montant_xof)}`,
                   tagVariant: part > 10 ? ("r" as const) : part > 5 ? ("w" as const) : ("n" as const),
                   detail: {
                     kicker: "Commande signée",
@@ -302,14 +302,14 @@ export async function DgTableauDeBord() {
                       part > 10 ? "affaire structurante" : part > 5 ? "affaire majeure" : "affaire notable",
                     tagVariant: part > 10 ? ("r" as const) : part > 5 ? ("w" as const) : ("n" as const),
                     body: [
-                      `Cette commande de ${formatMFcfa(o.montant_xof)} M FCFA représente à elle seule ${formatPct(part, 1)} % du chiffre d'affaires commandé de l'exercice${o.date ? `, signée le ${formatDate(o.date)}` : ""}.`,
+                      `Cette commande de ${formatFcfa(o.montant_xof)} FCFA représente à elle seule ${formatPct(part, 1)} % du chiffre d'affaires commandé de l'exercice${o.date ? `, signée le ${formatDate(o.date)}` : ""}.`,
                       part > 10
                         ? "Une affaire unique de ce poids fait bouger l'atterrissage à elle seule : son exécution et son encaissement sont à suivre au niveau de la direction, pas seulement du compte."
                         : "Le poids de cette affaire reste absorbable, mais elle entre dans la concentration mesurée sur les comptes ci-dessus.",
                       "Le classement porte sur les commandes signées, sur la date de commande. Une commande peut donc apparaître dans cet exercice tout en portant une référence de l'exercice précédent.",
                     ],
                     kv: [
-                      ["Montant", `${formatMFcfa(o.montant_xof)} M FCFA`],
+                      ["Montant", `${formatFcfa(o.montant_xof)} FCFA`],
                       ["Part du CA", `${formatPct(part, 1)} %`],
                       ["Client", o.client],
                       ["Référence", o.ref],

@@ -339,9 +339,19 @@ export interface Dso {
   retard_moyen_impayes_jours: number;
   nb_impayes_en_souffrance: number;
   dso_approx_jours: number | null;
+  /** Taille de l'échantillon des délais : combien de règlements datés la moyenne
+   *  agrège réellement. Un exercice à peine entamé en porte peu. */
+  nb_factures_avec_date_paiement: number;
+  /** Exercice sur lequel les DÉLAIS sont mesurés (factures réglées dans l'année).
+   *  Les montants du même objet restent hors borne — cf. `portee_montants`. */
+  exercice_delais: number | null;
+  portee_montants: string;
   note: string;
 }
 
+/** `year` désigne l'exercice d'OBSERVATION des délais — les factures réglées
+ *  pendant l'année, pas celles émises pendant l'année (cf. l'endpoint). Omis,
+ *  le backend prend l'exercice en cours. Les montants restent cumulés. */
 export async function getDso(client = "", year?: number): Promise<Dso | null> {
   const params = new URLSearchParams();
   if (client) params.set("client", client);
@@ -352,6 +362,7 @@ export async function getDso(client = "", year?: number): Promise<Dso | null> {
 
 export interface MarginStats {
   annee: number;
+  // ── Flux : bornés à `annee` ────────────────────────────────────────────────
   nb_dossiers: number;
   ca_provisoire_total: number;
   ca_definitif_total: number;
@@ -359,11 +370,36 @@ export interface MarginStats {
   marge_definitive_total: number;
   perc_marge_provisoire_moyen: number;
   perc_marge_definitive_moyen: number;
+  // ── Stocks : TOUS exercices, quel que soit `annee` ─────────────────────────
+  // Le backlog est le reste à livrer aujourd'hui : un dossier ouvert en 2025
+  // encore en cours en fait partie. Ne jamais les présenter sous le libellé de
+  // l'exercice — cf. `portee_stocks`, qui est là pour être affiché.
   total_encaisse: number;
   reste_a_encaisser: number;
   backlog_total: number;
   fournisseurs_payes: number;
   fournisseurs_restant: number;
+  portee_stocks: string;
+  nb_dossiers_tous_exercices: number;
+  // ── Taux de marge : à préférer TOUJOURS aux `perc_marge_*_moyen` ci-dessus ──
+  // Ceux-là sont des moyennes non pondérées de pourcentages par dossier (-745 %
+  // sur ce miroir) ; ceux-ci sont des ratios agrégés. `null` = pas de CA sur le
+  // périmètre, ce qui n'est pas une marge nulle et ne doit pas s'afficher « 0 % ».
+  taux_marge_provisoire_pct: number | null;
+  /** Mesuré sur le seul périmètre imputé — ne l'afficher que si
+   *  `marge_definitive_exploitable` est vrai, sinon annoncer la couverture. */
+  taux_marge_definitive_pct: number | null;
+  couverture_marge_definitive_pct: number;
+  nb_dossiers_marge_imputee: number;
+  ca_marge_imputee_xof: number;
+  /** Faux quand la dépense n'est imputée que sur une part trop faible du CA : un
+   *  dossier sans dépense affiche 100 % de marge par construction. */
+  marge_definitive_exploitable: boolean;
+  seuil_couverture_marge_pct: number;
+  /** Contrepartie hors borne des deux CA ci-dessus : à utiliser pour expliquer
+   *  un stock (taux de matérialisation du backlog), jamais pour l'exercice. */
+  ca_provisoire_tous_exercices: number;
+  ca_definitif_tous_exercices: number;
 }
 
 export interface Margins {
@@ -371,6 +407,8 @@ export interface Margins {
   top_dossiers: Array<Record<string, unknown>>;
 }
 
+/** Omis, `year` vaut l'exercice en cours côté backend. Il ne borne que les flux
+ *  de `stats` (CA, marges) et le classement `top_dossiers` — pas les stocks. */
 export async function getMargins(year?: number, limit = 10): Promise<Margins> {
   const params = new URLSearchParams();
   if (year) params.set("year", String(year));

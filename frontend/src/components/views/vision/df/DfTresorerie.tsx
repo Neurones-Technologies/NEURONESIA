@@ -1,5 +1,5 @@
 import { getTresoreriePrevisionnelle, CreanceSurveillee } from "@/lib/api/daf";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bento, HintLine, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Note, Tag } from "@/components/ui/primitives";
@@ -16,7 +16,7 @@ import { ScreenLede } from "@/components/ui/screen-lede";
  * ligne cassée alors que la créance existe. */
 function montantM(xof: number): string {
   if (xof > 0 && xof < 1_000_000) return "< 1 M";
-  return `${formatMFcfa(xof)} M`;
+  return `${formatFcfa(xof)}`;
 }
 
 /** Fiche de détail d'une créance, commune aux deux listes.
@@ -34,7 +34,7 @@ function ligneCreance(l: CreanceSurveillee, mode: "a_echoir" | "echue") {
         : `${formatNumber(l.jours_de_retard)} j de retard`,
     tagVariant: (gravite ? "r" : l.risque_glissement ? "w" : "n") as "r" | "w" | "n",
     body: [
-      `${l.reference} — ${formatMFcfa(l.reste_du_xof)} M FCFA restant dus, échéance au ${formatDate(l.echeance)}.`,
+      `${l.reference} — ${formatFcfa(l.reste_du_xof)} FCFA restant dus, échéance au ${formatDate(l.echeance)}.`,
       l.comportement_significatif
         ? `Ce client règle habituellement avec ${formatPct(l.retard_habituel_client_jours, 0)} jours de retard, mesurés sur ${formatNumber(l.nb_factures_reglees_client)} factures déjà réglées : l'encaissement est donc attendu autour du ${formatDate(l.encaissement_attendu_le)}.`
         : `Ce client n'a que ${formatNumber(l.nb_factures_reglees_client)} facture(s) réglée(s) : son comportement de paiement n'est pas encore mesurable, et le retard global constaté est utilisé par défaut pour situer l'encaissement.`,
@@ -48,8 +48,8 @@ function ligneCreance(l: CreanceSurveillee, mode: "a_echoir" | "echue") {
     ],
     kv: [
       ["Facture", l.reference],
-      ["Restant dû", `${formatMFcfa(l.reste_du_xof)} M FCFA`],
-      ["Montant facturé", `${formatMFcfa(l.montant_xof)} M FCFA`],
+      ["Restant dû", `${formatFcfa(l.reste_du_xof)} FCFA`],
+      ["Montant facturé", `${formatFcfa(l.montant_xof)} FCFA`],
       ["Échéance", formatDate(l.echeance)],
       mode === "a_echoir"
         ? ["Jours avant échéance", formatNumber(l.jours_avant_echeance)]
@@ -112,9 +112,9 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
 
       <ScreenLede
         texte={
-          `${formatMFcfa(arriere.montant_xof)} M FCFA de créances auraient déjà dû être encaissées — ` +
+          `${formatFcfa(arriere.montant_xof)} FCFA de créances auraient déjà dû être encaissées — ` +
           `${formatPct(arriere.part_encours_pct, 0)} % de l'encours client, dont ${formatPct(arriere.part_plus_de_2_ans_pct, 0)} % au-delà de deux ans. ` +
-          `Sur l'horizon du calendrier, ${formatMFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)} M FCFA restent attendus.`
+          `Sur l'horizon du calendrier, ${formatFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)} FCFA restent attendus.`
         }
         signaux={[
           {
@@ -137,8 +137,8 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={3}
           label={`À échoir sous ${formatNumber(vigilance.horizon_jours)} jours`}
           aide="L'argent que vos clients doivent vous régler dans les prochaines semaines. Pas encore en retard : c'est le moment de relancer pour que ça le reste."
-          value={formatMFcfa(vigilance.totaux.montant_a_echoir_xof)}
-          unit="M FCFA"
+          value={formatFcfa(vigilance.totaux.montant_a_echoir_xof)}
+          unit="FCFA"
           reading={`${formatNumber(vigilance.totaux.nb_a_echoir)} créances · ${formatNumber(vigilance.totaux.nb_a_echoir_a_risque)} à risque de glissement`}
           readingVariant={vigilance.totaux.nb_a_echoir_a_risque > 0 ? "wat" : "pos"}
           detail={{
@@ -147,12 +147,12 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
             tag: `${formatNumber(vigilance.totaux.nb_a_echoir)} créances`,
             tagVariant: "w",
             body: [
-              `${formatMFcfa(vigilance.totaux.montant_a_echoir_xof)} M FCFA arrivent à échéance dans les ${formatNumber(vigilance.horizon_jours)} prochains jours, sur ${formatNumber(vigilance.totaux.nb_a_echoir)} créances.`,
-              `${formatNumber(vigilance.totaux.nb_a_echoir_a_risque)} d'entre elles (${formatMFcfa(vigilance.totaux.montant_a_echoir_a_risque_xof)} M FCFA) sont portées par des clients dont le retard habituel mesuré dépasse une semaine : c'est là que l'appel préventif a de la valeur.`,
+              `${formatFcfa(vigilance.totaux.montant_a_echoir_xof)} FCFA arrivent à échéance dans les ${formatNumber(vigilance.horizon_jours)} prochains jours, sur ${formatNumber(vigilance.totaux.nb_a_echoir)} créances.`,
+              `${formatNumber(vigilance.totaux.nb_a_echoir_a_risque)} d'entre elles (${formatFcfa(vigilance.totaux.montant_a_echoir_a_risque_xof)} FCFA) sont portées par des clients dont le retard habituel mesuré dépasse une semaine : c'est là que l'appel préventif a de la valeur.`,
               vigilance.methode,
             ],
             kv: [
-              ["Montant à échoir", `${formatMFcfa(vigilance.totaux.montant_a_echoir_xof)} M FCFA`],
+              ["Montant à échoir", `${formatFcfa(vigilance.totaux.montant_a_echoir_xof)} FCFA`],
               ["Créances concernées", formatNumber(vigilance.totaux.nb_a_echoir)],
               ["Dont à risque de glissement", formatNumber(vigilance.totaux.nb_a_echoir_a_risque)],
               ["Horizon de vigilance", `${formatNumber(vigilance.horizon_jours)} jours`],
@@ -164,8 +164,8 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           span={3}
           label="Encaissement prévu restant"
           aide="Ce qu'il reste à encaisser d'ici la fin de l'exercice, selon les échéances annoncées."
-          value={formatMFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)}
-          unit="M FCFA"
+          value={formatFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)}
+          unit="FCFA"
           reading={`sur ${formatNumber(aVenir.length)} mois · hors arriéré`}
           readingVariant="wat"
           detail={{
@@ -174,14 +174,14 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
             tag: "projection",
             tagVariant: "w",
             body: [
-              `${formatMFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)} M FCFA sont attendus sur les ${formatNumber(aVenir.length)} mois du calendrier restant à courir.`,
+              `${formatFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)} FCFA sont attendus sur les ${formatNumber(aVenir.length)} mois du calendrier restant à courir.`,
               atterrissage.hypotheses[0],
-              `L'arriéré (${formatMFcfa(arriere.montant_xof)} M FCFA) n'y figure pas : il est publié séparément.`,
+              `L'arriéré (${formatFcfa(arriere.montant_xof)} FCFA) n'y figure pas : il est publié séparément.`,
             ],
             kv: [
-              ["Encaissement prévu", `${formatMFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)} M FCFA`],
-              ["Décaissement prévu", `${formatMFcfa(atterrissage.totaux.decaissement_prevu_restant_xof)} M FCFA`],
-              ["Solde prévu", `${formatMFcfa(soldeAVenir)} M FCFA`],
+              ["Encaissement prévu", `${formatFcfa(atterrissage.totaux.encaissement_prevu_restant_xof)} FCFA`],
+              ["Décaissement prévu", `${formatFcfa(atterrissage.totaux.decaissement_prevu_restant_xof)} FCFA`],
+              ["Solde prévu", `${formatFcfa(soldeAVenir)} FCFA`],
               ["Mois couverts", formatNumber(aVenir.length)],
             ],
           }}
@@ -193,8 +193,8 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           rang="principal"
           label="Arriéré hors calendrier"
           aide="Les sommes déjà en retard de paiement. Elles n'apparaissent pas dans le calendrier prévisionnel : leur date est passée, on ne sait pas quand elles rentreront."
-          value={formatMFcfa(arriere.montant_xof)}
-          unit="M FCFA"
+          value={formatFcfa(arriere.montant_xof)}
+          unit="FCFA"
           reading={`${formatPct(arriere.part_encours_pct, 0)} % de l'encours · ${formatPct(arriere.part_plus_de_2_ans_pct, 0)} % au-delà de 2 ans`}
           readingVariant="neg"
           detail={{
@@ -203,15 +203,15 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
             tag: `${formatNumber(arriere.nb_creances)} créances`,
             tagVariant: "r",
             body: [
-              `${formatMFcfa(arriere.montant_xof)} M FCFA sur ${formatNumber(arriere.nb_creances)} créances auraient déjà dû être encaissés, même en tenant compte du retard habituel de chaque client. Cela représente ${formatPct(arriere.part_encours_pct, 1)} % de l'encours client.`,
+              `${formatFcfa(arriere.montant_xof)} FCFA sur ${formatNumber(arriere.nb_creances)} créances auraient déjà dû être encaissés, même en tenant compte du retard habituel de chaque client. Cela représente ${formatPct(arriere.part_encours_pct, 1)} % de l'encours client.`,
               arriere.lecture,
-              `${formatMFcfa(arriere.montant_plus_de_2_ans_xof)} M FCFA dépassent deux ans d'ancienneté, soit ${formatPct(arriere.part_plus_de_2_ans_pct, 1)} % de l'arriéré.`,
+              `${formatFcfa(arriere.montant_plus_de_2_ans_xof)} FCFA dépassent deux ans d'ancienneté, soit ${formatPct(arriere.part_plus_de_2_ans_pct, 1)} % de l'arriéré.`,
             ],
             kv: [
-              ["Arriéré total", `${formatMFcfa(arriere.montant_xof)} M FCFA`],
+              ["Arriéré total", `${formatFcfa(arriere.montant_xof)} FCFA`],
               ["Créances concernées", formatNumber(arriere.nb_creances)],
               ["Part de l'encours", `${formatPct(arriere.part_encours_pct, 1)} %`],
-              ["Dont plus de 2 ans", `${formatMFcfa(arriere.montant_plus_de_2_ans_xof)} M FCFA`],
+              ["Dont plus de 2 ans", `${formatFcfa(arriere.montant_plus_de_2_ans_xof)} FCFA`],
             ],
           }}
         />
@@ -224,8 +224,8 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
           signeNeutre
           label="Variation cumulée"
           aide="Ce que la trésorerie aura gagné ou perdu sur l'ensemble de la période. Un chiffre négatif n'est pas forcément une alerte : tout dépend du niveau de départ."
-          value={formatMFcfa(atterrissage.totaux.variation_cumulee_xof)}
-          unit="M FCFA"
+          value={formatFcfa(atterrissage.totaux.variation_cumulee_xof)}
+          unit="FCFA"
           reading="variation, pas un solde bancaire"
           readingVariant={atterrissage.totaux.variation_cumulee_xof < 0 ? "neg" : "pos"}
           detail={{
@@ -234,17 +234,17 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
             tag: "pas une position",
             tagVariant: "w",
             body: [
-              `Le cumul des soldes mensuels du calendrier ressort à ${formatMFcfa(atterrissage.totaux.variation_cumulee_xof)} M FCFA.`,
+              `Le cumul des soldes mensuels du calendrier ressort à ${formatFcfa(atterrissage.totaux.variation_cumulee_xof)} FCFA.`,
               "Aucun solde bancaire n'existe dans le système : ce cumul est une VARIATION de trésorerie sur la période, pas une position. Un cumul négatif ne signifie pas un découvert — il signifie que la période consomme plus de trésorerie qu'elle n'en apporte.",
               position.note,
             ],
             kv: [
-              ["Encaissé constaté", `${formatMFcfa(atterrissage.totaux.encaissement_constate_xof)} M FCFA`],
-              ["Décaissé constaté", `${formatMFcfa(atterrissage.totaux.decaissement_constate_xof)} M FCFA`],
-              ["Solde prévu restant", `${formatMFcfa(soldeAVenir)} M FCFA`],
+              ["Encaissé constaté", `${formatFcfa(atterrissage.totaux.encaissement_constate_xof)} FCFA`],
+              ["Décaissé constaté", `${formatFcfa(atterrissage.totaux.decaissement_constate_xof)} FCFA`],
+              ["Solde prévu restant", `${formatFcfa(soldeAVenir)} FCFA`],
               ["Mois en alerte", formatNumber(atterrissage.totaux.nb_mois_en_alerte)],
-              ["Encours facturé", `${formatMFcfa(position.encours_facture_xof)} M FCFA`],
-              ["Reste à encaisser (dossiers)", `${formatMFcfa(position.reste_a_encaisser_dossiers_xof)} M FCFA`],
+              ["Encours facturé", `${formatFcfa(position.encours_facture_xof)} FCFA`],
+              ["Reste à encaisser (dossiers)", `${formatFcfa(position.reste_a_encaisser_dossiers_xof)} FCFA`],
             ],
           }}
         />
@@ -270,18 +270,18 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
                 libelle: "Variation cumulée de trésorerie",
                 couleur: SERIE_1,
                 aire: true,
-                etiquetteFin: `${formatMFcfa(atterrissage.totaux.variation_cumulee_xof)} M`,
+                etiquetteFin: `${formatFcfa(atterrissage.totaux.variation_cumulee_xof)}`,
                 points: atterrissage.mois.map((m) => ({
                   x: m.libelle,
                   y: m.solde_cumule_xof,
                   fiable: !m.synchronisation_incomplete && m.statut !== "a_venir",
-                  info: `${m.libelle_long} — cumul ${formatMFcfa(m.solde_cumule_xof)} M (solde du mois ${formatMFcfa(m.solde_xof)} M, encaissé ${formatMFcfa(m.encaissement_retenu_xof)} M, décaissé ${formatMFcfa(m.decaissement_retenu_xof)} M)${
+                  info: `${m.libelle_long} — cumul ${formatFcfa(m.solde_cumule_xof)} (solde du mois ${formatFcfa(m.solde_xof)}, encaissé ${formatFcfa(m.encaissement_retenu_xof)}, décaissé ${formatFcfa(m.decaissement_retenu_xof)})${
                     m.statut === "a_venir" ? " · projeté" : m.synchronisation_incomplete ? " · synchronisation incomplète" : ""
                   }`,
                 })),
               },
             ]}
-            formatY={(v) => `${formatMFcfa(v)} M`}
+            formatY={(v) => `${formatFcfa(v)}`}
             zeroBase={false}
           />
           <ChartNote>
@@ -326,10 +326,10 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
                     tagVariant: m.statut === "revolu" ? "s" : m.statut === "en_cours" ? "a" : "w",
                     body: [
                       m.statut === "revolu"
-                        ? `${formatMFcfa(m.encaissement_constate_xof)} M FCFA encaissés sur ${formatNumber(m.nb_encaissements_constates)} règlement(s), et ${formatMFcfa(m.decaissement_constate_xof)} M FCFA d'achats engagés sur ${formatNumber(m.nb_achats_engages)} commande(s).`
+                        ? `${formatFcfa(m.encaissement_constate_xof)} FCFA encaissés sur ${formatNumber(m.nb_encaissements_constates)} règlement(s), et ${formatFcfa(m.decaissement_constate_xof)} FCFA d'achats engagés sur ${formatNumber(m.nb_achats_engages)} commande(s).`
                         : m.statut === "en_cours"
-                          ? `${formatMFcfa(m.encaissement_constate_xof)} M FCFA déjà encaissés ce mois-ci, et ${formatMFcfa(m.encaissement_prevu_xof)} M FCFA encore attendus sur ${formatNumber(m.nb_creances_attendues)} créance(s). Les décaissements affichés sont les achats déjà engagés.`
-                          : `${formatMFcfa(m.encaissement_prevu_xof)} M FCFA attendus sur ${formatNumber(m.nb_creances_attendues)} créance(s) dont l'échéance, décalée du retard habituel du client, tombe sur ce mois. Le décaissement est une moyenne des ${formatNumber(atterrissage.totaux.fenetre_run_rate_mois)} derniers mois d'achats.`,
+                          ? `${formatFcfa(m.encaissement_constate_xof)} FCFA déjà encaissés ce mois-ci, et ${formatFcfa(m.encaissement_prevu_xof)} FCFA encore attendus sur ${formatNumber(m.nb_creances_attendues)} créance(s). Les décaissements affichés sont les achats déjà engagés.`
+                          : `${formatFcfa(m.encaissement_prevu_xof)} FCFA attendus sur ${formatNumber(m.nb_creances_attendues)} créance(s) dont l'échéance, décalée du retard habituel du client, tombe sur ce mois. Le décaissement est une moyenne des ${formatNumber(atterrissage.totaux.fenetre_run_rate_mois)} derniers mois d'achats.`,
                       projete
                         ? atterrissage.hypotheses[1]
                         : "Attention à la nature du décaissement : ce sont des achats ENGAGÉS (commandes), pas des règlements fournisseurs — aucune facture fournisseur n'est synchronisée.",
@@ -338,12 +338,12 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
                         : "",
                     ].filter(Boolean),
                     kv: [
-                      ["Encaissement constaté", `${formatMFcfa(m.encaissement_constate_xof)} M FCFA`],
-                      ["Encaissement prévu", `${formatMFcfa(m.encaissement_prevu_xof)} M FCFA`],
-                      ["Décaissement constaté", `${formatMFcfa(m.decaissement_constate_xof)} M FCFA`],
-                      ["Décaissement prévu", `${formatMFcfa(m.decaissement_prevu_xof)} M FCFA`],
-                      ["Solde du mois", `${formatMFcfa(m.solde_xof)} M FCFA`],
-                      ["Variation cumulée", `${formatMFcfa(m.solde_cumule_xof)} M FCFA`],
+                      ["Encaissement constaté", `${formatFcfa(m.encaissement_constate_xof)} FCFA`],
+                      ["Encaissement prévu", `${formatFcfa(m.encaissement_prevu_xof)} FCFA`],
+                      ["Décaissement constaté", `${formatFcfa(m.decaissement_constate_xof)} FCFA`],
+                      ["Décaissement prévu", `${formatFcfa(m.decaissement_prevu_xof)} FCFA`],
+                      ["Solde du mois", `${formatFcfa(m.solde_xof)} FCFA`],
+                      ["Variation cumulée", `${formatFcfa(m.solde_cumule_xof)} FCFA`],
                       ["Provenance encaissement", m.source_encaissement === "reel" ? "mesuré" : "projeté"],
                       ["Provenance décaissement", m.source_decaissement === "reel" ? "mesuré" : "projeté"],
                     ],
@@ -357,15 +357,15 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
                   </div>
                   <div className="daf-m-r daf-m-in">
                     <span>encaissé</span>
-                    <b>{formatMFcfa(m.encaissement_retenu_xof)} M</b>
+                    <b>{formatFcfa(m.encaissement_retenu_xof)}</b>
                   </div>
                   <div className="daf-m-r daf-m-out">
                     <span>décaissé</span>
-                    <b>{formatMFcfa(m.decaissement_retenu_xof)} M</b>
+                    <b>{formatFcfa(m.decaissement_retenu_xof)}</b>
                   </div>
                   <div className="daf-m-sd">
-                    <b className={m.solde_xof < 0 ? "neg" : "pos"}>{formatMFcfa(m.solde_xof)} M</b>
-                    <span>cum. {formatMFcfa(m.solde_cumule_xof)} M</span>
+                    <b className={m.solde_xof < 0 ? "neg" : "pos"}>{formatFcfa(m.solde_xof)}</b>
+                    <span>cum. {formatFcfa(m.solde_cumule_xof)}</span>
                   </div>
                   <p className="daf-m-p">
                     {m.statut === "revolu"
@@ -444,7 +444,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
         <Tile
           span={7}
           title="Créances échues à recouvrer"
-          kick={`${formatMFcfa(vigilance.totaux.montant_echu_xof)} M FCFA · ${formatNumber(vigilance.totaux.nb_contentieux)} au-delà de 90 j`}
+          kick={`${formatFcfa(vigilance.totaux.montant_echu_xof)} FCFA · ${formatNumber(vigilance.totaux.nb_contentieux)} au-delà de 90 j`}
           aide="Les factures impayées dont l'échéance est dépassée, de la plus grosse à la plus petite. Au-delà de trois mois, le recouvrement devient nettement plus difficile."
         >
           <HintLine>Classées par montant restant dû — l&apos;arriéré ancien est traité à part</HintLine>
@@ -477,7 +477,7 @@ export async function DfTresorerie({ annee }: { annee?: number }) {
             affiches={Math.min(10, vigilance.echues.length)}
             total={vigilance.totaux.nb_echues}
             nom="créances échues"
-            ou={`${formatMFcfa(vigilance.totaux.montant_echu_xof)} M FCFA au total`}
+            ou={`${formatFcfa(vigilance.totaux.montant_echu_xof)} FCFA au total`}
           />
           <Note accent style={{ marginTop: 14 }}>
             {arriere.lecture}

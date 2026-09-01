@@ -61,6 +61,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import delete, select, text
 
+from core.montants import fcfa
 from db.database import AsyncSessionLocal
 from db.models import IndicatorSnapshotModel
 
@@ -603,10 +604,13 @@ def _mouvement(bloc: dict, horizon: str) -> str:
         if not ecart:
             return f"stable {libelle}"
         return f"{'▲' if ecart > 0 else '▼'} {abs(int(ecart))} {libelle}"
-    millions = round(abs(ecart) / 1_000_000)
-    if not millions:
+    # Le seuil de « stabilité » reste le million : sous ce niveau, une variation
+    # n'est pas un mouvement à signaler dans un briefing de direction. C'est une
+    # règle de LECTURE, distincte de l'écriture du montant — qui passe par `fcfa`
+    # et suit l'échelle propre à l'écart (85 M, 2,55 Md).
+    if not round(abs(ecart) / 1_000_000):
         return f"stable {libelle}"
-    return f"{'▲' if ecart > 0 else '▼'} {millions} M FCFA {libelle}"
+    return f"{'▲' if ecart > 0 else '▼'} {fcfa(abs(ecart))} FCFA {libelle}"
 
 
 def formater(bloc: dict, horizon: str = "j1") -> str:
@@ -635,7 +639,7 @@ def _valeur_lisible(bloc: dict) -> str:
         return f"{valeur:.1f} %"
     if unite == "jours":
         return f"{round(valeur)} j"
-    return f"{round(valeur / 1_000_000):,}".replace(",", " ") + " M FCFA"
+    return f"{fcfa(valeur)} FCFA"
 
 
 def ligne_cadence(bloc: dict | None, libelle: str) -> str:

@@ -9,6 +9,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from core.montants import fcfa
 from modules.uc_arbitrage import service as arbitrage_service
 from modules.uc_briefing import analyses, evenements, indicateurs, preferences
 from modules.uc_briefing import seuils as seuils_mod
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 def _m(xof: float | int | None) -> int:
+    """Montant en millions, NUMÉRIQUE — réservé aux tests de présence du type
+    `if _m(x):`. Pour afficher, passer par `fcfa` : l'échelle (M ou Md) y suit
+    le montant au lieu d'être imposée par la phrase qui l'entoure."""
     return round((xof or 0) / 1_000_000)
 
 
@@ -65,15 +69,14 @@ def _taux_marge(margins: dict, volet: str) -> float | None:
 
 
 def _mm(xof: float | int | None) -> str:
-    """Montant en millions, ou « moins de 1 M » — jamais « 0 M FCFA ».
+    """Montant d'événement, unité comprise : « 400 000 FCFA », « 2,30 M FCFA ».
 
-    `_m` arrondit : une commande d'achat de 400 000 F sort à « 0 M FCFA », ce qui
-    se lit comme un montant nul et discrédite la puce qui l'entoure. Réservé aux
-    puces d'événements, où les montants unitaires sont parfois petits ; les
-    agrégats de direction restent sur `_m`.
+    Portait autrefois un garde-fou « moins de 1 M FCFA » : `_m` arrondissait une
+    commande d'achat de 400 000 F à « 0 M FCFA », ce qui se lisait comme un
+    montant nul et discréditait la puce entière. L'échelle adaptative de `fcfa`
+    supprime la cause — sous le million, le montant s'écrit en chiffres entiers.
     """
-    millions = _m(xof)
-    return "moins de 1 M FCFA" if not millions and (xof or 0) else f"{millions} M FCFA"
+    return f"{fcfa(xof)} FCFA"
 
 
 def _var(deltas: dict | None, cle: str, horizon: str = "j1") -> str:
@@ -341,24 +344,24 @@ def _action_du_jour(croisement_top, arb_top, rupture_top, position_nette_xof) ->
     if croisement_top:
         return (
             f"Trancher aujourd'hui le cas {croisement_top['client']} : "
-            f"{_m(croisement_top['impaye_xof'])} M FCFA échus depuis {croisement_top['retard_max_jours']} j "
+            f"{fcfa(croisement_top['impaye_xof'])} FCFA échus depuis {croisement_top['retard_max_jours']} j "
             f"sur un compte silencieux depuis {croisement_top['jours_silence']} j — recouvrer ou "
             f"réengager, pas les deux."
         )
     if arb_top:
         return (
-            f"Trancher aujourd'hui {arb_top['subject_ref']} ({_m(arb_top['enjeu_xof'])} M FCFA) : "
-            f"chaque semaine de report coûte {_m(arb_top['cout_report_xof_semaine'])} M FCFA."
+            f"Trancher aujourd'hui {arb_top['subject_ref']} ({fcfa(arb_top['enjeu_xof'])} FCFA) : "
+            f"chaque semaine de report coûte {fcfa(arb_top['cout_report_xof_semaine'])} FCFA."
         )
     if rupture_top:
         return (
             f"Appeler {rupture_top['client']} cette semaine : {rupture_top['jours_silence']} j de silence "
-            f"sur {_m(rupture_top['ca_annuel_moyen_xof'])} M FCFA/an historiques, avant l'arrêté budgétaire."
+            f"sur {fcfa(rupture_top['ca_annuel_moyen_xof'])} FCFA/an historiques, avant l'arrêté budgétaire."
         )
     if position_nette_xof is None:
         return None
     return (
-        f"Arbitrer aujourd'hui l'échéancier fournisseurs : {_m(abs(position_nette_xof))} M FCFA de "
+        f"Arbitrer aujourd'hui l'échéancier fournisseurs : {fcfa(abs(position_nette_xof))} FCFA de "
         f"découvert net entre ce qui est dû et ce qui est encaissable."
     )
 
@@ -389,7 +392,12 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             "win_rate": (lambda: crm.get_win_rate(), None),
             "lost": (lambda: crm.get_lost_deals(limit=5), None),
             "opportunites": (lambda: crm.list_opportunities(limit=500), []),
-            "collecte": (lambda: crm.get_invoice_collection_stats(), None),
+            # `exercice` et non `year` : la borne porte sur les factures RÉGLÉES
+            # dans l'année, jamais sur celles émises dans l'année (biais de
+            # censure, cf. LocalCRMAdapter.get_invoice_collection_stats). Même
+            # argument que l'onglet DG « Pilotage », qui doit dire le même délai
+            # que cette puce — les montants en attente restent hors borne.
+            "collecte": (lambda: crm.get_invoice_collection_stats(exercice=y), None),
             "par_commercial": (lambda: crm.get_revenue_by_salesperson(year=y), []),
             "secteurs": (lambda: crm.get_revenue_by_sector(year=y, limit=10), []),
             "mensuel": (lambda: crm.get_monthly_revenue(y), []),
@@ -428,9 +436,9 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             "nb_commandes_ytd_n1": ytd_n1["orders_count"],
         })
         puces.pour("ca_ytd").append(
-            f"CA commandé au {_fr(arret.isoformat())} : {_m(ytd['revenue_xof'])} M FCFA contre "
-            f"{_m(ytd_n1['revenue_xof'])} M FCFA à la même date en {y - 1} "
-            f"({'▲' if ecart >= 0 else '▼'} {_m(abs(ecart))} M FCFA"
+            f"CA commandé au {_fr(arret.isoformat())} : {fcfa(ytd['revenue_xof'])} FCFA contre "
+            f"{fcfa(ytd_n1['revenue_xof'])} FCFA à la même date en {y - 1} "
+            f"({'▲' if ecart >= 0 else '▼'} {fcfa(abs(ecart))} FCFA"
             + (f", {ecart_pct:+.0f}%" if ecart_pct is not None else "")
             + f"), sur {ytd['orders_count']} commandes contre {ytd_n1['orders_count']}"
             + _var(deltas, "ca_commande_ytd", "semaine") + "."
@@ -450,13 +458,13 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         if rupture_comptes:
             cites = ", ".join(
                 f"{cpt['client']} silencieux depuis {cpt['jours_silence']} j (dernière commande le "
-                f"{_fr(cpt['derniere_commande'])}, {_m(cpt['ca_annuel_moyen_xof'])} M FCFA/an historiques)"
+                f"{_fr(cpt['derniere_commande'])}, {fcfa(cpt['ca_annuel_moyen_xof'])} FCFA/an historiques)"
                 for cpt in rupture_comptes[:3]
             )
             puces.pour("rupture_rythme").append(
                 f"{rupture['nb_comptes_rompus']} comptes majeurs en rupture de rythme : {cites} — "
-                f"{_m(rupture['ca_annuel_historique_xof'])} M FCFA/an historiques réduits à "
-                f"{_m(rupture['ca_ytd_xof'])} M FCFA depuis janvier."
+                f"{fcfa(rupture['ca_annuel_historique_xof'])} FCFA/an historiques réduits à "
+                f"{fcfa(rupture['ca_ytd_xof'])} FCFA depuis janvier."
             )
 
     # 3 — croisement impayé × rupture de rythme (le fait décidable)
@@ -481,9 +489,9 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         })
     if c.actif("croisement_impaye_rupture") and croisement_top:
         puces.pour("croisement_impaye_rupture").append(
-            f"{croisement_top['client']} croise les deux risques : {_m(croisement_top['impaye_xof'])} M FCFA "
+            f"{croisement_top['client']} croise les deux risques : {fcfa(croisement_top['impaye_xof'])} FCFA "
             f"impayés à {croisement_top['retard_max_jours']} j de retard et {croisement_top['jours_silence']} j "
-            f"sans commande. Au total {_m(croisement_impaye)} M FCFA d'impayés sur les comptes qui ont cessé "
+            f"sans commande. Au total {fcfa(croisement_impaye)} FCFA d'impayés sur les comptes qui ont cessé "
             f"de commander" + (f", soit {part_pct:.0f}% de l'exposition." if part_pct is not None else ".")
         )
 
@@ -512,7 +520,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
                 f"{arb['kpi']['enjeu_cumule_m_fcfa']} M FCFA d'enjeu, "
                 f"{arb['kpi']['cout_report_m_fcfa_semaine']:.0f} M FCFA de coût par semaine de report"
                 + (
-                    f" — le premier est {arb_top['subject_ref']} ({_m(arb_top['enjeu_xof'])} M FCFA)."
+                    f" — le premier est {arb_top['subject_ref']} ({fcfa(arb_top['enjeu_xof'])} FCFA)."
                     if arb_top else "."
                 )
             )
@@ -535,8 +543,8 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
                 "couverture_fournisseurs_pct": round(couverture, 1) if couverture is not None else None,
             })
             puces.pour("position_tresorerie").append(
-                f"Position nette de trésorerie : {_m(four)} M FCFA dus aux fournisseurs contre "
-                f"{_m(reste)} M FCFA à encaisser des clients, soit {_m(abs(position_nette))} M FCFA de "
+                f"Position nette de trésorerie : {fcfa(four)} FCFA dus aux fournisseurs contre "
+                f"{fcfa(reste)} FCFA à encaisser des clients, soit {fcfa(abs(position_nette))} FCFA de "
                 f"{'découvert' if position_nette < 0 else 'excédent'} structurel"
                 + (f" ({couverture:.0f}% de couverture)" if couverture is not None else "")
                 + _var(deltas, "reste_a_encaisser", "semaine") + "."
@@ -561,7 +569,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         })
         if top5_pct is not None:
             puces.pour("concentration").append(
-                f"Concentration {y} : le top 5 pèse {top5_pct:.0f}% des {_m(base)} M FCFA commandés "
+                f"Concentration {y} : le top 5 pèse {top5_pct:.0f}% des {fcfa(base)} FCFA commandés "
                 f"(seuil de vigilance {c.seuil('concentration_top5_pct'):g}%), "
                 f"{top1['client']} premier à {top1_pct:.0f}%."
             )
@@ -579,7 +587,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         puces.pour("taux_materialisation").append(
             f"Matérialisation du CA (définitif/provisoire) : {taux:.1f}%, "
             f"{'sous' if taux < seuil else 'au-dessus de'} le seuil d'alerte de {seuil:g}% — "
-            f"{_m(margins['backlog_total'])} M FCFA de backlog non encore facturés"
+            f"{fcfa(margins['backlog_total'])} FCFA de backlog non encore facturés"
             + _var(deltas, "backlog", "semaine") + "."
         )
 
@@ -620,9 +628,9 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
                 "fournisseurs_top_dependance_pct": top_f.get("taux_dependance_pct"),
             })
             puces.pour("engagement_fournisseurs").append(
-                f"Engagement fournisseurs : {_m(total_encours)} M FCFA d'encours dû sur les "
+                f"Engagement fournisseurs : {fcfa(total_encours)} FCFA d'encours dû sur les "
                 f"{len(fournisseurs)} premiers fournisseurs, {top_f['name']} en tête à "
-                f"{_m(top_f['encours_du_xof'])} M FCFA"
+                f"{fcfa(top_f['encours_du_xof'])} FCFA"
                 + (f" ({top_f['taux_dependance_pct']:.0f}% des achats)."
                    if top_f.get("taux_dependance_pct") is not None else ".")
             )
@@ -643,9 +651,9 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             "pluriannuel_meilleure_ca_xof": meilleure["ca_xof"],
             "pluriannuel_part_meilleure_pct": round(part_meilleure, 1) if part_meilleure is not None else None,
         })
-        serie = ", ".join(f"{a['annee']} : {_m(a['ca_xof'])}" for a in pluriannuel)
+        serie = ", ".join(f"{a['annee']} : {fcfa(a['ca_xof'])}" for a in pluriannuel)
         puces.pour("ca_pluriannuel").append(
-            f"CA commandé des {len(pluriannuel)} derniers exercices (M FCFA) — {serie} ; "
+            f"CA commandé des {len(pluriannuel)} derniers exercices, en FCFA — {serie} ; "
             f"meilleure année {meilleure['annee']}"
             + (f", l'exercice en cours (encore incomplet) en est à {part_meilleure:.0f}%."
                if part_meilleure is not None and meilleure["annee"] != y else ".")
@@ -665,10 +673,10 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         })
         taux_prov, taux_def = _taux_marge(marge, "provisoire"), _taux_marge(marge, "definitif")
         puces.pour("marge_exercice").append(
-            f"Marge {y} : {_m(marge['marge_provisoire_total'])} M FCFA provisoires sur "
+            f"Marge {y} : {fcfa(marge['marge_provisoire_total'])} FCFA provisoires sur "
             f"{marge['nb_dossiers']} dossiers"
             + (f" ({taux_prov:.1f}% du CA provisoire)" if taux_prov is not None else "")
-            + f", {_m(marge['marge_definitive_total'])} M FCFA définitifs constatés"
+            + f", {fcfa(marge['marge_definitive_total'])} FCFA définitifs constatés"
             + (f" ({taux_def:.1f}% du CA définitif)" if taux_def is not None else "")
             + "."
         )
@@ -686,10 +694,10 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         })
         texte = f"Atterrissage {forecast.get('trimestre')} : "
         if forecast.get("realise_a_ce_jour_xof") is not None:
-            texte += f"{_m(forecast['realise_a_ce_jour_xof'])} M FCFA déjà commandés, "
-        texte += f"projection de fin de trimestre à {_m(projection['realiste_xof'])} M FCFA en scénario réaliste"
+            texte += f"{fcfa(forecast['realise_a_ce_jour_xof'])} FCFA déjà commandés, "
+        texte += f"projection de fin de trimestre à {fcfa(projection['realiste_xof'])} FCFA en scénario réaliste"
         if projection.get("pessimiste_xof") is not None and projection.get("optimiste_xof") is not None:
-            texte += f" (fourchette {_m(projection['pessimiste_xof'])} à {_m(projection['optimiste_xof'])})"
+            texte += f" (fourchette {fcfa(projection['pessimiste_xof'])} à {fcfa(projection['optimiste_xof'])})"
         puces.pour("prevision_atterrissage").append(texte + ".")
 
     # 13 — taux de transformation  [élément : taux_transformation]
@@ -711,7 +719,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             })
             texte += (
                 f" ; {lost['nb_total']} affaires perdues, {perdant['client']} en concentre le plus "
-                f"({_m(perdant['montant_xof'])} M FCFA sur {perdant['nb']})"
+                f"({fcfa(perdant['montant_xof'])} FCFA sur {perdant['nb']})"
             )
         puces.pour("taux_transformation").append(texte + ".")
 
@@ -740,7 +748,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         )
         puces.pour("delai_encaissement").append(
             tete + f" ; {collecte.get('taux_recouvrement_pct', 0)}% des factures recouvrées, "
-            f"{_m(collecte.get('montant_en_attente_xof'))} M FCFA en attente sur "
+            f"{fcfa(collecte.get('montant_en_attente_xof'))} FCFA en attente sur "
             f"{collecte.get('nb_impayes_en_souffrance', 0)} factures en souffrance "
             f"(retard moyen {collecte.get('retard_moyen_impayes_jours', 0)} j)."
         )
@@ -772,15 +780,15 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         if tete_secteur["secteur"] == "Non renseigné":
             puces.pour("mix_sectoriel").append(
                 f"Mix sectoriel {y} : le premier poste est « Non renseigné »"
-                + (f" ({part_secteur:.0f}% des {_m(total_secteurs)} M FCFA commandés)"
+                + (f" ({part_secteur:.0f}% des {fcfa(total_secteurs)} FCFA commandés)"
                    if part_secteur is not None else "")
                 + " — la qualification sectorielle des clients reste à faire avant toute lecture."
             )
         else:
             puces.pour("mix_sectoriel").append(
                 f"Mix sectoriel {y} : {tete_secteur['secteur']} en tête à "
-                f"{_m(tete_secteur['ca_total_xof'])} M FCFA"
-                + (f" ({part_secteur:.0f}% des {_m(total_secteurs)} M FCFA commandés)"
+                f"{fcfa(tete_secteur['ca_total_xof'])} FCFA"
+                + (f" ({part_secteur:.0f}% des {fcfa(total_secteurs)} FCFA commandés)"
                    if part_secteur is not None else "")
                 + f", sur {len(secteurs)} secteurs suivis."
             )
@@ -804,8 +812,8 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             "mensuel_dernier_vs_moyenne_pct": round(part_mois, 1) if part_mois is not None else None,
         })
         puces.pour("rythme_mensuel").append(
-            f"Rythme mensuel {y} : {_MOIS[dernier['mois']]} à {_m(dernier['ca_xof'])} M FCFA contre "
-            f"une moyenne de {_m(moyenne)} M FCFA sur les mois écoulés"
+            f"Rythme mensuel {y} : {_MOIS[dernier['mois']]} à {fcfa(dernier['ca_xof'])} FCFA contre "
+            f"une moyenne de {fcfa(moyenne)} FCFA sur les mois écoulés"
             + (f" ({part_mois:.0f}% de la moyenne)." if part_mois is not None else ".")
         )
 
@@ -820,9 +828,9 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             "imminentes_top": tete_lead,
         })
         puces.pour("affaires_imminentes").append(
-            f"{len(hot)} affaires chaudes au pipeline pour {_m(total_pondere)} M FCFA pondérés — "
+            f"{len(hot)} affaires chaudes au pipeline pour {fcfa(total_pondere)} FCFA pondérés — "
             f"la première : {tete_lead['opportunite']} ({tete_lead['client']}, "
-            f"{_m(tete_lead['score_pondere_xof'])} M FCFA pondérés)."
+            f"{fcfa(tete_lead['score_pondere_xof'])} FCFA pondérés)."
         )
 
     # 20 — factures échues, clients ET fournisseurs  [élément : factures_echues]
@@ -840,8 +848,8 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         })
         tete_facture = (
             f"Factures échues : {client_sit['nb_echues']} factures clients non réglées pour "
-            f"{_m(client_sit['montant_echu_xof'])} M FCFA, dont "
-            f"{_m(client_sit['montant_contentieux_xof'])} M au-delà de 90 jours"
+            f"{fcfa(client_sit['montant_echu_xof'])} FCFA, dont "
+            f"{fcfa(client_sit['montant_contentieux_xof'])} au-delà de 90 jours"
         )
         if fournisseur_sit:
             facts.update({
@@ -850,7 +858,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             })
             puces.pour("factures_echues").append(
                 tete_facture + f" ; côté fournisseurs, {fournisseur_sit['nb_echues']} factures "
-                f"échues pour {_m(fournisseur_sit['dette_echue_xof'])} M FCFA dus — un stock de "
+                f"échues pour {fcfa(fournisseur_sit['dette_echue_xof'])} FCFA dus — un stock de "
                 "cette taille se traite en plan d'assainissement (provision, échéancier négocié), "
                 "pas en relances au fil de l'eau."
             )
@@ -877,8 +885,8 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             })
             puces.pour("visibilite_carnet").append(
                 f"Visibilité du carnet : {mois:.1f} mois de facturation couverts "
-                f"({_m(visibilite['backlog_xof'])} M FCFA de backlog pour "
-                f"{_m(visibilite['facture_mensuel_moyen_xof'])} M FCFA facturés par mois en "
+                f"({fcfa(visibilite['backlog_xof'])} FCFA de backlog pour "
+                f"{fcfa(visibilite['facture_mensuel_moyen_xof'])} FCFA facturés par mois en "
                 f"moyenne sur {visibilite['fenetre_mois']} mois), "
                 f"{'sous le' if mois < seuil_mois else 'au-dessus du'} plancher de "
                 f"{seuil_mois:g} mois."
@@ -903,7 +911,7 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         })
         puces.pour("book_to_bill").append(
             f"Book-to-bill sur {btb['fenetre_mois']} mois : {ratio:.2f} "
-            f"({_m(btb['commande_xof'])} M FCFA commandés pour {_m(btb['facture_xof'])} M "
+            f"({fcfa(btb['commande_xof'])} FCFA commandés pour {fcfa(btb['facture_xof'])} "
             f"facturés) — le carnet se remplit "
             f"{'plus vite' if ratio >= plancher else 'moins vite'} qu'il ne se vide. "
             f"Réserve : {btb['reserve']}."
@@ -986,7 +994,7 @@ def _echeances(facts: dict, bullets: list[str], opportunities: list[dict], jours
         },
     })
     bullets.append(
-        f"{len(proches)} opportunité(s) ouverte(s) à échéance sous {jours} j pour {_m(montant)} M FCFA — "
+        f"{len(proches)} opportunité(s) ouverte(s) à échéance sous {jours} j pour {fcfa(montant)} FCFA — "
         f"la plus proche : {opp.get('opportunite')} ({opp.get('client')}) le {_fr(premiere.isoformat())}."
     )
 
@@ -1016,8 +1024,8 @@ def _couverture_objectifs(facts: dict, bullets: list[str], par_commercial: list[
         "couverture_objectif_saisi": False,
     })
     bullets.append(
-        f"Réalisé {annee} par commercial : {_m(total)} M FCFA sur {len(actifs)} commerciaux, "
-        f"{tete['commercial']} en tête à {_m(tete['ca_total_xof'])} M FCFA"
+        f"Réalisé {annee} par commercial : {fcfa(total)} FCFA sur {len(actifs)} commerciaux, "
+        f"{tete['commercial']} en tête à {fcfa(tete['ca_total_xof'])} FCFA"
         + (f" ({part:.0f}% du total)" if part is not None else "")
         + " — aucun objectif n'étant saisi en base, c'est une répartition du réalisé, pas un taux d'atteinte."
     )
@@ -1045,8 +1053,8 @@ def _mix_offre(facts: dict, bullets: list[str], par_produit: list[dict], annee: 
         f"{cle}_top_part_pct": round(part, 1) if part is not None else None,
     })
     bullets.append(
-        f"Mix d'offre {annee} : {_m(total)} M FCFA sur {len(lignes)} familles suivies, "
-        f"{nom} en tête à {_m(tete['ca_total_xof'])} M FCFA"
+        f"Mix d'offre {annee} : {fcfa(total)} FCFA sur {len(lignes)} familles suivies, "
+        f"{nom} en tête à {fcfa(tete['ca_total_xof'])} FCFA"
         + (f" ({part:.0f}% du total)." if part is not None else ".")
     )
 
@@ -1155,9 +1163,9 @@ def _puce_hygiene_pipe(facts: dict, bullets: list[str], hyg: dict | None) -> Non
         tete = relance["top"][0]
         debut = (
             f"{relance['nb']} affaire(s) encore dans les temps pour "
-            f"{_m(relance['montant_xof'])} M FCFA n'ont pas bougé depuis plus de "
+            f"{fcfa(relance['montant_xof'])} FCFA n'ont pas bougé depuis plus de "
             f"{hyg['seuil_jours']} j — la première : {tete['opportunite']} ({tete['client']}, "
-            f"{_m(tete['revenu_attendu_xof'])} M FCFA, échéance le {_fr(tete['deadline'])}, "
+            f"{fcfa(tete['revenu_attendu_xof'])} FCFA, échéance le {_fr(tete['deadline'])}, "
             f"{tete['jours_silence']} j de silence)"
         )
     else:
@@ -1167,7 +1175,7 @@ def _puce_hygiene_pipe(facts: dict, bullets: list[str], hyg: dict | None) -> Non
         )
     bullets.append(
         debut + f". En regard, {assainir['nb']} opportunité(s) restées ouvertes pour "
-        f"{_m(assainir['montant_xof'])} M FCFA ont une échéance déjà dépassée : tant "
+        f"{fcfa(assainir['montant_xof'])} FCFA ont une échéance déjà dépassée : tant "
         f"qu'elles ne sont pas clôturées, tout montant de pipeline publié les inclut."
     )
 
@@ -1218,12 +1226,12 @@ def _puce_ca_periode(facts: dict, puces: Puces, element: str, deltas: dict,
     facts[f"{element}_mois_xof"] = mois["valeur"]
     facts[f"{element}_ytd_xof"] = ytd.get("valeur")
     texte = (
-        f"{libelle} : {_m(mois['valeur'])} M FCFA depuis le 1er du mois"
+        f"{libelle} : {fcfa(mois['valeur'])} FCFA depuis le 1er du mois"
         + _var(deltas, cle_mois, "j1")
     )
     if ytd.get("valeur") is not None:
         texte += (
-            f", {_m(ytd['valeur'])} M FCFA depuis le 1er janvier"
+            f", {fcfa(ytd['valeur'])} FCFA depuis le 1er janvier"
             + _var(deltas, cle_ytd, "mois")
         )
     if cle_nb:
@@ -1248,12 +1256,12 @@ def _puce_carnet(facts: dict, puces: Puces, element: str, deltas: dict,
     if backlog is None:
         return
     facts["carnet_backlog_xof"] = backlog
-    texte = f"Carnet de commandes : {_m(backlog)} M FCFA vendus et pas encore facturés"
+    texte = f"Carnet de commandes : {fcfa(backlog)} FCFA vendus et pas encore facturés"
     texte += _var(deltas, "backlog", "semaine")
     reste = (deltas.get("reste_a_encaisser") or {}).get("valeur")
     if reste is not None:
         facts["carnet_reste_a_encaisser_xof"] = reste
-        texte += f", dont {_m(reste)} M FCFA restent à encaisser sur les dossiers ouverts"
+        texte += f", dont {fcfa(reste)} FCFA restent à encaisser sur les dossiers ouverts"
     puces.ajouter(element, texte + ".")
 
 
@@ -1287,7 +1295,7 @@ def _puce_concentration_clients(facts: dict, puces: Puces, element: str,
     })
     puces.ajouter(
         element,
-        f"Dépendance clients : le top 3 pèse {part3:.0f}% des {_m(base)} M FCFA commandés, "
+        f"Dépendance clients : le top 3 pèse {part3:.0f}% des {fcfa(base)} FCFA commandés, "
         f"le top 5 {part5:.0f}% face au seuil de vigilance de {seuil_pct:g}% — "
         f"{tete['client']} premier à {tete['ca_total_xof'] / base * 100:.0f}%."
     )
@@ -1310,12 +1318,12 @@ def _puce_attente_facturation(facts: dict, puces: Puces, element: str,
     if backlog is None:
         return
     facts["attente_facturation_xof"] = backlog
-    texte = f"En attente de facturation : {_m(backlog)} M FCFA vendus non facturés"
+    texte = f"En attente de facturation : {fcfa(backlog)} FCFA vendus non facturés"
     if visibilite.get("mesurable"):
         facts["attente_facturation_mois"] = visibilite["mois_visibilite"]
         texte += (
             f", soit {visibilite['mois_visibilite']:.1f} mois au rythme de facturation "
-            f"actuel ({_m(visibilite['facture_mensuel_moyen_xof'])} M FCFA par mois)"
+            f"actuel ({fcfa(visibilite['facture_mensuel_moyen_xof'])} FCFA par mois)"
         )
     else:
         texte += (
@@ -1412,11 +1420,11 @@ async def build_dir_commercial_facts(crm, composition: Composition | None = None
         nb = int(nb_ouvertes) if nb_ouvertes is not None else scen["nb_opportunites"]
         facts["nb_opportunites_ouvertes"] = nb
         puces.pour("pipeline_ouvert").append(
-            f"Pipeline ouvert : {_m(brut)} M FCFA brut, "
-            f"{_m(pipeline['ca_potentiel_pondéré_xof'])} M FCFA pondéré "
+            f"Pipeline ouvert : {fcfa(brut)} FCFA brut, "
+            f"{fcfa(pipeline['ca_potentiel_pondéré_xof'])} FCFA pondéré "
             f"({nb} opportunités)"
             + (
-                f" — dont {_m(actif)} M FCFA seulement sur des affaires dont "
+                f" — dont {fcfa(actif)} FCFA seulement sur des affaires dont "
                 f"l'échéance n'est pas encore passée"
                 + _var(deltas, "pipe_actif_brut", "semaine")
                 if actif is not None else ""
@@ -1431,8 +1439,8 @@ async def build_dir_commercial_facts(crm, composition: Composition | None = None
             "forecast_optimiste_xof": scen["optimiste_xof"],
         })
         puces.pour("forecast_scenarios").append(
-            f"Forecast 6 mois : {_m(scen['pessimiste_xof'])} à {_m(scen['optimiste_xof'])} M FCFA "
-            f"(réaliste {_m(scen['realiste_xof'])} M FCFA)."
+            f"Forecast 6 mois : {fcfa(scen['pessimiste_xof'])} à {fcfa(scen['optimiste_xof'])} FCFA "
+            f"(réaliste {fcfa(scen['realiste_xof'])} FCFA)."
         )
 
     if c.actif("taux_victoire") and win_rate:
@@ -1450,14 +1458,14 @@ async def build_dir_commercial_facts(crm, composition: Composition | None = None
         if top_client_perdant:
             puces.pour("pertes_par_client").append(
                 f"Client concentrant le plus de pertes : {top_client_perdant['client']} "
-                f"({_m(top_client_perdant['montant_xof'])} M FCFA sur {top_client_perdant['nb']} opportunités)."
+                f"({fcfa(top_client_perdant['montant_xof'])} FCFA sur {top_client_perdant['nb']} opportunités)."
             )
 
     if c.actif("top_lead") and hot_leads:
         facts["top_lead"] = hot_leads[0]
         puces.pour("top_lead").append(
             f"Lead le plus chaud : {hot_leads[0]['opportunite']} ({hot_leads[0]['client']}), "
-            f"{_m(hot_leads[0]['score_pondere_xof'])} M FCFA pondérés."
+            f"{fcfa(hot_leads[0]['score_pondere_xof'])} FCFA pondérés."
         )
 
     if c.actif("echeances_opportunites"):
@@ -1524,20 +1532,20 @@ def _puce_ca_facture(facts: dict, puces: Puces, deltas: dict) -> None:
         "objectif_saisi": False,
     })
     texte = (
-        f"CA facturé : {_m(facture['valeur'])} M FCFA sur le mois"
+        f"CA facturé : {fcfa(facture['valeur'])} FCFA sur le mois"
         + _var(deltas, "ca_facture_mois", "j1")
     )
     if facture_ytd.get("valeur") is not None:
-        texte += f", {_m(facture_ytd['valeur'])} M FCFA depuis janvier"
+        texte += f", {fcfa(facture_ytd['valeur'])} FCFA depuis janvier"
         if commande_ytd.get("valeur") is not None:
-            texte += f" contre {_m(commande_ytd['valeur'])} M FCFA commandés sur la même période"
+            texte += f" contre {fcfa(commande_ytd['valeur'])} FCFA commandés sur la même période"
     if encaisse.get("valeur") is not None:
         # Un encaissement nul se dit, il ne s'affiche pas en montant : « 0 M FCFA
         # encaissés » se lit comme une performance catastrophique alors que la
         # cause est ailleurs — aucun règlement n'est daté après le 05/06 dans le
         # miroir. La phrase pointe le fait, pas le chiffre.
         if encaisse["valeur"]:
-            texte += f" ; {_m(encaisse['valeur'])} M FCFA encaissés sur le mois"
+            texte += f" ; {fcfa(encaisse['valeur'])} FCFA encaissés sur le mois"
         else:
             texte += " ; aucun règlement enregistré ce mois-ci"
     puces.ajouter(
@@ -1571,11 +1579,11 @@ def _puce_balance_agee(facts: dict, bullets: list[str], bal: dict | None) -> Non
         "balance_intragroupe_xof": bal["intragroupe"]["montant_xof"],
     })
     texte = (
-        f"Balance âgée : {_m(bal['montant_total_xof'])} M FCFA dus sur "
-        f"{bal['nb_total']} factures — {_m(t['a_echoir']['montant_xof'])} M à échoir, "
-        f"{_m(t['j0_30']['montant_xof'])} M à 0-30 j, {_m(t['j30_60']['montant_xof'])} M à "
-        f"30-60 j, {_m(t['j60_90']['montant_xof'])} M à 60-90 j et "
-        f"{_m(t['j90_plus']['montant_xof'])} M au-delà de 90 j"
+        f"Balance âgée : {fcfa(bal['montant_total_xof'])} FCFA dus sur "
+        f"{bal['nb_total']} factures — {fcfa(t['a_echoir']['montant_xof'])} à échoir, "
+        f"{fcfa(t['j0_30']['montant_xof'])} à 0-30 j, {fcfa(t['j30_60']['montant_xof'])} à "
+        f"30-60 j, {fcfa(t['j60_90']['montant_xof'])} à 60-90 j et "
+        f"{fcfa(t['j90_plus']['montant_xof'])} au-delà de 90 j"
     )
     # Le « dont » n'a de sens que si le seuil de contentieux tombe AILLEURS que
     # sur la borne des 90 jours déjà énumérée : à 90, il répéterait mot pour mot
@@ -1585,7 +1593,7 @@ def _puce_balance_agee(facts: dict, bullets: list[str], bal: dict | None) -> Non
             texte += f", soit {cont['part_pct']:.0f}% du total"
         else:
             texte += (
-                f", dont {_m(cont['montant_xof'])} M échus depuis plus de "
+                f", dont {fcfa(cont['montant_xof'])} échus depuis plus de "
                 f"{cont['seuil_jours']:g} j ({cont['part_pct']:.0f}% du total)"
             )
     # `_m` arrondit au million : une créance intragroupe de 400 000 F sortirait
@@ -1593,7 +1601,7 @@ def _puce_balance_agee(facts: dict, bullets: list[str], bal: dict | None) -> Non
     # la ligne la plus dense du briefing DAF.
     if _m(bal["intragroupe"]["montant_xof"]):
         texte += (
-            f" ; {_m(bal['intragroupe']['montant_xof'])} M d'intragroupe sont inclus et "
+            f" ; {fcfa(bal['intragroupe']['montant_xof'])} d'intragroupe sont inclus et "
             "restent à isoler de toute lecture du risque"
         )
     bullets.append(texte + f". Réserve : {bal['reserve']}.")
@@ -1615,14 +1623,14 @@ def _puce_relances(facts: dict, bullets: list[str], rel: dict | None) -> None:
         "relances_top": rel["top"],
     })
     cites = "; ".join(
-        f"{ligne['client']} ({_m(ligne['montant_xof'])} M FCFA sur {ligne['nb_factures']} "
+        f"{ligne['client']} ({fcfa(ligne['montant_xof'])} FCFA sur {ligne['nb_factures']} "
         f"factures, jusqu'à {ligne['retard_max_jours']} j de retard"
         + (", intragroupe" if ligne["intragroupe"] else "") + ")"
         for ligne in rel["top"][:3]
     )
     bullets.append(
         f"Relances du jour : {rel['nb_clients']} clients portent "
-        f"{_m(rel['montant_xof'])} M FCFA échus depuis plus de "
+        f"{fcfa(rel['montant_xof'])} FCFA échus depuis plus de "
         f"{rel['retard_min_jours']:g} j — les trois premiers : {cites}."
     )
 
@@ -1713,7 +1721,7 @@ async def build_dir_financier_facts(crm, composition: Composition | None = None)
             "nb_factures_impayees": exposure["nb_factures_impayees"],
         })
         puces.pour("exposition_impayes").append(
-            f"Exposition totale aux impayés : {_m(exposure['exposition_totale_xof'])} M FCFA "
+            f"Exposition totale aux impayés : {fcfa(exposure['exposition_totale_xof'])} FCFA "
             f"sur {exposure['nb_factures_impayees']} factures"
             + _var(deltas, "impayes_echus", "semaine") + "."
         )
@@ -1721,7 +1729,7 @@ async def build_dir_financier_facts(crm, composition: Composition | None = None)
     if c.actif("retard_90j") and exposure:
         facts["retard_90j_montant_xof"] = exposure["retard_90j_montant_xof"]
         puces.pour("retard_90j").append(
-            f"Retard de plus de 90 jours : {_m(exposure['retard_90j_montant_xof'])} M FCFA"
+            f"Retard de plus de 90 jours : {fcfa(exposure['retard_90j_montant_xof'])} FCFA"
             + _var(deltas, "impayes_echus_90j", "mois") + "."
         )
 
@@ -1740,8 +1748,8 @@ async def build_dir_financier_facts(crm, composition: Composition | None = None)
             "fournisseurs_restant_xof": margins["fournisseurs_restant"],
         })
         puces.pour("encaissable_vs_du").append(
-            f"Reste à encaisser : {_m(margins['reste_a_encaisser'])} M FCFA. "
-            f"Fournisseurs restant à payer : {_m(margins['fournisseurs_restant'])} M FCFA."
+            f"Reste à encaisser : {fcfa(margins['reste_a_encaisser'])} FCFA. "
+            f"Fournisseurs restant à payer : {fcfa(margins['fournisseurs_restant'])} FCFA."
         )
 
     if c.actif("top_debiteur") and exposure:
@@ -1750,7 +1758,7 @@ async def build_dir_financier_facts(crm, composition: Composition | None = None)
         if top_debiteur:
             puces.pour("top_debiteur").append(
                 f"Plus gros débiteur : {top_debiteur['client']} "
-                f"({_m(top_debiteur['montant_total_xof'])} M FCFA, {top_debiteur['retard_max_jours']} jours de retard)."
+                f"({fcfa(top_debiteur['montant_total_xof'])} FCFA, {top_debiteur['retard_max_jours']} jours de retard)."
             )
 
     if c.actif("forecast_trimestre") and forecast:
@@ -1760,7 +1768,7 @@ async def build_dir_financier_facts(crm, composition: Composition | None = None)
             "forecast_realiste_xof": proj.get("realiste_xof"),
         })
         puces.pour("forecast_trimestre").append(
-            f"Prévision {forecast.get('trimestre')} : {_m(proj.get('realiste_xof'))} M FCFA (scénario réaliste)."
+            f"Prévision {forecast.get('trimestre')} : {fcfa(proj.get('realiste_xof'))} FCFA (scénario réaliste)."
         )
 
     # Répare ROLE_FOCUS["dir_financier"] : « la marge réelle par rapport à la
@@ -1828,8 +1836,8 @@ def _echeancier_fournisseurs(facts: dict, bullets: list[str], fournisseurs: list
         "echeancier_nb_fournisseurs": len(lignes),
     })
     bullets.append(
-        f"Échéancier fournisseurs sur les {len(lignes)} premiers : {_m(c30)} M FCFA à 30 j, "
-        f"{_m(c60)} M FCFA à 60 j, {_m(c90)} M FCFA à 90 j."
+        f"Échéancier fournisseurs sur les {len(lignes)} premiers : {fcfa(c30)} FCFA à 30 j, "
+        f"{fcfa(c60)} FCFA à 60 j, {fcfa(c90)} FCFA à 90 j."
     )
 
 
@@ -1891,9 +1899,9 @@ async def build_dir_operations_facts(crm, composition: Composition | None = None
             "fournisseurs_restant_xof": margins["fournisseurs_restant"],
         })
         puces.pour("backlog").append(
-            f"Backlog non facturé : {_m(margins['backlog_total'])} M FCFA"
+            f"Backlog non facturé : {fcfa(margins['backlog_total'])} FCFA"
             + _var(deltas, "backlog", "semaine")
-            + f". Fournisseurs restant à payer : {_m(margins['fournisseurs_restant'])} M FCFA."
+            + f". Fournisseurs restant à payer : {fcfa(margins['fournisseurs_restant'])} FCFA."
         )
 
     if c.actif("top_dossier_marge") and top_dossiers:
@@ -1901,7 +1909,7 @@ async def build_dir_operations_facts(crm, composition: Composition | None = None
         facts["top_dossier"] = top_dossier
         puces.pour("top_dossier_marge").append(
             f"Dossier le plus margé : {top_dossier['ref']} ({top_dossier['client']}), "
-            f"{_m(top_dossier['marge_provisoire'])} M FCFA de marge provisoire ({top_dossier['perc_marge_prov']}%)."
+            f"{fcfa(top_dossier['marge_provisoire'])} FCFA de marge provisoire ({top_dossier['perc_marge_prov']}%)."
         )
 
     if c.actif("dossiers_marge_faible") and top_dossiers:
@@ -1911,7 +1919,7 @@ async def build_dir_operations_facts(crm, composition: Composition | None = None
         facts["dossier_marge_faible"] = pire
         puces.pour("dossiers_marge_faible").append(
             f"Dossier à la marge la plus basse : {pire['ref']} ({pire['client']}), "
-            f"{pire['perc_marge_prov']}% de marge provisoire pour {_m(pire['marge_provisoire'])} M FCFA."
+            f"{pire['perc_marge_prov']}% de marge provisoire pour {fcfa(pire['marge_provisoire'])} FCFA."
         )
 
     # Répare ROLE_FOCUS["dir_operations"] : « la visibilité de charge par practice ».
@@ -1939,8 +1947,8 @@ async def build_dir_operations_facts(crm, composition: Composition | None = None
         tete = recentes[0]
         facts.update({"commandes_recentes_nb": len(recentes), "commandes_recentes_montant_xof": montant})
         puces.pour("commandes_recentes").append(
-            f"{len(recentes)} dernières commandes entrées pour {_m(montant)} M FCFA — la plus récente : "
-            f"{tete.get('client')} ({_m(tete.get('montant_xof'))} M FCFA)."
+            f"{len(recentes)} dernières commandes entrées pour {fcfa(montant)} FCFA — la plus récente : "
+            f"{tete.get('client')} ({fcfa(tete.get('montant_xof'))} FCFA)."
         )
 
     return {"facts": facts, "bullets": puces.liste(), "blocs": puces.par_bloc()}
@@ -1967,7 +1975,7 @@ def _puce_derive(facts: dict, bullets: list[str], der: dict | None) -> None:
     ecart = tete["marge_constatee_pct"] - tete["marge_prevue_pct"]
     bullets.append(
         f"{der['nb']} dossiers ont consommé au moins {der['seuil_consommation_pct']:g}% de leur "
-        f"budget de dépense, pour {_m(der['depense_engagee_xof'])} M FCFA engagés — le plus "
+        f"budget de dépense, pour {fcfa(der['depense_engagee_xof'])} FCFA engagés — le plus "
         f"exposé : {tete['ref']} ({tete['client']}) à {tete['consommation_pct']:.0f}% de "
         f"consommation, marge passée de {tete['marge_prevue_pct']:.1f}% annoncés à "
         f"{tete['marge_constatee_pct']:.1f}% constatés ({ecart:+.1f} point(s)). "
@@ -1994,9 +2002,9 @@ def _puce_sous_traitance(facts: dict, bullets: list[str], st: dict | None) -> No
     })
     tete = st["top"][0]
     texte = (
-        f"Sous-traitance : {_m(st['engagement_xof'])} M FCFA engagés sur "
+        f"Sous-traitance : {fcfa(st['engagement_xof'])} FCFA engagés sur "
         f"{st['nb_dossiers']} dossiers — en tête {tete['ref']} ({tete['client']}, "
-        f"{_m(tete['engagement_xof'])} M FCFA"
+        f"{fcfa(tete['engagement_xof'])} FCFA"
         + (f", soit {tete['poids_sur_ca_pct']:.0f}% du CA {tete['base_ca']} du dossier"
            if tete["poids_sur_ca_pct"] is not None else "")
         + ")"
@@ -2106,7 +2114,7 @@ async def build_commercial_facts(crm, composition: Composition | None = None) ->
         })
         puces.pour("pipeline_perso").append(
             f"Pipeline ouvert : {nb} opportunités, "
-            f"{_m(scen['realiste_xof'])} M FCFA pondérés (scénario réaliste)."
+            f"{fcfa(scen['realiste_xof'])} FCFA pondérés (scénario réaliste)."
         )
 
     if c.actif("taux_victoire_nb") and win_rate:
@@ -2120,7 +2128,7 @@ async def build_commercial_facts(crm, composition: Composition | None = None) ->
             facts["top_lead"] = top_lead
             puces.pour("top_lead").append(
                 f"Lead le plus chaud du pipeline : {top_lead['opportunite']} ({top_lead['client']}), "
-                f"{_m(top_lead['score_pondere_xof'])} M FCFA pondérés, étape {top_lead['stade']}."
+                f"{fcfa(top_lead['score_pondere_xof'])} FCFA pondérés, étape {top_lead['stade']}."
             )
         else:
             puces.pour("top_lead").append("Aucun lead chaud identifié actuellement.")
@@ -2137,7 +2145,7 @@ async def build_commercial_facts(crm, composition: Composition | None = None) ->
             puces.pour("comptes_silencieux").append(
                 f"{src['rupture']['nb_comptes_rompus']} comptes ont décroché sur l'ensemble du portefeuille "
                 f"S2I — {tete['client']} en tête, silencieux depuis {tete['jours_silence']} j "
-                f"({_m(tete['ca_annuel_moyen_xof'])} M FCFA/an historiques)."
+                f"({fcfa(tete['ca_annuel_moyen_xof'])} FCFA/an historiques)."
             )
 
     if c.actif("impayes_portefeuille") and src["exposure"]:
@@ -2147,8 +2155,8 @@ async def build_commercial_facts(crm, composition: Composition | None = None) ->
         if top_debiteur:
             facts["impayes_top_debiteur"] = top_debiteur
             puces.pour("impayes_portefeuille").append(
-                f"Impayés en cours sur le portefeuille S2I : {_m(exposure['exposition_totale_xof'])} M FCFA, "
-                f"{top_debiteur['client']} en tête à {_m(top_debiteur['montant_total_xof'])} M FCFA "
+                f"Impayés en cours sur le portefeuille S2I : {fcfa(exposure['exposition_totale_xof'])} FCFA, "
+                f"{top_debiteur['client']} en tête à {fcfa(top_debiteur['montant_total_xof'])} FCFA "
                 f"({top_debiteur['retard_max_jours']} j de retard)."
             )
 
@@ -2160,7 +2168,7 @@ async def build_commercial_facts(crm, composition: Composition | None = None) ->
             facts["top_client_perdant"] = top_perdant
             puces.pour("deals_perdus").append(
                 f"{lost['nb_total']} affaires perdues récemment — {top_perdant['client']} en concentre "
-                f"{top_perdant['nb']} pour {_m(top_perdant['montant_xof'])} M FCFA."
+                f"{top_perdant['nb']} pour {fcfa(top_perdant['montant_xof'])} FCFA."
             )
 
     if c.actif("mouvements_recents"):

@@ -1,6 +1,6 @@
 import { getBudgetDaf } from "@/lib/api/daf";
 import { getMargins } from "@/lib/api/dashboard";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, Reste, StatTile, Tile } from "@/components/ui/bento";
 import { Clickable } from "@/components/ui/detail";
 import { Note, Tag } from "@/components/ui/primitives";
@@ -98,8 +98,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
       <ScreenLede
         texte={
           `L'indice de performance financière ressort à ${formatPct(indice, 0)} sur 100 — verdict « ${performance.verdict} ». ` +
-          `Le résultat net projeté s'établit à ${formatMFcfa(resultat.resultat_net_projete_xof)} M FCFA, ` +
-          `pour ${formatMFcfa(charges.totaux.montant_total_xof)} M FCFA de charges engagées sur l'exercice.`
+          `Le résultat net projeté s'établit à ${formatFcfa(resultat.resultat_net_projete_xof)} FCFA, ` +
+          `pour ${formatFcfa(charges.totaux.montant_total_xof)} FCFA de charges engagées sur l'exercice.`
         }
         signaux={[
           { label: `marge brute ${formatPct(marge.taux_retenu_pct, 1)} %`, alerte: indiceFaible },
@@ -155,8 +155,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
           unit="%"
           reading={
             surFlux
-              ? `${formatMFcfa(marge.marge_retenue_xof)} M · lecture de flux`
-              : `${formatMFcfa(marge.marge_retenue_xof)} M sur ${formatNumber(marge.couverture.nb_dossiers_imputes)} dossiers`
+              ? `${formatFcfa(marge.marge_retenue_xof)} · lecture de flux`
+              : `${formatFcfa(marge.marge_retenue_xof)} sur ${formatNumber(marge.couverture.nb_dossiers_imputes)} dossiers`
           }
           readingVariant={surFlux ? "wat" : undefined}
           detail={{
@@ -166,8 +166,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
             tagVariant: surFlux ? "w" : "s",
             body: [
               surFlux
-                ? `L'imputation des dépenses de dossier ne couvre que ${formatPct(marge.couverture.couverture_pct, 1)} % du CA de l'exercice : la marge affichée est donc calculée sur les flux — ${formatMFcfa(marge.lecture_flux.ca_signe_xof)} M FCFA signés moins ${formatMFcfa(marge.lecture_flux.achats_engages_xof)} M FCFA d'achats engagés.`
-                : `${formatMFcfa(marge.marge_xof)} M FCFA de marge sur ${formatMFcfa(marge.ca_realise_xof)} M FCFA de CA définitif, mesurés sur ${formatNumber(marge.couverture.nb_dossiers_imputes)} dossiers dont la dépense est imputée.`,
+                ? `L'imputation des dépenses de dossier ne couvre que ${formatPct(marge.couverture.couverture_pct, 1)} % du CA de l'exercice : la marge affichée est donc calculée sur les flux — ${formatFcfa(marge.lecture_flux.ca_signe_xof)} FCFA signés moins ${formatFcfa(marge.lecture_flux.achats_engages_xof)} FCFA d'achats engagés.`
+                : `${formatFcfa(marge.marge_xof)} FCFA de marge sur ${formatFcfa(marge.ca_realise_xof)} FCFA de CA définitif, mesurés sur ${formatNumber(marge.couverture.nb_dossiers_imputes)} dossiers dont la dépense est imputée.`,
               marge.couverture.raison_non_exploitable || marge.lecture_flux.limites,
               marge.note,
             ],
@@ -184,8 +184,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
           span={3}
           label="Résultat net projeté"
           aide="Ce que l'exercice devrait laisser en fin d'année, une fois toutes les charges déduites. C'est une projection : elle repose sur des hypothèses de charges, pas sur des factures reçues."
-          value={formatMFcfa(resultat.resultat_net_projete_xof)}
-          unit="M FCFA"
+          value={formatFcfa(resultat.resultat_net_projete_xof)}
+          unit="FCFA"
           reading={`projection · ${formatNumber(resultat.mois_ecoules)} mois de charges`}
           readingVariant={resultat.resultat_net_projete_xof < 0 ? "neg" : "wat"}
           detail={{
@@ -194,16 +194,16 @@ export async function DfBudget({ annee }: { annee?: number }) {
             tag: "projection",
             tagVariant: "w",
             body: [
-              `Marge brute mesurée de ${formatMFcfa(resultat.marge_brute_xof)} M FCFA, moins ${formatMFcfa(resultat.charges_structure_xof)} M FCFA de charges de structure posées sur ${formatNumber(resultat.mois_ecoules)} mois, moins ${formatMFcfa(resultat.impot_xof)} M FCFA d'impôt au taux de ${formatPct(resultat.taux_is_pct, 0)} %.`,
+              `Marge brute mesurée de ${formatFcfa(resultat.marge_brute_xof)} FCFA, moins ${formatFcfa(resultat.charges_structure_xof)} FCFA de charges de structure posées sur ${formatNumber(resultat.mois_ecoules)} mois, moins ${formatFcfa(resultat.impot_xof)} FCFA d'impôt au taux de ${formatPct(resultat.taux_is_pct, 0)} %.`,
               resultat.raison,
               resultat.note,
             ],
             kv: [
-              ["Marge brute (mesurée)", `${formatMFcfa(resultat.marge_brute_xof)} M FCFA`],
-              ["Charges de structure (posées)", `${formatMFcfa(resultat.charges_structure_xof)} M FCFA`],
-              ["Résultat avant impôt", `${formatMFcfa(resultat.resultat_avant_impot_xof)} M FCFA`],
-              ["Impôt projeté", `${formatMFcfa(resultat.impot_xof)} M FCFA`],
-              ["Résultat net projeté", `${formatMFcfa(resultat.resultat_net_projete_xof)} M FCFA`],
+              ["Marge brute (mesurée)", `${formatFcfa(resultat.marge_brute_xof)} FCFA`],
+              ["Charges de structure (posées)", `${formatFcfa(resultat.charges_structure_xof)} FCFA`],
+              ["Résultat avant impôt", `${formatFcfa(resultat.resultat_avant_impot_xof)} FCFA`],
+              ["Impôt projeté", `${formatFcfa(resultat.impot_xof)} FCFA`],
+              ["Résultat net projeté", `${formatFcfa(resultat.resultat_net_projete_xof)} FCFA`],
             ],
           }}
         />
@@ -214,8 +214,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
           rang="contexte"
           label="Charges engagées"
           aide="Ce que vous avez commandé à vos fournisseurs depuis le début de l'exercice. Engagé ne veut pas dire payé : la dépense est décidée, le règlement peut venir plus tard."
-          value={formatMFcfa(charges.totaux.montant_total_xof)}
-          unit="M FCFA"
+          value={formatFcfa(charges.totaux.montant_total_xof)}
+          unit="FCFA"
           reading={
             charges.totaux.variation_pct !== null
               ? `${charges.totaux.variation_pct > 0 ? "+" : ""}${formatPct(charges.totaux.variation_pct, 0)} % vs ${data.annee - 1}`
@@ -228,13 +228,13 @@ export async function DfBudget({ annee }: { annee?: number }) {
             tag: `${formatNumber(charges.totaux.nb_fournisseurs)} fournisseurs`,
             tagVariant: "s",
             body: [
-              `${formatMFcfa(charges.totaux.montant_total_xof)} M FCFA engagés sur ${formatNumber(charges.totaux.nb_commandes)} commandes d'achat en ${data.annee}, auprès de ${formatNumber(charges.totaux.nb_fournisseurs)} fournisseurs.`,
+              `${formatFcfa(charges.totaux.montant_total_xof)} FCFA engagés sur ${formatNumber(charges.totaux.nb_commandes)} commandes d'achat en ${data.annee}, auprès de ${formatNumber(charges.totaux.nb_fournisseurs)} fournisseurs.`,
               charges.perimetre,
               charges.note,
             ],
             kv: [
-              ["Engagé cet exercice", `${formatMFcfa(charges.totaux.montant_total_xof)} M FCFA`],
-              ["Engagé exercice précédent", `${formatMFcfa(charges.totaux.montant_exercice_precedent_xof)} M FCFA`],
+              ["Engagé cet exercice", `${formatFcfa(charges.totaux.montant_total_xof)} FCFA`],
+              ["Engagé exercice précédent", `${formatFcfa(charges.totaux.montant_exercice_precedent_xof)} FCFA`],
               ["Part du top affiché", `${formatPct(charges.totaux.part_top_pct, 0)} %`],
               ["Commandes en devise", formatNumber(charges.totaux.nb_commandes_en_devise)],
             ],
@@ -298,8 +298,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
           <Bars
             rows={resultat.charges_detail.slice(0, 6).map((c) => ({
               name: c.poste,
-              sub: `${c.nature === "fixe" ? "charge fixe" : "charge variable"} · ${formatMFcfa(c.montant_periode_xof)} M sur ${formatNumber(resultat.mois_ecoules)} mois`,
-              value: `${formatMFcfa(c.montant_mensuel_xof)} M/mois`,
+              sub: `${c.nature === "fixe" ? "charge fixe" : "charge variable"} · ${formatFcfa(c.montant_periode_xof)} sur ${formatNumber(resultat.mois_ecoules)} mois`,
+              value: `${formatFcfa(c.montant_mensuel_xof)}/mois`,
               pct: c.part_pct,
               variant: "w" as const,
               detail: {
@@ -308,12 +308,12 @@ export async function DfBudget({ annee }: { annee?: number }) {
                 tag: c.nature === "fixe" ? "fixe" : "variable",
                 tagVariant: "w",
                 body: [
-                  `${formatMFcfa(c.montant_mensuel_xof)} M FCFA par mois, soit ${formatMFcfa(c.montant_periode_xof)} M FCFA sur les ${formatNumber(resultat.mois_ecoules)} mois écoulés de l'exercice — ${formatPct(c.part_pct, 1)} % des charges de structure retenues.`,
+                  `${formatFcfa(c.montant_mensuel_xof)} FCFA par mois, soit ${formatFcfa(c.montant_periode_xof)} FCFA sur les ${formatNumber(resultat.mois_ecoules)} mois écoulés de l'exercice — ${formatPct(c.part_pct, 1)} % des charges de structure retenues.`,
                   resultat.raison,
                 ],
                 kv: [
-                  ["Montant mensuel", `${formatMFcfa(c.montant_mensuel_xof)} M FCFA`],
-                  ["Cumul à date", `${formatMFcfa(c.montant_periode_xof)} M FCFA`],
+                  ["Montant mensuel", `${formatFcfa(c.montant_mensuel_xof)} FCFA`],
+                  ["Cumul à date", `${formatFcfa(c.montant_periode_xof)} FCFA`],
                   ["Part des charges", `${formatPct(c.part_pct, 1)} %`],
                   ["Nature", c.nature === "fixe" ? "fixe" : "variable"],
                 ],
@@ -335,22 +335,22 @@ export async function DfBudget({ annee }: { annee?: number }) {
                 cle: "ca",
                 libelle: "CA signé cumulé",
                 couleur: SERIE_2,
-                etiquetteFin: `${formatMFcfa(burn.resume.ca_cumule_xof)} M`,
+                etiquetteFin: `${formatFcfa(burn.resume.ca_cumule_xof)}`,
                 points: burn.points.map((p) => ({
                   x: p.libelle,
                   y: p.ca_cumule_xof,
-                  info: `${p.libelle} — CA cumulé ${formatMFcfa(p.ca_cumule_xof)} M (${formatMFcfa(p.ca_mois_xof)} M sur le mois)`,
+                  info: `${p.libelle} — CA cumulé ${formatFcfa(p.ca_cumule_xof)} (${formatFcfa(p.ca_mois_xof)} sur le mois)`,
                 })),
               },
               {
                 cle: "achats",
                 libelle: "Achats engagés cumulés",
                 couleur: SERIE_1,
-                etiquetteFin: `${formatMFcfa(burn.resume.achats_cumules_xof)} M`,
+                etiquetteFin: `${formatFcfa(burn.resume.achats_cumules_xof)}`,
                 points: burn.points.map((p) => ({
                   x: p.libelle,
                   y: p.achats_cumules_xof,
-                  info: `${p.libelle} — achats cumulés ${formatMFcfa(p.achats_cumules_xof)} M (${formatMFcfa(p.achats_mois_xof)} M sur le mois)`,
+                  info: `${p.libelle} — achats cumulés ${formatFcfa(p.achats_cumules_xof)} (${formatFcfa(p.achats_mois_xof)} sur le mois)`,
                 })),
               },
               {
@@ -361,15 +361,15 @@ export async function DfBudget({ annee }: { annee?: number }) {
                 points: burn.points.map((p) => ({
                   x: p.libelle,
                   y: p.rythme_budget_xof,
-                  info: `${p.libelle} — rythme théorique ${formatMFcfa(p.rythme_budget_xof)} M`,
+                  info: `${p.libelle} — rythme théorique ${formatFcfa(p.rythme_budget_xof)}`,
                 })),
               },
             ]}
-            formatY={(v) => `${formatMFcfa(v)} M`}
+            formatY={(v) => `${formatFcfa(v)}`}
           />
           <ChartNote>
-            Achats en retrait de {formatMFcfa(Math.abs(burn.resume.ecart_rythme_xof))} M sur le rythme, mais le
-            CA signé cumulé atteint {formatMFcfa(burn.resume.ca_cumule_xof)} M — la marge de flux tient à{" "}
+            Achats en retrait de {formatFcfa(Math.abs(burn.resume.ecart_rythme_xof))} M sur le rythme, mais le
+            CA signé cumulé atteint {formatFcfa(burn.resume.ca_cumule_xof)} — la marge de flux tient à{" "}
             {formatPct(burn.resume.taux_marge_flux_pct, 1)} %. La sous-consommation n&apos;est donc pas une
             baisse d&apos;activité.
           </ChartNote>
@@ -393,7 +393,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                 x: p.libelle,
                 y: p.taux_pct,
                 etiquette: `${formatPct(p.taux_pct, 0)}`,
-                info: `${p.annee} — marge ${formatPct(p.taux_pct, 1)} % sur ${formatMFcfa(p.ca_impute_xof)} M de CA imputé (${formatNumber(p.nb_imputes)} dossiers sur ${formatNumber(p.nb_dossiers)}, couverture ${formatPct(p.couverture_pct, 0)} %)`,
+                info: `${p.annee} — marge ${formatPct(p.taux_pct, 1)} % sur ${formatFcfa(p.ca_impute_xof)} de CA imputé (${formatNumber(p.nb_imputes)} dossiers sur ${formatNumber(p.nb_dossiers)}, couverture ${formatPct(p.couverture_pct, 0)} %)`,
               }))}
             formatY={(v) => `${Math.round(v)} %`}
             couleur={SERIE_1}
@@ -441,16 +441,16 @@ export async function DfBudget({ annee }: { annee?: number }) {
                       tag: `${formatPct(c.part_pct, 1)} % des achats`,
                       tagVariant: c.part_pct > 15 ? "r" : "w",
                       body: [
-                        `${formatMFcfa(c.montant_xof)} M FCFA engagés sur ${formatNumber(c.nb_commandes)} commande(s) en ${data.annee}, soit un montant moyen de ${formatMFcfa(c.montant_moyen_xof)} M FCFA par commande.`,
+                        `${formatFcfa(c.montant_xof)} FCFA engagés sur ${formatNumber(c.nb_commandes)} commande(s) en ${data.annee}, soit un montant moyen de ${formatFcfa(c.montant_moyen_xof)} FCFA par commande.`,
                         `Ce fournisseur pèse ${formatPct(c.part_pct, 1)} % des achats de l'exercice ; les ${formatNumber(c.rang)} premiers en cumulent ${formatPct(c.part_cumulee_pct, 1)} %.`,
                         c.devises.some((d) => d !== "XOF")
                           ? `Commandes libellées en ${c.devises.join(", ")} : le montant est converti par l'ERP, le taux appliqué n'est pas conservé dans le miroir.`
                           : charges.perimetre,
                       ],
                       kv: [
-                        ["Montant engagé", `${formatMFcfa(c.montant_xof)} M FCFA`],
+                        ["Montant engagé", `${formatFcfa(c.montant_xof)} FCFA`],
                         ["Commandes", formatNumber(c.nb_commandes)],
-                        ["Montant moyen", `${formatMFcfa(c.montant_moyen_xof)} M FCFA`],
+                        ["Montant moyen", `${formatFcfa(c.montant_moyen_xof)} FCFA`],
                         ["Part des achats", `${formatPct(c.part_pct, 1)} %`],
                         ["Dernière commande", c.derniere_commande ?? "—"],
                         ["Ligne budgétaire", c.ligne_budgetaire],
@@ -460,7 +460,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                   >
                     <td className="mono">{c.rang}</td>
                     <td>{c.fournisseur}</td>
-                    <td className="r mono">{formatMFcfa(c.montant_xof)} M</td>
+                    <td className="r mono">{formatFcfa(c.montant_xof)}</td>
                     <td className="r mono">{formatPct(c.part_pct, 1)} %</td>
                     <td className="r mono">{formatPct(c.part_cumulee_pct, 1)} %</td>
                     <td>
@@ -481,7 +481,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
               x: `${c.rang}`,
               y: c.part_pct,
               etiquette: c.part_pct >= 5 ? `${formatPct(c.part_pct, 0)}` : undefined,
-              info: `${c.rang}. ${c.fournisseur} — ${formatMFcfa(c.montant_xof)} M, soit ${formatPct(c.part_pct, 1)} % des achats (cumul ${formatPct(c.part_cumulee_pct, 1)} %)`,
+              info: `${c.rang}. ${c.fournisseur} — ${formatFcfa(c.montant_xof)}, soit ${formatPct(c.part_pct, 1)} % des achats (cumul ${formatPct(c.part_cumulee_pct, 1)} %)`,
             }))}
             cumul={charges.charges.map((c) => c.part_cumulee_pct)}
             couleur={SERIE_1}
@@ -520,8 +520,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
               return {
                 name: l.ligne,
                 sub: [
-                  `budget ${formatMFcfa(l.budget_annuel_xof)} M`,
-                  `consommé ${formatMFcfa(l.consomme_xof)} M`,
+                  `budget ${formatFcfa(l.budget_annuel_xof)}`,
+                  `consommé ${formatFcfa(l.consomme_xof)}`,
                   `${enAvance ? "+" : ""}${formatPct(l.ecart_rythme_pts, 0)} pts vs rythme`,
                 ].join(" · "),
                 value: `${formatPct(l.consommation_pct, 0)} %`,
@@ -539,7 +539,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                         : "dans le rythme",
                   tagVariant: l.statut === "depasse" ? "r" : l.statut === "tendu" ? "w" : "s",
                   body: [
-                    `${formatMFcfa(l.consomme_xof)} M FCFA consommés sur un budget de ${formatMFcfa(l.budget_annuel_xof)} M FCFA, soit ${formatPct(l.consommation_pct, 1)} %, sur ${formatNumber(l.nb_commandes)} commande(s) auprès de ${formatNumber(l.nb_fournisseurs)} fournisseur(s).`,
+                    `${formatFcfa(l.consomme_xof)} FCFA consommés sur un budget de ${formatFcfa(l.budget_annuel_xof)} FCFA, soit ${formatPct(l.consommation_pct, 1)} %, sur ${formatNumber(l.nb_commandes)} commande(s) auprès de ${formatNumber(l.nb_fournisseurs)} fournisseur(s).`,
                     l.part_exercice_ecoulee_pct !== null
                       ? `L'exercice est écoulé à ${formatPct(l.part_exercice_ecoulee_pct, 0)} % : l'écart de rythme est de ${formatPct(l.ecart_rythme_pts, 0)} points. C'est cet écart qui signale une dérive, pas le taux brut.`
                       : "L'exercice est révolu : la consommation se lit contre le budget plein.",
@@ -548,14 +548,14 @@ export async function DfBudget({ annee }: { annee?: number }) {
                       : l.commentaire,
                   ],
                   kv: [
-                    ["Budget posé", `${formatMFcfa(l.budget_annuel_xof)} M FCFA`],
-                    ["Consommé (mesuré)", `${formatMFcfa(l.consomme_xof)} M FCFA`],
-                    ["Reste", `${formatMFcfa(l.reste_xof)} M FCFA`],
+                    ["Budget posé", `${formatFcfa(l.budget_annuel_xof)} FCFA`],
+                    ["Consommé (mesuré)", `${formatFcfa(l.consomme_xof)} FCFA`],
+                    ["Reste", `${formatFcfa(l.reste_xof)} FCFA`],
                     ["Consommation", `${formatPct(l.consommation_pct, 1)} %`],
                     ["Écart de rythme", `${formatPct(l.ecart_rythme_pts, 0)} pts`],
                     ["Commandes", formatNumber(l.nb_commandes)],
                     ...l.top_fournisseurs.slice(0, 3).map(
-                      (f) => [f.fournisseur, `${formatMFcfa(f.montant_xof)} M FCFA`] as const,
+                      (f) => [f.fournisseur, `${formatFcfa(f.montant_xof)} FCFA`] as const,
                     ),
                   ],
                 },
@@ -577,7 +577,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                 items={[
                   {
                     title: "Marge sur flux engagés",
-                    sub: `${formatMFcfa(marge.lecture_flux.ca_signe_xof)} M signés − ${formatMFcfa(marge.lecture_flux.achats_engages_xof)} M achetés`,
+                    sub: `${formatFcfa(marge.lecture_flux.ca_signe_xof)} signés − ${formatFcfa(marge.lecture_flux.achats_engages_xof)} achetés`,
                     tag: `${formatPct(marge.lecture_flux.taux_pct, 1)} %`,
                     tagVariant: "s" as const,
                     detail: {
@@ -586,13 +586,13 @@ export async function DfBudget({ annee }: { annee?: number }) {
                       tag: "affichée",
                       tagVariant: "s" as const,
                       body: [
-                        `${formatMFcfa(marge.lecture_flux.marge_xof)} M FCFA de marge, sur ${formatNumber(marge.lecture_flux.nb_commandes_vente)} commandes de vente et ${formatNumber(marge.lecture_flux.nb_commandes_achat)} commandes d'achat.`,
+                        `${formatFcfa(marge.lecture_flux.marge_xof)} FCFA de marge, sur ${formatNumber(marge.lecture_flux.nb_commandes_vente)} commandes de vente et ${formatNumber(marge.lecture_flux.nb_commandes_achat)} commandes d'achat.`,
                         marge.lecture_flux.limites,
                       ],
                       kv: [
-                        ["CA signé", `${formatMFcfa(marge.lecture_flux.ca_signe_xof)} M FCFA`],
-                        ["Achats engagés", `${formatMFcfa(marge.lecture_flux.achats_engages_xof)} M FCFA`],
-                        ["Marge", `${formatMFcfa(marge.lecture_flux.marge_xof)} M FCFA`],
+                        ["CA signé", `${formatFcfa(marge.lecture_flux.ca_signe_xof)} FCFA`],
+                        ["Achats engagés", `${formatFcfa(marge.lecture_flux.achats_engages_xof)} FCFA`],
+                        ["Marge", `${formatFcfa(marge.lecture_flux.marge_xof)} FCFA`],
                         ["Taux", `${formatPct(marge.lecture_flux.taux_pct, 1)} %`],
                       ],
                     },
@@ -608,7 +608,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                       tag: "non exploitable",
                       tagVariant: "r" as const,
                       body: [
-                        `Calculée sur ${formatMFcfa(marge.ca_realise_xof)} M FCFA de CA définitif seulement, soit ${formatPct(marge.couverture.couverture_pct, 1)} % de l'exercice.`,
+                        `Calculée sur ${formatFcfa(marge.ca_realise_xof)} FCFA de CA définitif seulement, soit ${formatPct(marge.couverture.couverture_pct, 1)} % de l'exercice.`,
                         marge.couverture.raison_non_exploitable,
                       ],
                       kv: [
@@ -631,7 +631,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                 .filter((m) => m.ca_xof > 0)
                 .map((m) => ({
                   name: m.libelle,
-                  sub: `${formatMFcfa(m.ca_xof)} M de CA · ${formatNumber(m.nb_dossiers)} dossier(s)`,
+                  sub: `${formatFcfa(m.ca_xof)} de CA · ${formatNumber(m.nb_dossiers)} dossier(s)`,
                   value: `${formatPct(m.taux_pct, 0)} %`,
                   pct: m.taux_pct,
                   variant:
@@ -642,13 +642,13 @@ export async function DfBudget({ annee }: { annee?: number }) {
                     tag: `${formatPct(m.taux_pct, 1)} %`,
                     tagVariant: m.taux_pct >= marge.cible_taux_pct ? "s" : "w",
                     body: [
-                      `${formatMFcfa(m.marge_xof)} M FCFA de marge pour ${formatMFcfa(m.ca_xof)} M FCFA de CA définitif et ${formatMFcfa(m.depense_xof)} M FCFA de dépense imputée, sur ${formatNumber(m.nb_dossiers)} dossier(s).`,
+                      `${formatFcfa(m.marge_xof)} FCFA de marge pour ${formatFcfa(m.ca_xof)} FCFA de CA définitif et ${formatFcfa(m.depense_xof)} FCFA de dépense imputée, sur ${formatNumber(m.nb_dossiers)} dossier(s).`,
                       "Seuls les dossiers dont la dépense est imputée entrent dans cette série : un mois sans dépense imputée afficherait 100 % de marge.",
                     ],
                     kv: [
-                      ["CA définitif", `${formatMFcfa(m.ca_xof)} M FCFA`],
-                      ["Dépense imputée", `${formatMFcfa(m.depense_xof)} M FCFA`],
-                      ["Marge", `${formatMFcfa(m.marge_xof)} M FCFA`],
+                      ["CA définitif", `${formatFcfa(m.ca_xof)} FCFA`],
+                      ["Dépense imputée", `${formatFcfa(m.depense_xof)} FCFA`],
+                      ["Marge", `${formatFcfa(m.marge_xof)} FCFA`],
                       ["Dossiers", formatNumber(m.nb_dossiers)],
                     ],
                   },
@@ -673,7 +673,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                   name: `${d.ref} · ${d.client}`,
                   sub: [
                     d.projet || "projet non renseigné",
-                    `${formatMFcfa(d.ca_definitif)} M facturés`,
+                    `${formatFcfa(d.ca_definitif)} facturés`,
                     `prévue ${formatPct(d.perc_marge_prov, 0)} %`,
                   ].join(" · "),
                   value: `${formatPct(d.perc_marge_def, 1)} %`,
@@ -688,7 +688,7 @@ export async function DfBudget({ annee }: { annee?: number }) {
                     tag: perte ? "marge négative" : "marge faible",
                     tagVariant: perte ? ("r" as const) : ("w" as const),
                     body: [
-                      `Le dossier « ${d.projet || d.ref} » affiche une marge constatée de ${formatPct(d.perc_marge_def, 1)} % pour ${formatMFcfa(d.ca_definitif)} M FCFA facturés, contre ${formatPct(d.perc_marge_prov, 0)} % prévus au chiffrage — un écart de ${formatPct(ecart, 0)} points.`,
+                      `Le dossier « ${d.projet || d.ref} » affiche une marge constatée de ${formatPct(d.perc_marge_def, 1)} % pour ${formatFcfa(d.ca_definitif)} FCFA facturés, contre ${formatPct(d.perc_marge_prov, 0)} % prévus au chiffrage — un écart de ${formatPct(ecart, 0)} points.`,
                       perte
                         ? "La marge est négative : le dossier a coûté plus qu'il n'a rapporté. À instruire avec la direction commerciale et les opérations — l'écart vient soit du chiffrage initial, soit de dépenses non refacturées."
                         : "La marge reste positive mais nettement sous le niveau attendu de l'activité. Un dossier de ce taux consomme de la capacité sans reconstituer de résultat.",
@@ -698,8 +698,8 @@ export async function DfBudget({ annee }: { annee?: number }) {
                       ["Marge constatée", `${formatPct(d.perc_marge_def, 1)} %`],
                       ["Marge prévue", `${formatPct(d.perc_marge_prov, 1)} %`],
                       ["Écart", `${formatPct(ecart, 1)} points`],
-                      ["CA définitif", `${formatMFcfa(d.ca_definitif)} M FCFA`],
-                      ["CA provisoire", `${formatMFcfa(d.ca_provisoire)} M FCFA`],
+                      ["CA définitif", `${formatFcfa(d.ca_definitif)} FCFA`],
+                      ["CA provisoire", `${formatFcfa(d.ca_provisoire)} FCFA`],
                       ["Client", d.client],
                     ],
                   },

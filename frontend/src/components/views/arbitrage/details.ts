@@ -6,7 +6,7 @@ import type {
   PayeurProfile,
 } from "@/lib/api/arbitrage";
 import type { DetailCard } from "@/components/ui/detail";
-import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
+import { formatDate, formatFcfa, formatFcfaDepuisM, formatNumber, mFcfa } from "@/lib/format";
 import {
   CONSEQUENCE_LABELS,
   NATURE_VARIANT,
@@ -77,12 +77,12 @@ export function candidateDetail(c: ArbitrageCandidate, seuilM: number): DetailCa
         .map((pos) => `${roleLabel(pos.role)} — ${pos.text}`)
         .join(" ; ")}.`,
       p.lecture,
-      `Deux montants à ne pas confondre : ${formatMFcfa(c.impaye_xof)} M FCFA sont réellement dus (mesuré), tandis que l'enjeu de ${formatMFcfa(
+      `Deux montants à ne pas confondre : ${formatFcfa(c.impaye_xof)} FCFA sont réellement dus (mesuré), tandis que l'enjeu de ${formatFcfa(
         c.enjeu_xof
-      )} M FCFA est le montant du signal commercial en jeu (${c.signal_nature}).`,
-      `Le mandat revient à ${roleLabel(c.mandat_role)} : ${formatNumber(enjeuM)} M FCFA ${
+      )} FCFA est le montant du signal commercial en jeu (${c.signal_nature}).`,
+      `Le mandat revient à ${roleLabel(c.mandat_role)} : ${formatFcfa(c.enjeu_xof)} FCFA ${
         enjeuM >= seuilM ? "dépasse" : "reste sous"
-      } le seuil de ${formatNumber(seuilM)} M FCFA.`,
+      } le seuil de ${formatFcfaDepuisM(seuilM)} FCFA.`,
       ...(c.signaux_portefeuille.length ? [`Signaux de portefeuille actifs : ${c.signaux_portefeuille.join(" · ")}.`] : []),
     ],
     kv: [
@@ -96,24 +96,24 @@ export function candidateDetail(c: ArbitrageCandidate, seuilM: number): DetailCa
             : `${formatNumber(p.delai_recent_jours)} j (récent)`
           : `aucun règlement depuis ${formatNumber(p.jours_depuis_dernier_paiement ?? 0)} j`,
       ],
-      ["Impayé constaté (mesuré)", `${formatMFcfa(c.impaye_xof)} M FCFA`],
+      ["Impayé constaté (mesuré)", `${formatFcfa(c.impaye_xof)} FCFA`],
       ["Factures échues", formatNumber(c.impaye_nb_factures)],
       ["Retard le plus ancien", `${formatNumber(c.retard_max_jours)} jours`],
-      ["Enjeu commercial", `${formatMFcfa(c.enjeu_xof)} M FCFA (${c.signal_nature})`],
+      ["Enjeu commercial", `${formatFcfa(c.enjeu_xof)} FCFA (${c.signal_nature})`],
       ["Signal retenu", signalSummary(c)],
-      ["Seuil de mandat DG", `${formatNumber(seuilM)} M FCFA (${enjeuM >= seuilM ? "dépassé" : "non atteint"})`],
+      ["Seuil de mandat DG", `${formatFcfaDepuisM(seuilM)} FCFA (${enjeuM >= seuilM ? "dépassé" : "non atteint"})`],
       ["Mandat", roleLabel(c.mandat_role)],
       ["Profils impliqués", c.profils_impliques.map(roleLabel).join(" · ") || "—"],
       ...(c.commercial_compte ? [["Commercial du compte", c.commercial_compte]] : []),
       [
         "Coût du report (estimation)",
-        `≈ ${formatMFcfa(c.cout_report_xof_semaine)} M FCFA / semaine (${(p.cout_report_ratio_semaine * 100).toFixed(
+        `≈ ${formatFcfa(c.cout_report_xof_semaine)} FCFA / semaine (${(p.cout_report_ratio_semaine * 100).toFixed(
           1
         )} % de l'enjeu, ratio du profil de payeur)`,
       ],
       ["Échéance", echeanceLabel(c.echeance, formatDate)],
-      ...(c.backlog_xof !== null ? [["Backlog", `${formatMFcfa(c.backlog_xof)} M FCFA`]] : []),
-      ...(c.reste_a_encaisser_xof !== null ? [["Reste à encaisser", `${formatMFcfa(c.reste_a_encaisser_xof)} M FCFA`]] : []),
+      ...(c.backlog_xof !== null ? [["Backlog", `${formatFcfa(c.backlog_xof)} FCFA`]] : []),
+      ...(c.reste_a_encaisser_xof !== null ? [["Reste à encaisser", `${formatFcfa(c.reste_a_encaisser_xof)} FCFA`]] : []),
     ],
   };
 }
@@ -148,7 +148,7 @@ export function decisionDetail(d: Decision): DetailCard {
       ["Propriétaire", d.owner || d.created_by || "—"],
       ["Créée le", formatDate(d.created_at)],
       ["Relecture due le", formatDate(d.review_date)],
-      ...(d.enjeu_xof ? [["Enjeu", `${formatMFcfa(d.enjeu_xof)} M FCFA`]] : []),
+      ...(d.enjeu_xof ? [["Enjeu", `${formatFcfa(d.enjeu_xof)} FCFA`]] : []),
       ["Mandat", d.mandat_role ? roleLabel(d.mandat_role) : "—"],
       ...(d.profil_payeur_classe
         ? [["Comportement de paiement au moment de trancher", PAYEUR_CLASSE_LABELS[d.profil_payeur_classe] ?? d.profil_payeur_classe]]

@@ -73,7 +73,18 @@ async def _dashboard_context(crm, include_finance: bool) -> tuple[str, list[dict
         f"Taux de transformation (historique) : {win['taux_nb_pct']} % en nombre "
         f"({win['gagnees_nb']} gagnées / {win['perdues_nb']} perdues), mais {win['taux_valeur_pct']} % en valeur "
         f"({_fmt_m(win['gagnees_valeur_xof'])} gagnés vs {_fmt_m(win['perdues_valeur_xof'])} perdus).",
-        f"Marge définitive moyenne : {margins['perc_marge_definitive_moyen']} % ({margins['nb_dossiers']} dossiers).",
+        # Taux agrégé sur périmètre imputé, jamais `perc_marge_definitive_moyen`
+        # (moyenne de pourcentages par dossier). Sous le seuil de couverture, la
+        # ligne dit pourquoi le taux manque plutôt que d'en inventer un.
+        (
+            f"Marge définitive : {margins['taux_marge_definitive_pct']} % du CA facturé "
+            f"({margins['nb_dossiers_marge_imputee']} dossiers imputés sur {margins['nb_dossiers']})."
+            if margins["marge_definitive_exploitable"] else
+            f"Marge définitive non exploitable : dépense imputée sur seulement "
+            f"{margins['couverture_marge_definitive_pct']} % du CA facturé "
+            f"(seuil {margins['seuil_couverture_marge_pct']} %). Marge provisoire : "
+            f"{margins['taux_marge_provisoire_pct']} % du CA sur {margins['nb_dossiers']} dossiers."
+        ),
         "Top clients (CA commandé) : " + ", ".join(
             f"{c['client']} ({_fmt_m(c['ca_total_xof'])})" for c in top_clients
         ),

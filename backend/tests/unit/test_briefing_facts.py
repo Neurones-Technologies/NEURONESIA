@@ -68,7 +68,7 @@ class FauxCRM:
         return {"year": year, "revenue_xof": 1_000_000_000 * (year - 2020),
                 "orders_count": 10, "clients_with_orders": 5}
 
-    async def get_invoice_collection_stats(self, client_name="", year=None):
+    async def get_invoice_collection_stats(self, client_name="", year=None, exercice=None):
         self._trace("get_invoice_collection_stats")
         return {
             "total_factures": 200, "payees": 150, "en_attente": 50,
@@ -684,7 +684,14 @@ async def test_delta_present_suffixe_la_puce(monkeypatch):
     # horizon. C'est le comportement qui empêche « +250 M vs hier » de
     # s'afficher sous l'étiquette « sur 7 j ».
     assert len(res["bullets"]) == 1
-    assert "M FCFA" in res["bullets"][0]
+    # Un montant est bien cité. Test insensible à l'ÉCHELLE : `core.montants.fcfa`
+    # rend « M » ou « Md » selon le montant, et figer l'une des deux ferait
+    # échouer ce test le jour où l'exposition franchit le milliard — sans que rien
+    # ne soit cassé.
+    assert "FCFA" in res["bullets"][0]
+    # L'intention réelle du cas : la puce reste NUE. Aucun suffixe de variation
+    # emprunté à un autre horizon que celui cité.
+    assert "▲" not in res["bullets"][0] and "▼" not in res["bullets"][0]
 
 
 @pytest.mark.asyncio

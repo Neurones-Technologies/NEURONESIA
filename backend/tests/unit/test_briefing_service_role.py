@@ -144,8 +144,8 @@ _BLOC_CA = {
 }
 
 _LIGNE_ATTENDUE = (
-    "CA commandé : 6 128 M FCFA — stable vs hier, stable sur 7 j, "
-    "▲ 17 M FCFA sur 30 j."
+    "CA commandé : 6,13 Md FCFA — stable vs hier, stable sur 7 j, "
+    "▲ 17,0 M FCFA sur 30 j."
 )
 
 
@@ -171,7 +171,7 @@ async def test_le_resume_dg_porte_la_cadence_en_derniere_ligne(store_temporaire,
 @pytest.mark.asyncio
 async def test_la_cadence_ne_passe_pas_par_le_redacteur(store_temporaire, cadence_mesurable, monkeypatch):
     """Un rythme paraphrasé n'est plus un rythme : le rédacteur ne doit jamais
-    voir la ligne, sinon « ▲ 17 M FCFA sur 30 j » ressort en « le CA progresse
+    voir la ligne, sinon « ▲ 17,0 M FCFA sur 30 j » ressort en « le CA progresse
     légèrement »."""
     soumis = {}
 

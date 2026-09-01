@@ -1,6 +1,6 @@
 import { getArbitrageDossier } from "@/lib/api/arbitrage";
 import type { ArbitrageDossier, PayeurProfile } from "@/lib/api/arbitrage";
-import { formatDate, formatMFcfa, formatNumber, mFcfa } from "@/lib/format";
+import { formatDate, formatFcfa, formatFcfaDepuisM, formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { Clickable } from "@/components/ui/detail";
 import { Note, Tag } from "@/components/ui/primitives";
@@ -162,21 +162,21 @@ export async function DossierPanel({
         <div className="arb-facts">
           <div className="arb-fact">
             <span>Impayé constaté</span>
-            <b>{formatMFcfa(dossier.impaye_xof)} M</b>
+            <b>{formatFcfa(dossier.impaye_xof)}</b>
             <i>
               {formatNumber(dossier.impaye_nb_factures)} facture(s) · mesuré
             </i>
           </div>
           <div className="arb-fact">
             <span>Enjeu commercial</span>
-            <b>{formatMFcfa(dossier.enjeu_xof)} M</b>
+            <b>{formatFcfa(dossier.enjeu_xof)}</b>
             <i>
               {dossier.signal_type.toLowerCase()} · {dossier.signal_nature}
             </i>
           </div>
           <div className="arb-fact">
             <span>Coût du report</span>
-            <b>≈ {formatMFcfa(dossier.cout_report_xof_semaine)} M</b>
+            <b>≈ {formatFcfa(dossier.cout_report_xof_semaine)}</b>
             <i>par semaine · {ratio} % de l&apos;enjeu</i>
           </div>
           <div className="arb-fact">
@@ -187,8 +187,8 @@ export async function DossierPanel({
         </div>
 
         <p>
-          Le mandat revient à {roleLabel(dossier.mandat_role)} : l&apos;enjeu de {formatNumber(enjeuM)} M FCFA{" "}
-          {enjeuM >= seuilM ? "dépasse" : "reste sous"} le seuil de {formatNumber(seuilM)} M au-delà duquel aucune
+          Le mandat revient à {roleLabel(dossier.mandat_role)} : l&apos;enjeu de {formatFcfa(dossier.enjeu_xof)} FCFA{" "}
+          {enjeuM >= seuilM ? "dépasse" : "reste sous"} le seuil de {formatFcfaDepuisM(seuilM)} FCFA au-delà duquel aucune
           direction ne tranche seule. Priorité {dossier.priorite.label} — {dossier.priorite.raison}. Le coût du
           report est une estimation calibrée sur le comportement de paiement de ce client, pas un montant à
           provisionner.
@@ -210,7 +210,7 @@ export async function DossierPanel({
                 {formatNumber(dossier.retard_max_jours)} jours
               </div>
             </div>
-            <div className="num">{formatMFcfa(dossier.impaye_xof)} M FCFA</div>
+            <div className="num">{formatFcfa(dossier.impaye_xof)} FCFA</div>
             <Tag variant={NATURE_VARIANT.mesuré}>mesuré</Tag>
           </div>
           <div className="row-m">
@@ -218,7 +218,7 @@ export async function DossierPanel({
               <div className="row-n">Enjeu commercial ({dossier.signal_type.toLowerCase()})</div>
               <div className="row-s">{signalSummary(dossier)}</div>
             </div>
-            <div className="num">{formatMFcfa(dossier.enjeu_xof)} M FCFA</div>
+            <div className="num">{formatFcfa(dossier.enjeu_xof)} FCFA</div>
             <Tag variant={NATURE_VARIANT[dossier.signal_nature] ?? "w"}>{dossier.signal_nature}</Tag>
           </div>
         </div>

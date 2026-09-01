@@ -271,12 +271,12 @@ def test_delta_sans_historique_ne_rend_pas_zero():
 # ── Mise en forme ────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("bloc, horizon, attendu", [
-    ({"unite": "xof", "j1": 85_000_000, "j1_jours": 1}, "j1", " (▲ 85 M FCFA vs hier)"),
-    ({"unite": "xof", "j1": -85_000_000, "j1_jours": 1}, "j1", " (▼ 85 M FCFA vs hier)"),
+    ({"unite": "xof", "j1": 85_000_000, "j1_jours": 1}, "j1", " (▲ 85,0 M FCFA vs hier)"),
+    ({"unite": "xof", "j1": -85_000_000, "j1_jours": 1}, "j1", " (▼ 85,0 M FCFA vs hier)"),
     ({"unite": "xof", "j1": 0, "j1_jours": 1}, "j1", " (stable vs hier)"),
     ({"unite": "nb", "j1": 5, "j1_jours": 1}, "j1", " (▲ 5 vs hier)"),
     ({"unite": "xof", "j1": None}, "j1", ""),
-    # Sous le million, l'arrondi rendrait « ▲ 0 M FCFA » : « stable » est plus
+    # Sous le million, l'arrondi rendrait « ▲ 0 FCFA » : « stable » est plus
     # juste et plus lisible qu'un mouvement affiché comme nul.
     ({"unite": "xof", "j1": 400_000, "j1_jours": 1}, "j1", " (stable vs hier)"),
 ])
@@ -289,7 +289,7 @@ def test_formater_date_une_comparaison_decalee():
     elle est invérifiable par le lecteur."""
     bloc = {"unite": "xof", "semaine": 4_000_000, "semaine_depuis": "2026-08-13",
             "semaine_jours": 14}
-    assert indicateurs.formater(bloc, "semaine") == " (▲ 4 M FCFA depuis le 13/08)"
+    assert indicateurs.formater(bloc, "semaine") == " (▲ 4,00 M FCFA depuis le 13/08)"
 
 
 # ── Ligne de cadence (6e ligne du résumé) ────────────────────────────────────
@@ -299,8 +299,8 @@ def test_ligne_cadence_dit_les_trois_horizons():
             "j1": 0, "j1_jours": 1, "semaine": -12_000_000, "semaine_jours": 7,
             "mois": 17_000_000, "mois_jours": 30}
     assert indicateurs.ligne_cadence(bloc, "CA commandé") == (
-        "CA commandé : 6 128 M FCFA — stable vs hier, ▼ 12 M FCFA sur 7 j, "
-        "▲ 17 M FCFA sur 30 j."
+        "CA commandé : 6,13 Md FCFA — stable vs hier, ▼ 12,0 M FCFA sur 7 j, "
+        "▲ 17,0 M FCFA sur 30 j."
     )
 
 
@@ -311,7 +311,7 @@ def test_ligne_cadence_tait_les_horizons_absents():
     bloc = {"unite": "xof", "valeur": 900_000_000,
             "j1": 5_000_000, "j1_jours": 1, "semaine": None, "mois": None}
     assert indicateurs.ligne_cadence(bloc, "Pipe actif") == (
-        "Pipe actif : 900 M FCFA — ▲ 5 M FCFA vs hier."
+        "Pipe actif : 900 M FCFA — ▲ 5,00 M FCFA vs hier."
     )
 
 
@@ -332,7 +332,7 @@ def test_ligne_cadence_et_puce_disent_le_meme_mouvement():
     autrement, le lecteur voit deux chiffres pour un seul écart."""
     bloc = {"unite": "xof", "valeur": 6_128_000_000, "j1": 85_000_000, "j1_jours": 1}
     suffixe = indicateurs.formater(bloc, "j1")
-    assert suffixe == " (▲ 85 M FCFA vs hier)"
+    assert suffixe == " (▲ 85,0 M FCFA vs hier)"
     assert suffixe.strip()[1:-1] in indicateurs.ligne_cadence(bloc, "CA commandé")
 
 

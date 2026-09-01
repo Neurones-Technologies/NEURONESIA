@@ -648,7 +648,26 @@ class OdooAdapter(CRMRepository):
                 raise
         return records
 
-    async def get_all_purchase_orders(self, limit: int = 2000, since: datetime | None = None) -> list[dict]:
+    # Taille de page des achats. Même tranche que la synchro des dossiers : 500
+    # enregistrements par aller-retour XML-RPC passent sans timeout sur cette
+    # instance, 5 000 non.
+    _PO_PAGE = 500
+
+    async def get_all_purchase_orders(self, limit: int = 0, since: datetime | None = None) -> list[dict]:
+        """Commandes d'achat confirmées, PAGINÉES jusqu'à épuisement.
+
+        `limit=0` (défaut) ramène tout. Un plafond fixe était le comportement
+        d'origine et il tronquait en silence : Odoo porte 7 487 achats confirmés,
+        l'appel en demandait 2 000, et le miroir en contenait déjà 2 134 — le
+        plafond était donc dépassé sans qu'aucune trace ne le dise. Les montants
+        d'achat du tableau de bord Budget étaient calculés sur un quart des
+        données. Un simple relèvement du plafond aurait rendu la panne muette un
+        peu plus longtemps ; la pagination la supprime.
+
+        Tri par `id asc` et non par date : avec un OFFSET, un tri sur une colonne
+        à ex æquo peut rendre deux fois la même ligne et en sauter une autre.
+        L'appelant fait des upserts par clé, l'ordre ne lui sert à rien.
+        """
         domain = [["state", "in", ["purchase", "done"]]]
         if since:
             domain.append(["write_date", ">=", since.strftime("%Y-%m-%d %H:%M:%S")])
@@ -660,23 +679,47 @@ class OdooAdapter(CRMRepository):
                                "date_order", "state", "dossier_id"]
         fields_without_dossier = ["id", "name", "partner_id", "amount_total", "currency_id",
                                   "date_order", "state"]
-        try:
-            return await self._call(
-                "purchase.order", "search_read", [domain],
-                {"fields": fields_with_dossier, "limit": limit, "order": "date_order desc"},
-            )
-        except RuntimeError as e:
-            if "dossier_id" in str(e):
-                logger.warning("Champ dossier_id absent sur purchase.order — sync sans ce champ : %s", e)
+        champs = fields_with_dossier
+
+        async def _page(offset: int, taille: int) -> list[dict]:
+            nonlocal champs
+            try:
                 return await self._call(
                     "purchase.order", "search_read", [domain],
-                    {"fields": fields_without_dossier, "limit": limit, "order": "date_order desc"},
+                    {"fields": champs, "limit": taille, "offset": offset, "order": "id asc"},
                 )
-            logger.warning("purchase.order non disponible : %s", e)
-            return []
+            except RuntimeError as e:
+                if "dossier_id" in str(e) and champs is fields_with_dossier:
+                    logger.warning("Champ dossier_id absent sur purchase.order — sync sans ce champ : %s", e)
+                    # Bascule DÉFINITIVE pour les pages suivantes : sans elle, chaque
+                    # page repayait l'échec avant de retomber sur le jeu réduit.
+                    champs = fields_without_dossier
+                    return await self._call(
+                        "purchase.order", "search_read", [domain],
+                        {"fields": champs, "limit": taille, "offset": offset, "order": "id asc"},
+                    )
+                raise
+
+        tout: list[dict] = []
+        offset = 0
+        try:
+            while True:
+                taille = self._PO_PAGE if not limit else min(self._PO_PAGE, limit - len(tout))
+                if taille <= 0:
+                    break
+                page = await _page(offset, taille)
+                tout.extend(page)
+                # Page incomplète = fin du jeu. Ne pas s'arrêter sur `len(page) == 0`
+                # seulement : cela ferait un aller-retour de plus à chaque synchro.
+                if len(page) < taille:
+                    break
+                offset += len(page)
         except Exception as e:
-            logger.warning("purchase.order non disponible : %s", e)
-            return []
+            # Une page en échec ne doit pas jeter ce qui a déjà été lu : la synchro
+            # continue sur un jeu partiel ET le dit, plutôt que de rendre une liste
+            # vide qui se lirait comme « aucun achat ».
+            logger.warning("purchase.order interrompu à l'offset %d (%d déjà lus) : %s", offset, len(tout), e)
+        return tout
 
     # ─── Fournisseurs (res.partner, supplier_rank > 0) ────────────────────────
 

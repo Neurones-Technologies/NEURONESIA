@@ -1,5 +1,5 @@
 import { getCycleVie } from "@/lib/api/commercial";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { SourceNote, sourceKick } from "./source";
@@ -38,7 +38,6 @@ export async function DcCycleVie() {
   }
 
   const { stock, duree_close: duree, historique_etapes: histo } = cycle;
-  const seuilM = Math.round(cycle.seuil_xof / 1_000_000);
   const maxEtape = Math.max(...cycle.par_etape.map((e) => e.montant_xof), 1);
   const maxGabarit = Math.max(...histo.durees_par_etape.map((e) => e.duree_mediane_jours), 1);
 
@@ -47,27 +46,27 @@ export async function DcCycleVie() {
       <div className="kpi-row">
         <StatTile
           span={4}
-          label={`Affaires ≥ ${formatNumber(seuilM)} M FCFA`}
+          label={`Affaires ≥ ${formatFcfa(cycle.seuil_xof)} FCFA`}
           aide="Le nombre de grosses affaires actuellement en cours. Ce sont celles dont le cadrage demandait un suivi de bout en bout."
           value={formatNumber(stock.nb_ouvertes)}
           unit="ouvertes"
-          reading={`${formatMFcfa(stock.montant_ouvert_xof)} M FCFA · ${formatPct(stock.part_pipe_ouvert_pct, 0)} % du pipe ouvert`}
+          reading={`${formatFcfa(stock.montant_ouvert_xof)} FCFA · ${formatPct(stock.part_pipe_ouvert_pct, 0)} % du pipe ouvert`}
           detail={{
             kicker: "Indicateur · périmètre tracé",
-            title: `Affaires au-dessus du seuil de ${formatNumber(seuilM)} M FCFA`,
+            title: `Affaires au-dessus du seuil de ${formatFcfa(cycle.seuil_xof)} FCFA`,
             tag: `${formatNumber(stock.nb_total)} au total`,
             tagVariant: "a",
             body: [
-              `${formatNumber(stock.nb_ouvertes)} affaires ouvertes dépassent le seuil, pour ${formatMFcfa(stock.montant_ouvert_xof)} M FCFA — soit ${formatPct(stock.part_pipe_ouvert_pct, 0)} % du pipe ouvert en montant. Pondérées par la probabilité déclarée, elles ressortent à ${formatMFcfa(stock.montant_ouvert_pondere_xof)} M FCFA.`,
+              `${formatNumber(stock.nb_ouvertes)} affaires ouvertes dépassent le seuil, pour ${formatFcfa(stock.montant_ouvert_xof)} FCFA — soit ${formatPct(stock.part_pipe_ouvert_pct, 0)} % du pipe ouvert en montant. Pondérées par la probabilité déclarée, elles ressortent à ${formatFcfa(stock.montant_ouvert_pondere_xof)} FCFA.`,
               `Le miroir en compte ${formatNumber(stock.nb_total)} au total, dont ${formatNumber(stock.nb_closes)} déjà closes.`,
               `Point à trancher : le cadrage supposait une vingtaine d'affaires par an au-dessus de ce seuil. Le pipe en porte ${formatNumber(stock.nb_ouvertes)} ouvertes à lui seul. Soit le seuil doit monter, soit le traçage « de bout en bout » ne peut pas être manuel.`,
             ],
             kv: [
               ["Ouvertes", formatNumber(stock.nb_ouvertes)],
-              ["Montant ouvert", `${formatMFcfa(stock.montant_ouvert_xof)} M FCFA`],
-              ["Montant pondéré", `${formatMFcfa(stock.montant_ouvert_pondere_xof)} M FCFA`],
+              ["Montant ouvert", `${formatFcfa(stock.montant_ouvert_xof)} FCFA`],
+              ["Montant pondéré", `${formatFcfa(stock.montant_ouvert_pondere_xof)} FCFA`],
               ["Closes", formatNumber(stock.nb_closes)],
-              ["Seuil appliqué", `${formatNumber(seuilM)} M FCFA`],
+              ["Seuil appliqué", `${formatFcfa(cycle.seuil_xof)} FCFA`],
             ],
           }}
         />
@@ -137,7 +136,7 @@ export async function DcCycleVie() {
       <Bento>
         <Tile
           span={7}
-          title={`Où se tiennent les affaires ≥ ${formatNumber(seuilM)} M`}
+          title={`Où se tiennent les affaires ≥ ${formatFcfa(cycle.seuil_xof)}`}
           kick="mesuré · par étape"
           aide="À quel stade d'avancement se trouvent vos grosses affaires en cours. Une accumulation sur une même étape signale l'endroit où ça coince."
         >
@@ -148,7 +147,7 @@ export async function DcCycleVie() {
               return {
                 name: e.stage,
                 sub: `${formatNumber(e.nb)} affaires · ${formatPct(part, 0)} % du montant suivi`,
-                value: `${formatMFcfa(e.montant_xof)} M`,
+                value: `${formatFcfa(e.montant_xof)}`,
                 pct: (e.montant_xof / maxEtape) * 100,
                 variant: part > 40 ? ("w" as const) : undefined,
                 detail: {
@@ -157,7 +156,7 @@ export async function DcCycleVie() {
                   tag: `${formatPct(part, 0)} % du montant suivi`,
                   tagVariant: part > 40 ? ("w" as const) : ("a" as const),
                   body: [
-                    `${formatNumber(e.nb)} affaires au-dessus du seuil sont à l'étape « ${e.stage} », pour ${formatMFcfa(e.montant_xof)} M FCFA.`,
+                    `${formatNumber(e.nb)} affaires au-dessus du seuil sont à l'étape « ${e.stage} », pour ${formatFcfa(e.montant_xof)} FCFA.`,
                     part > 40
                       ? "Cette étape porte à elle seule plus de 40 % du montant suivi : un défaut de calibrage à cet endroit déplace tout le chiffre annoncé."
                       : "Le poids de cette étape reste réparti.",
@@ -165,7 +164,7 @@ export async function DcCycleVie() {
                   ],
                   kv: [
                     ["Affaires", formatNumber(e.nb)],
-                    ["Montant", `${formatMFcfa(e.montant_xof)} M FCFA`],
+                    ["Montant", `${formatFcfa(e.montant_xof)} FCFA`],
                     ["Part du montant suivi", `${formatPct(part, 0)} %`],
                   ],
                 },
@@ -198,7 +197,7 @@ export async function DcCycleVie() {
               ]
                 .filter(Boolean)
                 .join(" · "),
-              tag: a.enlisee ? "enlisée" : `${formatMFcfa(a.montant_xof)} M`,
+              tag: a.enlisee ? "enlisée" : `${formatFcfa(a.montant_xof)}`,
               tagVariant: a.enlisee ? ("r" as const) : ("a" as const),
               detail: {
                 kicker: "Affaire · cycle de vie",
@@ -206,7 +205,7 @@ export async function DcCycleVie() {
                 tag: a.enlisee ? "enlisée" : "en cours",
                 tagVariant: a.enlisee ? ("r" as const) : ("a" as const),
                 body: [
-                  `${a.client} · ${a.stage} · ${formatMFcfa(a.montant_xof)} M FCFA à ${formatPct(a.probabilite_pct, 0)} % de probabilité déclarée, portée par ${a.commercial || "aucun commercial rattaché"}.`,
+                  `${a.client} · ${a.stage} · ${formatFcfa(a.montant_xof)} FCFA à ${formatPct(a.probabilite_pct, 0)} % de probabilité déclarée, portée par ${a.commercial || "aucun commercial rattaché"}.`,
                   a.age_jours !== null
                     ? `Ouverte depuis ${formatNumber(a.age_jours)} jours (création le ${formatDate(a.creee_le)}).${a.enlisee ? ` Au-delà de ${stock.seuil_enlisement_jours} jours, l'affaire a traversé deux forecasts sans se conclure.` : ""}`
                     : "Sa date de création est une date d'import en masse : l'âge réel de cette affaire est inconnu, et elle n'est donc jamais déclarée enlisée.",
@@ -218,7 +217,7 @@ export async function DcCycleVie() {
                   ["Client", a.client],
                   ["Commercial", a.commercial || "non renseigné"],
                   ["Étape", a.stage],
-                  ["Montant", `${formatMFcfa(a.montant_xof)} M FCFA`],
+                  ["Montant", `${formatFcfa(a.montant_xof)} FCFA`],
                   ["Probabilité déclarée", `${formatPct(a.probabilite_pct, 0)} %`],
                   ["Créée le", formatDate(a.creee_le)],
                   ["Âge", a.age_jours !== null ? `${formatNumber(a.age_jours)} jours` : "inconnu"],
@@ -322,7 +321,7 @@ export async function DcCycleVie() {
               items={histo.mouvement_observe.changements_etape.map((m) => ({
                 title: m.name,
                 sub: `${m.client} · ${m.etape_avant} → ${m.etape_apres} · ${m.commercial || "commercial non renseigné"}`,
-                tag: `${formatMFcfa(m.montant_xof)} M`,
+                tag: `${formatFcfa(m.montant_xof)}`,
                 tagVariant: "s" as const,
                 detail: {
                   kicker: "Mouvement · changement d'étape",
@@ -337,7 +336,7 @@ export async function DcCycleVie() {
                     ["Client", m.client],
                     ["Étape avant", m.etape_avant],
                     ["Étape après", m.etape_apres],
-                    ["Montant", `${formatMFcfa(m.montant_xof)} M FCFA`],
+                    ["Montant", `${formatFcfa(m.montant_xof)} FCFA`],
                     ["Commercial", m.commercial || "non renseigné"],
                   ],
                 },

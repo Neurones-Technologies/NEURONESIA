@@ -107,6 +107,20 @@ def build_top_comptes(
     `comptes` : sortie de `CRMRepository.get_account_activity()`.
     `opportunites` : sortie de `queries.fetch_opportunites()`.
 
+    PORTÉE — le classement se lit sur l'EXERCICE EN COURS (`ca_exercice_xof`,
+    `nb_commandes_exercice`), pas sur le cumul depuis l'origine du miroir. Le
+    cockpit répond à « où en est-on cette année » : lu sur le cumul, l'écran
+    annonçait 69 031 M FCFA sur 8 exercices (2019→2026) dont 6 128 seulement pour
+    l'année en cours, et un compte inactif depuis deux ans tenait le haut du
+    classement. Le cumul reste servi en contexte (`ca_historique_xof`,
+    `nb_commandes_historique`) : il qualifie la relation sans porter la lecture.
+
+    Un compte sans commande sur l'exercice ET sans pipe à venir sort du
+    classement. Il n'est pas perdu pour autant : c'est exactement l'objet de la
+    dormance (`uc_dormance`, onglet « Base installée »), qui le lit sur sa durée
+    de silence — et qui continue donc de s'appuyer sur les champs HISTORIQUES de
+    `get_account_activity`, jamais sur ceux d'exercice.
+
     Les opportunités « à venir » sont les opportunités OUVERTES dont l'échéance
     n'est pas dépassée. Celles dont l'échéance est passée sont comptées à part
     (`nb_opp_echues`) et non dans le « à venir » : les mêmes affaires servaient
@@ -144,10 +158,20 @@ def build_top_comptes(
     for c in comptes:
         cid = (c.get("client_id") or "").strip()
         pipe = par_id.get(cid) or par_nom.get((c.get("compte") or "").strip().upper()) or {}
-        ca = c.get("ca_total_xof", 0)
-        nb_cmd = c.get("nb_commandes", 0)
+        # CA de l'EXERCICE : le cockpit répond à « où en est-on cette année »,
+        # pas « qui a le plus acheté depuis 2019 ». Le cumul historique reste
+        # servi à côté (`ca_historique_xof`) parce qu'il qualifie le compte —
+        # 1 069 M cette année sur un compte qui en a fait 1 878 depuis 2019 ne
+        # se lit pas comme le même client qu'un nouveau venu au même montant.
+        ca = c.get("ca_exercice_xof", 0)
+        nb_cmd = c.get("nb_commandes_exercice", 0)
+        ca_hist = c.get("ca_total_xof", 0)
         a_venir_nb = pipe.get("a_venir_nb", 0)
         a_venir_xof = pipe.get("a_venir_xof", 0)
+        # Un compte sans commande cette année ET sans pipe ne concerne pas
+        # l'exercice. S'il a un historique, il n'est pas perdu pour autant : il
+        # relève de la dormance (onglet Base installée), qui le lit justement
+        # sur son silence — c'est là qu'il doit apparaître, pas ici.
         if ca <= 0 and a_venir_nb == 0:
             continue
         lignes.append({
@@ -156,6 +180,8 @@ def build_top_comptes(
             "commercial": c.get("commercial") or "",
             "ca_realise_xof": ca,
             "nb_commandes": nb_cmd,
+            "ca_historique_xof": ca_hist,
+            "nb_commandes_historique": c.get("nb_commandes", 0),
             "panier_moyen_xof": round(ca / nb_cmd) if nb_cmd else 0,
             "nb_opp_a_venir": a_venir_nb,
             "pipe_a_venir_xof": a_venir_xof,
@@ -185,15 +211,22 @@ def build_top_comptes(
 
     lignes.sort(key=lambda l: l["indice_combine"], reverse=True)
     total_ca = sum(l["ca_realise_xof"] for l in lignes)
+    total_hist = sum(l["ca_historique_xof"] for l in lignes)
     total_pipe = sum(l["pipe_a_venir_xof"] for l in lignes)
     top = lignes[:limit]
+    exercice = next((c.get("annee_exercice") for c in comptes if c.get("annee_exercice")), jour.year)
 
     return {
         "as_of": jour.isoformat(),
+        "annee": exercice,
         "comptes": top,
         "totaux": {
             "nb_comptes_classes": len(lignes),
             "ca_realise_xof": total_ca,
+            # Cumul depuis l'origine du miroir, sur les mêmes comptes classés.
+            # Sert de contexte au chiffre de l'exercice, jamais de substitut :
+            # l'écran doit dire lequel des deux il affiche.
+            "ca_historique_xof": total_hist,
             "pipe_a_venir_xof": total_pipe,
             "part_ca_top_pct": round(100 * sum(l["ca_realise_xof"] for l in top) / total_ca, 1) if total_ca else 0.0,
             "part_pipe_top_pct": round(100 * sum(l["pipe_a_venir_xof"] for l in top) / total_pipe, 1) if total_pipe else 0.0,

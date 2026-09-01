@@ -1,5 +1,5 @@
 import { getEquipeDc, Periode } from "@/lib/api/commercial";
-import { formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { PeriodeNav } from "./periode-nav";
@@ -159,9 +159,9 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
                 c.taux_valeur_pct !== null
                   ? `transformation ${formatPct(c.taux_valeur_pct, 0)} %${c.taux_significatif ? "" : " (non significatif)"}`
                   : "aucune affaire close",
-                `panier ${formatMFcfa(c.panier_moyen_xof)} M`,
+                `panier ${formatFcfa(c.panier_moyen_xof)}`,
               ].join(" · "),
-              value: `${formatMFcfa(c.ca_signe_xof)} M`,
+              value: `${formatFcfa(c.ca_signe_xof)}`,
               pct: (c.ca_signe_xof / maxCa) * 100,
               variant: c.taux_significatif ? undefined : ("w" as const),
               detail: {
@@ -171,11 +171,11 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
                 tagVariant: c.taux_significatif ? ("a" as const) : ("w" as const),
                 body: [
                   `Indice composé de trois rangs : transformation en valeur ${c.composantes.transformation !== null ? formatPct(c.composantes.transformation, 0) : "non retenue"}, volume signé ${c.composantes.volume_signe !== null ? formatPct(c.composantes.volume_signe, 0) : "—"}, taille moyenne des affaires gagnées ${c.composantes.taille_affaire !== null ? formatPct(c.composantes.taille_affaire, 0) : "—"}.`,
-                  `Sur l'historique complet : ${formatNumber(c.nb_gagnees)} affaires gagnées (${formatMFcfa(c.montant_gagne_xof)} M FCFA) contre ${formatNumber(c.nb_perdues)} perdues (${formatMFcfa(c.montant_perdu_xof)} M FCFA). Pipe ouvert porté : ${formatNumber(c.nb_ouvertes)} affaires pour ${formatMFcfa(c.pipe_ouvert_xof)} M FCFA.`,
+                  `Sur l'historique complet : ${formatNumber(c.nb_gagnees)} affaires gagnées (${formatFcfa(c.montant_gagne_xof)} FCFA) contre ${formatNumber(c.nb_perdues)} perdues (${formatFcfa(c.montant_perdu_xof)} FCFA). Pipe ouvert porté : ${formatNumber(c.nb_ouvertes)} affaires pour ${formatFcfa(c.pipe_ouvert_xof)} FCFA.`,
                   c.taux_significatif
                     ? `Son taux de transformation en valeur (${formatPct(c.taux_valeur_pct, 0)} %) porte sur ${formatNumber(c.nb_closes)} affaires closes : il entre dans l'indice.`
                     : `Son taux de transformation ne porte que sur ${formatNumber(c.nb_closes)} affaires closes, sous le seuil de ${formatNumber(eff.seuil_significativite_closes)} retenu : il reste affiché mais n'entre PAS dans l'indice. Un 100 % obtenu sur trois affaires n'est pas une performance mesurée.`,
-                  `Sur ${eff.annee} : ${formatMFcfa(c.ca_signe_xof)} M FCFA signés sur ${formatNumber(c.nb_commandes)} commandes, panier moyen ${formatMFcfa(c.panier_moyen_xof)} M FCFA.`,
+                  `Sur ${eff.annee} : ${formatFcfa(c.ca_signe_xof)} FCFA signés sur ${formatNumber(c.nb_commandes)} commandes, panier moyen ${formatFcfa(c.panier_moyen_xof)} FCFA.`,
                   "Deux périodes cohabitent sur cette ligne : la transformation porte sur l'historique complet (les opportunités n'ont pas de date fiable), le CA signé sur l'exercice affiché.",
                 ],
                 kv: [
@@ -185,10 +185,10 @@ export async function DcEfficacite({ periode, annee }: { periode: Periode; annee
                   ["Affaires perdues", formatNumber(c.nb_perdues)],
                   ["Transformation en valeur", c.taux_valeur_pct !== null ? `${formatPct(c.taux_valeur_pct, 0)} %` : "—"],
                   ["Transformation en nombre", c.taux_nb_pct !== null ? `${formatPct(c.taux_nb_pct, 0)} %` : "—"],
-                  ["Ticket moyen gagné", `${formatMFcfa(c.ticket_moyen_gagne_xof)} M FCFA`],
-                  ["CA signé", `${formatMFcfa(c.ca_signe_xof)} M FCFA`],
+                  ["Ticket moyen gagné", `${formatFcfa(c.ticket_moyen_gagne_xof)} FCFA`],
+                  ["CA signé", `${formatFcfa(c.ca_signe_xof)} FCFA`],
                   ["Commandes", formatNumber(c.nb_commandes)],
-                  ["Pipe ouvert porté", `${formatMFcfa(c.pipe_ouvert_xof)} M FCFA`],
+                  ["Pipe ouvert porté", `${formatFcfa(c.pipe_ouvert_xof)} FCFA`],
                 ],
               },
             }))}

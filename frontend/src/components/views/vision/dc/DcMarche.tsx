@@ -1,6 +1,6 @@
 import { getBriefing } from "@/lib/api/briefing";
 import { getMarcheDc } from "@/lib/api/commercial";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bars, Bento, Brief, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 
@@ -68,7 +68,7 @@ export async function DcMarche() {
           briefLines.length
             ? undefined
             : [
-                `Le pipe ouvert qualifié se répartit sur ${formatNumber(axes.coverage.nb_axes)} axes pour ${formatMFcfa(totalOuvert)} M FCFA. Le briefing du jour n'est pas encore généré pour ce profil.`,
+                `Le pipe ouvert qualifié se répartit sur ${formatNumber(axes.coverage.nb_axes)} axes pour ${formatFcfa(totalOuvert)} FCFA. Le briefing du jour n'est pas encore généré pour ce profil.`,
               ]
         }
         pills={[
@@ -105,7 +105,7 @@ export async function DcMarche() {
             tagVariant: "s",
             body: [
               `Le pipe ouvert qualifié se répartit sur ${formatNumber(axes.coverage.nb_axes)} axes de marché, dominé par ${axes.dominante?.axe ?? "—"} à ${formatPct(axes.dominante?.part_montant_pct ?? null, 0)} % du montant.`,
-              `L'axe est déduit du LIBELLÉ de l'opportunité au moyen d'une grille de ${formatNumber(axes.coverage.nb_motifs)} motifs éditables : le CRM ne porte aucune notion d'axe. ${formatNumber(axes.coverage.nb_non_classe)} opportunités (${formatMFcfa(axes.coverage.montant_non_classe_xof)} M FCFA) portent un libellé trop générique pour être qualifiées — les parts ci-dessus portent donc sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe.`,
+              `L'axe est déduit du LIBELLÉ de l'opportunité au moyen d'une grille de ${formatNumber(axes.coverage.nb_motifs)} motifs éditables : le CRM ne porte aucune notion d'axe. ${formatNumber(axes.coverage.nb_non_classe)} opportunités (${formatFcfa(axes.coverage.montant_non_classe_xof)} FCFA) portent un libellé trop générique pour être qualifiées — les parts ci-dessus portent donc sur ${formatPct(axes.coverage.couverture_montant_pct, 0)} % du pipe.`,
               "Cette grille est une convention de lecture, pas une donnée extraite : la corriger fait bouger les chiffres, ce qui est normal et voulu.",
             ],
             kv: [
@@ -138,7 +138,7 @@ export async function DcMarche() {
             body: [
               secteurs.part_marche.distinction,
               secteurs.part_marche.raison,
-              `La valeur affichée rapporte un CA de gabarit à une taille de marché supposée de ${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA. Elle montre la forme de l'indicateur ; elle ne mesure rien.`,
+              `La valeur affichée rapporte un CA de gabarit à une taille de marché supposée de ${formatFcfa(secteurs.totaux.taille_marche_xof)} FCFA. Elle montre la forme de l'indicateur ; elle ne mesure rien.`,
             ],
             kv: [
               [
@@ -147,7 +147,7 @@ export async function DcMarche() {
                   ? `${formatPct(secteurs.totaux.part_marche_globale_pct, 2)} %`
                   : "—",
               ],
-              ["Taille de marché supposée", `${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA`],
+              ["Taille de marché supposée", `${formatFcfa(secteurs.totaux.taille_marche_xof)} FCFA`],
               ["Source externe raccordée", "aucune"],
             ],
           }}
@@ -204,7 +204,7 @@ export async function DcMarche() {
                   ? `réussite ${formatPct(a.win_rate_pct, 0)} % sur ${formatNumber(a.nb_closes)} closes`
                   : "aucune affaire close",
               ].join(" · "),
-              value: `${formatMFcfa(a.montant_ouvert_xof)} M`,
+              value: `${formatFcfa(a.montant_ouvert_xof)}`,
               pct: (a.montant_ouvert_xof / maxAxe) * 100,
               variant: a.part_montant_pct > 30 ? ("w" as const) : undefined,
               detail: {
@@ -213,21 +213,21 @@ export async function DcMarche() {
                 tag: `${formatPct(a.part_montant_pct, 0)} % du pipe qualifié`,
                 tagVariant: a.part_montant_pct > 30 ? ("w" as const) : ("a" as const),
                 body: [
-                  `${formatNumber(a.nb_ouvertes)} opportunités ouvertes sur cet axe pour ${formatMFcfa(a.montant_ouvert_xof)} M FCFA, soit ${formatMFcfa(a.montant_pondere_xof)} M FCFA pondérés par la probabilité déclarée.`,
+                  `${formatNumber(a.nb_ouvertes)} opportunités ouvertes sur cet axe pour ${formatFcfa(a.montant_ouvert_xof)} FCFA, soit ${formatFcfa(a.montant_pondere_xof)} FCFA pondérés par la probabilité déclarée.`,
                   a.win_rate_pct !== null
-                    ? `Sur les ${formatNumber(a.nb_closes)} affaires déjà closes de cet axe, ${formatPct(a.win_rate_pct, 0)} % de la valeur engagée a été gagnée (${formatMFcfa(a.montant_gagne_xof)} M gagnés contre ${formatMFcfa(a.montant_perdu_xof)} M perdus). L'écart entre le poids dans le pipe et le taux de réussite est le signal à lire : se positionner massivement là où l'on gagne peu déplace le résultat.`
+                    ? `Sur les ${formatNumber(a.nb_closes)} affaires déjà closes de cet axe, ${formatPct(a.win_rate_pct, 0)} % de la valeur engagée a été gagnée (${formatFcfa(a.montant_gagne_xof)} gagnés contre ${formatFcfa(a.montant_perdu_xof)} perdus). L'écart entre le poids dans le pipe et le taux de réussite est le signal à lire : se positionner massivement là où l'on gagne peu déplace le résultat.`
                     : "Aucune affaire close sur cet axe : son taux de réussite n'est pas encore calculable.",
                   "L'axe est déduit du libellé de l'opportunité par une grille de motifs, non lu dans un champ du CRM : un libellé plus explicite améliore directement la lecture.",
                 ],
                 kv: [
-                  ["Pipe ouvert", `${formatMFcfa(a.montant_ouvert_xof)} M FCFA`],
-                  ["Pipe pondéré", `${formatMFcfa(a.montant_pondere_xof)} M FCFA`],
+                  ["Pipe ouvert", `${formatFcfa(a.montant_ouvert_xof)} FCFA`],
+                  ["Pipe pondéré", `${formatFcfa(a.montant_pondere_xof)} FCFA`],
                   ["Opportunités ouvertes", formatNumber(a.nb_ouvertes)],
                   ["Part du pipe qualifié", `${formatPct(a.part_montant_pct, 0)} %`],
                   ["Taux de réussite", a.win_rate_pct !== null ? `${formatPct(a.win_rate_pct, 0)} %` : "—"],
                   ["Affaires closes", formatNumber(a.nb_closes)],
-                  ["Valeur gagnée", `${formatMFcfa(a.montant_gagne_xof)} M FCFA`],
-                  ["Valeur perdue", `${formatMFcfa(a.montant_perdu_xof)} M FCFA`],
+                  ["Valeur gagnée", `${formatFcfa(a.montant_gagne_xof)} FCFA`],
+                  ["Valeur perdue", `${formatFcfa(a.montant_perdu_xof)} FCFA`],
                 ],
               },
             }))}
@@ -245,7 +245,7 @@ export async function DcMarche() {
             rows={[
               {
                 name: "Part de marché globale supposée",
-                sub: `notre CA rapporté à une taille de marché de ${formatMFcfa(secteurs.totaux.taille_marche_xof)} M FCFA — aucune source externe raccordée`,
+                sub: `notre CA rapporté à une taille de marché de ${formatFcfa(secteurs.totaux.taille_marche_xof)} FCFA — aucune source externe raccordée`,
                 value:
                   secteurs.totaux.part_marche_globale_pct !== null
                     ? `${formatPct(secteurs.totaux.part_marche_globale_pct, 2)} %`

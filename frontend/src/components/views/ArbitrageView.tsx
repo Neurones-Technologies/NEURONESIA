@@ -6,7 +6,7 @@ import type { ArbitrageCandidate } from "@/lib/api/arbitrage";
 import { getMe } from "@/lib/api/me";
 import { isAdminRole } from "@/lib/auth/roles";
 import { META } from "@/lib/data/profiles";
-import { formatNumber, mFcfa } from "@/lib/format";
+import { formatFcfa, formatFcfaDepuisM, formatNumber, mFcfa } from "@/lib/format";
 import { ProfileKey } from "@/lib/types";
 import { Aide } from "@/components/ui/aide";
 import { StatTile } from "@/components/ui/bento";
@@ -88,8 +88,8 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
 
   const relevantCandidate = (c: ArbitrageCandidate) => isRowRelevant(profile, isAdmin, c.mandat_role, c.profils_impliques);
   const mesCandidats = file.candidats.filter(relevantCandidate);
-  const monEnjeuM = mesCandidats.reduce((sum, c) => sum + mFcfa(c.enjeu_xof), 0);
-  const monImpayeM = mesCandidats.reduce((sum, c) => sum + mFcfa(c.impaye_xof), 0);
+  const monEnjeuXof = mesCandidats.reduce((sum, c) => sum + c.enjeu_xof, 0);
+  const monImpayeXof = mesCandidats.reduce((sum, c) => sum + c.impaye_xof, 0);
 
   const items = file.candidats.map((c, i) => queueItem(c, i + 1, relevantCandidate(c), seuilM));
   // Le dossier demandé s'il existe encore dans la file, sinon celui de tête du
@@ -146,36 +146,34 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
               ["Conflits détectés", formatNumber(file.candidats.length)],
               ["Dans votre périmètre", formatNumber(mesCandidats.length)],
               ["Décisions ouvertes", formatNumber(file.decisions_ouvertes.length)],
-              ["Enjeu cumulé (tous profils)", `${formatNumber(file.kpi.enjeu_cumule_m_fcfa)} M FCFA`],
+              ["Enjeu cumulé (tous profils)", `${formatFcfaDepuisM(file.kpi.enjeu_cumule_m_fcfa)} FCFA`],
             ],
           }}
         />
         <StatTile
           span={4}
           label="Enjeu cumulé"
-          value={formatNumber(file.kpi.enjeu_cumule_m_fcfa)}
-          unit="M FCFA"
+          value={formatFcfaDepuisM(file.kpi.enjeu_cumule_m_fcfa)}
+          unit="FCFA"
           aide="Le montant commercial que ces dossiers mettent en jeu : renouvellements et commandes qui basculent selon ce qui sera décidé. Ce n'est pas la somme que les clients doivent."
-          reading={isAdmin ? "tous profils confondus" : `dont ${formatNumber(monEnjeuM)} M dans votre périmètre`}
+          reading={isAdmin ? "tous profils confondus" : `dont ${formatFcfa(monEnjeuXof)} FCFA dans votre périmètre`}
           detail={{
             kicker: "Indicateur · enjeu",
             title: "Enjeu cumulé en arbitrage",
             tag: `${formatNumber(file.kpi.dossiers_ouverts)} dossiers`,
             tagVariant: "a",
             body: [
-              `Les dossiers ouverts portent ensemble sur ${formatNumber(
+              `Les dossiers ouverts portent ensemble sur ${formatFcfaDepuisM(
                 file.kpi.enjeu_cumule_m_fcfa
-              )} M FCFA de signaux commerciaux. Attention : c'est le montant que la décision déplace côté commerce, PAS le montant dû.`,
-              `L'exposition financière réellement échue sur votre périmètre est de ${formatNumber(
-                monImpayeM
-              )} M FCFA — les deux échelles sont distinctes et doivent être lues séparément.`,
-              `Au-delà de ${formatNumber(seuilM)} M FCFA d'enjeu, le mandat bascule automatiquement à la Direction générale : c'est ce seuil qui explique pourquoi la plupart des dossiers sont mandat DG.`,
+              )} FCFA de signaux commerciaux. Attention : c'est le montant que la décision déplace côté commerce, PAS le montant dû.`,
+              `L'exposition financière réellement échue sur votre périmètre est de ${formatFcfa(monImpayeXof)} FCFA — les deux échelles sont distinctes et doivent être lues séparément.`,
+              `Au-delà de ${formatFcfaDepuisM(seuilM)} FCFA d'enjeu, le mandat bascule automatiquement à la Direction générale : c'est ce seuil qui explique pourquoi la plupart des dossiers sont mandat DG.`,
             ],
             kv: [
-              ["Enjeu cumulé (tous profils)", `${formatNumber(file.kpi.enjeu_cumule_m_fcfa)} M FCFA`],
-              ["Enjeu de votre périmètre", `${formatNumber(monEnjeuM)} M FCFA`],
-              ["Impayé de votre périmètre", `${formatNumber(monImpayeM)} M FCFA`],
-              ["Seuil de mandat DG", `${formatNumber(seuilM)} M FCFA`],
+              ["Enjeu cumulé (tous profils)", `${formatFcfaDepuisM(file.kpi.enjeu_cumule_m_fcfa)} FCFA`],
+              ["Enjeu de votre périmètre", `${formatFcfa(monEnjeuXof)} FCFA`],
+              ["Impayé de votre périmètre", `${formatFcfa(monImpayeXof)} FCFA`],
+              ["Seuil de mandat DG", `${formatFcfaDepuisM(seuilM)} FCFA`],
             ],
           }}
         />
@@ -219,8 +217,8 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
         <StatTile
           span={4}
           label="Coût du report"
-          value={`≈ ${formatNumber(file.kpi.cout_report_m_fcfa_semaine)}`}
-          unit="M FCFA / semaine"
+          value={`≈ ${formatFcfaDepuisM(file.kpi.cout_report_m_fcfa_semaine)}`}
+          unit="FCFA / semaine"
           aide="Ce que coûte, à peu près, chaque semaine où l'on ne tranche pas. C'est une estimation calculée à partir de l'enjeu et du comportement de paiement du client : elle sert à savoir quel dossier passe en premier, pas à provisionner un montant."
           reading="estimation calibrée par client, pas une mesure"
           readingVariant="wat"
@@ -230,14 +228,14 @@ export async function ArbitrageView({ profile, selected }: { profile: ProfileKey
             tag: "estimation",
             tagVariant: "w",
             body: [
-              `Ne pas trancher coûterait environ ${formatNumber(
+              `Ne pas trancher coûterait environ ${formatFcfaDepuisM(
                 file.kpi.cout_report_m_fcfa_semaine
-              )} M FCFA par semaine, cumulés sur l'ensemble des dossiers ouverts.`,
+              )} FCFA par semaine, cumulés sur l'ensemble des dossiers ouverts.`,
               "Cela reste une convention de calcul, pas une mesure : un pourcentage de l'enjeu par semaine. Elle sert à comparer deux reports entre eux et à ordonner la file — jamais à provisionner un montant ni à alimenter un plan de trésorerie.",
               "Le taux n'est plus le même pour tous : il va de 0,5 % chez un client dont le rythme de paiement s'améliore à 5 % chez un client qui a cessé de payer. Un taux uniforme revenait à affirmer qu'attendre coûte autant dans les deux cas, alors que c'est précisément ce que la file doit distinguer.",
             ],
             kv: [
-              ["Coût hebdomadaire estimé", `≈ ${formatNumber(file.kpi.cout_report_m_fcfa_semaine)} M FCFA`],
+              ["Coût hebdomadaire estimé", `≈ ${formatFcfaDepuisM(file.kpi.cout_report_m_fcfa_semaine)} FCFA`],
               ["Méthode", "% de l'enjeu par semaine, taux fonction du comportement de paiement du client"],
               ["Plage de taux", "0,5 % (rythme en amélioration) à 5 % (paiements arrêtés)"],
               ["Dossiers concernés", formatNumber(file.kpi.dossiers_ouverts)],

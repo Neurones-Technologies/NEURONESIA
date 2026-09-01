@@ -1,5 +1,5 @@
 import { getVisites } from "@/lib/api/commercial";
-import { formatDate, formatMFcfa, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatFcfa, formatNumber, formatPct } from "@/lib/format";
 import { Bento, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Note } from "@/components/ui/primitives";
 import { SourceNote, sourceKick } from "./source";
@@ -17,7 +17,7 @@ import { SourceNote, sourceKick } from "./source";
  *    seulement suivre un taux de couverture, rattachement compte ou opportunité) ;
  * 2. livrer tout de suite la moitié qui est mesurable : les comptes à couvrir. « Ce
  *    compte n'a pas été visité depuis quatre mois » n'est pas calculable, mais « ce
- *    compte à 4 274 M FCFA n'a pas commandé depuis onze mois » l'est.
+ *    compte à 4 274 FCFA n'a pas commandé depuis onze mois » l'est.
  *
  * Les comptes affichés sont RÉELS, les visites sont posées à la main, et les
  * interlocuteurs sont des FONCTIONS et non des noms fabriqués : un compte-rendu
@@ -200,7 +200,7 @@ export async function DcVisites() {
             items={fichier.comptes_a_visiter.map((cp) => ({
               title: cp.compte,
               sub: [
-                `${formatMFcfa(cp.ca_total_xof)} M FCFA historiques`,
+                `${formatFcfa(cp.ca_total_xof)} FCFA historiques`,
                 cp.mois_silence !== null ? `${formatNumber(cp.mois_silence)} mois sans commande` : null,
                 cp.nb_opp_ouvertes > 0 ? `${formatNumber(cp.nb_opp_ouvertes)} opportunités ouvertes` : null,
                 cp.commercial || null,
@@ -221,14 +221,14 @@ export async function DcVisites() {
                 tag: "aucune visite enregistrée",
                 tagVariant: "w" as const,
                 body: [
-                  `${formatMFcfa(cp.ca_total_xof)} M FCFA de CA historique. Dernière commande le ${formatDate(cp.derniere_commande)}${cp.mois_silence !== null ? `, soit ${formatNumber(cp.mois_silence)} mois` : ""}.`,
+                  `${formatFcfa(cp.ca_total_xof)} FCFA de CA historique. Dernière commande le ${formatDate(cp.derniere_commande)}${cp.mois_silence !== null ? `, soit ${formatNumber(cp.mois_silence)} mois` : ""}.`,
                   cp.nb_opp_ouvertes > 0
                     ? `${formatNumber(cp.nb_opp_ouvertes)} opportunités ouvertes sur ce compte : il y a du travail commercial en cours.`
                     : "Aucune opportunité ouverte sur ce compte.",
                   "Ces éléments sont mesurés. Ce qui manque, et que seule la saisie apportera, c'est la date de la dernière visite — le silence commercial et le silence de commande ne sont pas la même chose.",
                 ],
                 kv: [
-                  ["CA historique", `${formatMFcfa(cp.ca_total_xof)} M FCFA`],
+                  ["CA historique", `${formatFcfa(cp.ca_total_xof)} FCFA`],
                   ["Dernière commande", formatDate(cp.derniere_commande)],
                   ["Silence", cp.mois_silence !== null ? `${formatNumber(cp.mois_silence)} mois` : "—"],
                   ["Opportunités ouvertes", formatNumber(cp.nb_opp_ouvertes)],
