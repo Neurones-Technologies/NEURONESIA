@@ -116,7 +116,7 @@ async def relances_du_jour(as_of: date | None = None, retard_min_jours: int = 30
     accompagne le nom.
     """
     as_of = as_of or date.today()
-    lignes = await _lignes(f"""
+    lignes = await _lignes("""
         SELECT COALESCE(c.name, '—'), COUNT(*), COALESCE(SUM(i.amount_residual), 0),
                MAX(CAST(julianday(date(:a)) - julianday(date(i.due_date)) AS INTEGER))
         FROM invoices i LEFT JOIN clients c ON c.client_id = i.client_id
