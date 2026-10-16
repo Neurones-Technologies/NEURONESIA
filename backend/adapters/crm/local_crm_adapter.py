@@ -9,7 +9,7 @@ from core.domain.client import Client, Contract, Invoice, Project, ContractStatu
 from db.database import AsyncSessionLocal
 from db.models import (
     ClientModel, ContractModel, InvoiceModel, ProjectModel, SaleOrderModel, DossierModel,
-    SupplierModel,
+    SupplierModel, PurchaseOrderModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -1861,9 +1861,15 @@ class LocalCRMAdapter(CRMRepository):
                 # ── Fiche fournisseur (crédit, délai négocié) — jointure par NOM, best
                 # effort : purchase_orders ne stocke que client_name/client_id (le
                 # partner_id vendeur), suppliers.supplier_id est le MÊME partner_id.
+                # Odoo prod porte des homonymes (deux fiches « SOGELUX ») : on préfère
+                # la fiche réellement référencée par les BDC, sinon la première.
+                ids_bdc = select(PurchaseOrderModel.client_id).where(PurchaseOrderModel.client_name == name)
                 sup_row = (await session.execute(
-                    select(SupplierModel).where(SupplierModel.name == name)
-                )).scalar_one_or_none()
+                    select(SupplierModel)
+                    .where(SupplierModel.name == name)
+                    .order_by(SupplierModel.supplier_id.in_(ids_bdc).desc(), SupplierModel.supplier_id)
+                    .limit(1)
+                )).scalars().first()
                 credit_limit = sup_row.credit_limit if sup_row else None
                 use_credit_limit = bool(sup_row.use_partner_credit_limit) if sup_row else False
                 payment_term_name = sup_row.payment_term_name if sup_row else None
