@@ -430,15 +430,16 @@ SANS_REPONSE: dict[str, list[tuple[str, str]]] = {
         ("Est-ce que je vends au bon prix (TJM) ?",
          "sans objet — l'activité se fait en intégration, pas en régie"),
         ("Mon pipe couvre-t-il mon objectif ?",
-         "le pipe est mesuré, mais aucun objectif n'est saisi en base"),
+         "l'objectif d'équipe est importé de nt360, mais la couverture du reste à faire "
+         "par le pipe n'est pas encore calculée"),
     ],
     "dir_financier": [
         ("Quelle est ma position de trésorerie ?",
          "les paiements et relevés bancaires ne sont pas synchronisés"),
         ("Ai-je des engagements réceptionnés non facturés ?",
          "les lignes de commande d'achat ne sont pas synchronisées"),
-        ("Où en est le facturé face à l'objectif ?",
-         "le facturé est mesuré, mais aucun objectif n'est saisi en base"),
+        # « Où en est le facturé face à l'objectif ? » : répondue par la puce
+        # ca_facture_periode depuis l'import des objectifs nt360.
     ],
     "dir_operations": [
         ("Qui est en intercontrat, quel est mon taux d'occupation ?",

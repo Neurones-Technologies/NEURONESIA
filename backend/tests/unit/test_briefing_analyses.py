@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 from db.database import Base
 from db.models import ClientModel, DossierModel, InvoiceModel, PurchaseOrderModel, SaleOrderModel
 from modules.uc_briefing import analyses
+from tests.unit.nt360_semences import avec_nt360, create_views
 
 AUJOURD_HUI = date(2026, 8, 27)
 
@@ -29,6 +30,7 @@ async def _dans_la_base(corps, semer):
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(create_views)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
         session.add_all(semer())
@@ -272,4 +274,13 @@ def test_book_to_bill():
         return await analyses.book_to_bill(AUJOURD_HUI, fenetre_mois=12)
     b = asyncio.run(_dans_la_base(corps, _carnet))
     assert b["ratio"] == 2.0                           # 1200 commandés / 600 facturés
-    assert b["reserve"]                                # TTC des deux côtés
+    assert "TTC" in b["reserve"]                       # repli Odoo des deux côtés
+
+
+def test_book_to_bill_refuse_deux_bases_differentes():
+    """Commandes déjà sur nt360 (HT), factures encore sur Odoo (TTC) : le ratio
+    serait faux d'environ 15 % — il ne doit pas être publié."""
+    async def corps():
+        return await analyses.book_to_bill(AUJOURD_HUI, fenetre_mois=12)
+    b = asyncio.run(_dans_la_base(corps, lambda: avec_nt360(_carnet())))
+    assert b["mesurable"] is False

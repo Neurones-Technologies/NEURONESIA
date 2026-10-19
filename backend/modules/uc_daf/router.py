@@ -63,8 +63,10 @@ def _jours_ecoules(annee: int, aujourdhui: date) -> int:
 
 
 async def _socle_creances(factures: list[dict], annee: int, aujourdhui: date) -> dict:
-    """Socle de créances mesuré, partagé par les trois tableaux de bord."""
-    ca = await q.fetch_ca_mensuel(annee)
+    """Socle de créances mesuré, partagé par les trois tableaux de bord.
+
+    CA TTC : il divise un encours TTC (cf. queries.fetch_ca_mensuel_ttc)."""
+    ca = await q.fetch_ca_mensuel_ttc(annee)
     ca_exercice = sum(m["ca_xof"] for m in ca)
     return await _hors_boucle(
         mod_relation.mesurer_creances, factures, aujourdhui, ca_exercice, _jours_ecoules(annee, aujourdhui),
@@ -138,7 +140,7 @@ async def tableau_relation_commerciale(
     factures, factures_fournisseurs, achats, delais, annees = await asyncio.gather(
         q.fetch_factures_clients(),
         q.fetch_factures_fournisseurs(),
-        q.fetch_achats(),
+        q.fetch_achats_ttc(),       # DPO : face aux dettes fournisseurs TTC
         q.fetch_delais_negocies(),
         q.fetch_annees_disponibles(),
     )
@@ -208,7 +210,8 @@ async def tableau_tresorerie_previsionnelle(
     an = _annee(annee)
     aujourdhui = _aujourdhui()
     factures, achats, dossiers, annees = await asyncio.gather(
-        q.fetch_factures_clients(), q.fetch_achats(), q.fetch_dossiers(), q.fetch_annees_disponibles(),
+        # Achats TTC : décaissements face à des encaissements TTC (cf. fetch_achats_ttc).
+        q.fetch_factures_clients(), q.fetch_achats_ttc(), q.fetch_dossiers(), q.fetch_annees_disponibles(),
     )
     socle = await _socle_creances(factures, an, aujourdhui)
 

@@ -140,7 +140,7 @@ async def _query_db(question: str):
         if client_row:
             cid = client_row["client_id"]
             async with db.execute(
-                "SELECT name, date_order, amount, currency, state FROM sale_orders "
+                "SELECT name, date_order, amount, currency, state FROM v_sale_orders "
                 "WHERE client_id = ? ORDER BY date_order DESC LIMIT 50",
                 (cid,)
             ) as cur:
@@ -207,7 +207,7 @@ async def get_client(name: str):
             cid = c["client_id"]
 
             async with db.execute(
-                "SELECT name, date_order, amount, currency, state FROM sale_orders "
+                "SELECT name, date_order, amount, currency, state FROM v_sale_orders "
                 "WHERE client_id = ? ORDER BY date_order DESC LIMIT 20",
                 (cid,)
             ) as cur:

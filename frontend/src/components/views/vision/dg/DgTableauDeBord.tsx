@@ -9,17 +9,23 @@ import {
 import { formatDate, formatFcfa, formatNumber, formatPct, signedFcfa } from "@/lib/format";
 import { Bars, Bento, Brief, HintLine, Lst, StatTile, Tile } from "@/components/ui/bento";
 import { Section } from "@/components/ui/primitives";
+import { Pays, PAYS_PAR_DEFAUT, paysLabel } from "@/lib/data/pays";
+import { PerimetreGroupe } from "../pays-nav";
 import { MOIS_ABREV, toSpark } from "./commun";
 
 /** Page d'ouverture du cockpit DG : le briefing du jour, les trois indicateurs
  * de cadrage, et les dépendances (comptes et commandes qui fragilisent
  * l'exercice). C'est la PREMIÈRE section déclarée (cf. lib/data/sections.ts) :
  * elle porte le `Brief` — les autres pages n'en ont pas, un cockpit n'a qu'un
- * panneau d'ouverture. */
-export async function DgTableauDeBord() {
+ * panneau d'ouverture.
+ *
+ * Le pays (`?pays=`) ne ventile que le BRIEFING — titre, puces et pastilles du
+ * panneau d'ouverture, tous tirés des faits de l'entité. Les tuiles en dessous
+ * restent au niveau groupe, sous le bandeau `PerimetreGroupe`. */
+export async function DgTableauDeBord({ pays = PAYS_PAR_DEFAUT }: { pays?: Pays }) {
   const year = new Date().getFullYear();
   const [briefing, kpis, forecast, topClients, variance, topOrders] = await Promise.all([
-    getBriefing(),
+    getBriefing(pays),
     getKpis(year),
     getForecastPipelineWeighted(),
     getTopClients(year, 10),
@@ -37,12 +43,17 @@ export async function DgTableauDeBord() {
     ? ((kpis.ytd.revenue_xof - kpis.previous_ytd.revenue_xof) / kpis.previous_ytd.revenue_xof) * 100
     : null;
 
-  // Le titre lit le fait figé par le briefing (même source que ses puces),
-  // avec repli sur le direct : titre et puces ne peuvent plus afficher deux
-  // chiffres différents pour le même indicateur.
+  // Le titre et les pastilles du panneau lisent les faits figés par le
+  // briefing DU PAYS (même source que ses puces). Pas de repli sur `kpis` :
+  // ce sont des chiffres groupe, ils se liraient comme des chiffres du pays.
   const dgFacts = (briefing?.section?.facts ?? {}) as Record<string, unknown>;
-  const caArrete = typeof dgFacts.ca_ytd_xof === "number" ? dgFacts.ca_ytd_xof : kpis.ytd.revenue_xof;
+  const num = (cle: string) => (typeof dgFacts[cle] === "number" ? (dgFacts[cle] as number) : null);
+  const caArrete = num("ca_ytd_xof");
+  const ecartN1 = num("ca_ytd_ecart_pct");
+  const nbCommandesPays = num("nb_commandes_ytd");
+  const top5PaysPct = num("concentration_top5_pct");
   const dateArret = typeof dgFacts.date_arret === "string" ? dgFacts.date_arret : kpis.ytd.as_of;
+  const libellePays = paysLabel(pays);
 
   const totalRevenue = kpis.year.revenue_xof;
   const top1 = topClients?.[0];
@@ -80,30 +91,36 @@ export async function DgTableauDeBord() {
       <Brief
         kicker={
           briefing?.generated_at
-            ? `Briefing du ${formatDate(briefing.generated_at)} · chiffres arrêtés au ${formatDate(dateArret)}`
-            : "Briefing de direction"
+            ? `Briefing ${libellePays} du ${formatDate(briefing.generated_at)} · chiffres arrêtés au ${formatDate(dateArret)}`
+            : `Briefing de direction · ${libellePays}`
         }
         headline={
-          `Exercice ${year} au ${formatDate(dateArret)} — ${formatFcfa(caArrete)} FCFA commandés`
-          + (revenueDeltaPct !== null
-            ? `, ${revenueDeltaPct >= 0 ? "+" : ""}${formatPct(revenueDeltaPct, 0)} % vs ${year - 1} à date comparable`
-            : "")
-          + "."
+          caArrete === null
+            ? `Exercice ${year} — ${libellePays} : briefing en préparation.`
+            : `Exercice ${year} au ${formatDate(dateArret)} — ${formatFcfa(caArrete)} FCFA commandés en ${libellePays}`
+              + (ecartN1 !== null
+                ? `, ${ecartN1 >= 0 ? "+" : ""}${formatPct(ecartN1, 0)} % vs ${year - 1} à date comparable`
+                : "")
+              + "."
         }
         lines={briefLines}
         paragraphs={
           briefLines.length ? undefined : ["Briefing pas encore généré pour ce profil."]
         }
+        // Pastilles du pays uniquement. Le nombre d'opportunités ouvertes n'y
+        // est plus : les opportunités nt360 ne portent pas d'entité.
         pills={[
-          { label: `${formatNumber(kpis.ytd.orders_count)} commandes`, hot: false },
-          { label: `${formatNumber(forecast.scenarios.nb_opportunites)} opportunités ouvertes`, hot: false },
-          {
-            label: top5Pct !== null ? `Top 5 · ${formatPct(top5Pct, 0)} % du CA` : "Concentration inconnue",
-            hot: top5Pct !== null && top5Pct > 50,
-          },
-          { label: briefing?.triggered_by ? `Source · ${briefing.triggered_by}` : "Miroir Odoo", hot: false },
+          ...(nbCommandesPays !== null
+            ? [{ label: `${formatNumber(nbCommandesPays)} commandes`, hot: false }]
+            : []),
+          ...(top5PaysPct !== null
+            ? [{ label: `Top 5 · ${formatPct(top5PaysPct, 0)} % du CA`, hot: top5PaysPct > 50 }]
+            : []),
+          { label: briefing?.triggered_by ? `Source · ${briefing.triggered_by}` : "nt360", hot: false },
         ]}
       />
+
+      <PerimetreGroupe pays={pays} />
 
       <Bento>
         {/* `fill` sur les trois : seule la première porte une sparkline, sans

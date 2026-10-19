@@ -65,7 +65,7 @@ async def fetch_opportunites() -> list[dict]:
         SELECT opp_id, name, client_id, client_name, stage, expected_revenue,
                probability, salesperson_name, deadline, created_at, date_closed,
                write_date, offer_family
-        FROM opportunities
+        FROM v_opportunities
     """)
     return [
         {
@@ -103,7 +103,7 @@ async def fetch_series_mensuelles_par_compte() -> list[dict]:
             SELECT client_id, client_name FROM (
                 SELECT client_id, client_name,
                        ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_order DESC) rg
-                FROM sale_orders
+                FROM v_sale_orders
                 WHERE client_name IS NOT NULL AND client_name != ''
             ) WHERE rg = 1
         )
@@ -113,7 +113,7 @@ async def fetch_series_mensuelles_par_compte() -> list[dict]:
                COUNT(*) AS nb,
                SUM(o.amount) AS montant,
                MAX(o.salesperson_name) AS commercial
-        FROM sale_orders o
+        FROM v_sale_orders o
         LEFT JOIN nom n ON n.client_id = o.client_id
         LEFT JOIN clients c ON c.client_id = o.client_id
         WHERE o.client_id IS NOT NULL AND o.client_id != '' AND o.{_ETATS_CA}
@@ -146,7 +146,7 @@ async def fetch_ca_mensuel_par_commercial(annee: int) -> list[dict]:
                CAST(strftime('%m', date_order) AS INTEGER) AS mois,
                COUNT(*) AS nb,
                SUM(amount) AS ca
-        FROM sale_orders
+        FROM v_sale_orders
         WHERE {_ETATS_CA} AND strftime('%Y', date_order) = :annee
         GROUP BY commercial, mois
     """, {"annee": str(annee)})
@@ -160,7 +160,7 @@ async def fetch_annees_disponibles() -> list[int]:
     """Années pour lesquelles le miroir porte des commandes, décroissant."""
     rows = await _rows(f"""
         SELECT DISTINCT CAST(strftime('%Y', date_order) AS INTEGER) AS a
-        FROM sale_orders WHERE {_ETATS_CA} AND date_order IS NOT NULL
+        FROM v_sale_orders WHERE {_ETATS_CA} AND date_order IS NOT NULL
         ORDER BY a DESC
     """)
     return [int(r[0]) for r in rows if r[0]]
@@ -169,7 +169,15 @@ async def fetch_annees_disponibles() -> list[int]:
 # ── Instantanés du pipeline (mouvement réel du pipe) ─────────────────────────
 
 async def fetch_dates_snapshots() -> list[str]:
-    rows = await _rows("SELECT DISTINCT snapshot_date FROM pipeline_snapshots ORDER BY snapshot_date")
+    """Dates d'instantanés COMPARABLES : à partir de la bascule du pipeline sur
+    nt360 seulement — une photo Odoo face à une photo nt360 ne décrit pas le
+    même univers d'opportunités (cf. uc_briefing/bascule.py)."""
+    from modules.uc_briefing import bascule
+    coupure = bascule.date_opportunites()
+    rows = await _rows(
+        "SELECT DISTINCT snapshot_date FROM pipeline_snapshots WHERE snapshot_date >= :c ORDER BY snapshot_date",
+        {"c": coupure.isoformat() if coupure else "0000-00-00"},
+    )
     return [str(r[0])[:10] for r in rows]
 
 
@@ -219,11 +227,11 @@ async def fetch_noms_commerciaux() -> list[dict]:
     rows = await _rows("""
         SELECT nom, SUM(nb) AS occurrences, GROUP_CONCAT(src) AS sources FROM (
             SELECT TRIM(salesperson_name) AS nom, COUNT(*) AS nb, 'opportunities' AS src
-            FROM opportunities WHERE salesperson_name IS NOT NULL AND TRIM(salesperson_name) != ''
+            FROM v_opportunities WHERE salesperson_name IS NOT NULL AND TRIM(salesperson_name) != ''
             GROUP BY nom
             UNION ALL
             SELECT TRIM(salesperson_name) AS nom, COUNT(*) AS nb, 'sale_orders' AS src
-            FROM sale_orders WHERE salesperson_name IS NOT NULL AND TRIM(salesperson_name) != ''
+            FROM v_sale_orders WHERE salesperson_name IS NOT NULL AND TRIM(salesperson_name) != ''
             GROUP BY nom
         ) GROUP BY nom ORDER BY occurrences DESC
     """)
@@ -235,9 +243,9 @@ async def fetch_noms_commerciaux() -> list[dict]:
 
 async def fetch_lignes_sans_commercial() -> dict:
     rows = await _rows("""
-        SELECT (SELECT COUNT(*) FROM opportunities
+        SELECT (SELECT COUNT(*) FROM v_opportunities
                 WHERE salesperson_name IS NULL OR TRIM(salesperson_name) = ''),
-               (SELECT COUNT(*) FROM sale_orders
+               (SELECT COUNT(*) FROM v_sale_orders
                 WHERE salesperson_name IS NULL OR TRIM(salesperson_name) = '')
     """)
     r = rows[0]

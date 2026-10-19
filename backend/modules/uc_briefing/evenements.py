@@ -36,6 +36,7 @@ from datetime import date, timedelta
 from sqlalchemy import text
 
 from db.database import AsyncSessionLocal
+from modules.uc_briefing import bascule
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ DORMANCE_JOURS = 15
 
 _FLUX = {
     "commandes_entrees": (
-        "sale_orders", "date_order", "amount", "client_name", "name",
+        "v_sale_orders", "date_order", "amount", "client_name", "name",
         "state IN ('sale', 'done')",
     ),
     "factures_emises": (
@@ -96,7 +97,7 @@ async def _opportunites_retouchees(depuis: date, jusqu_a: date, limite: int) -> 
     async with AsyncSessionLocal() as session:
         lignes = (await session.execute(text("""
             SELECT name, client_name, expected_revenue, stage, date(write_date)
-            FROM opportunities
+            FROM v_opportunities
             WHERE write_date IS NOT NULL
               AND date(write_date) >= date(:depuis) AND date(write_date) <= date(:jusqu_a)
             ORDER BY expected_revenue DESC
@@ -127,6 +128,11 @@ async def _bornes_snapshot(depuis: date, jusqu_a: date) -> tuple[date, date] | N
         return None
     conv = lambda v: v if isinstance(v, date) else date.fromisoformat(str(v)[:10])  # noqa: E731
     debut, fin = conv(debut), conv(fin)
+    # Jamais de différence à travers la bascule Odoo → nt360 : les deux photos
+    # ne décrivent pas le même univers d'opportunités (cf. bascule.py).
+    coupure = bascule.date_opportunites()
+    if coupure and debut < coupure <= fin:
+        return None
     return None if debut >= fin else (debut, fin)
 
 
@@ -214,7 +220,7 @@ async def hygiene_pipe(seuil_jours: int = DORMANCE_JOURS, limite: int = 5,
         async with AsyncSessionLocal() as session:
             return (await session.execute(text(f"""
                 SELECT name, client_name, expected_revenue, stage, {silence}, date(deadline)
-                FROM opportunities
+                FROM v_opportunities
                 WHERE expected_revenue > 0 AND {_PIPE_OUVERT} AND {condition}
                 ORDER BY expected_revenue DESC
             """), params)).all()

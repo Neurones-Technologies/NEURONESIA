@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
-import { paysDe, PAYS_AVEC_DONNEES } from "@/lib/data/pays";
-import { PaysIndisponible, PaysNav } from "../pays-nav";
+import { Pays, paysDe } from "@/lib/data/pays";
+import { PaysNav, PerimetreGroupe } from "../pays-nav";
 import { DgTableauDeBord } from "./DgTableauDeBord";
 import { DgTrajectoire } from "./DgTrajectoire";
 import { DgPilotage } from "./DgPilotage";
@@ -8,11 +8,14 @@ import { DgFactures } from "./DgFactures";
 import type { DcSectionParams } from "../dc";
 
 /** Habille chaque onglet DG du sélecteur de pays (à l'extrémité droite de la
- * ligne d'en-tête), et bascule sur l'écran « Donnée non disponible » quand le
- * pays sélectionné n'est pas encore raccordé au miroir. Le pays vit dans l'URL
- * (`?pays=`, cf. lib/data/pays.ts) comme les autres filtres du produit : les
- * onglets restent des composants serveur. */
-function page(section: string, rendre: () => ReactNode) {
+ * ligne d'en-tête). Le pays vit dans l'URL (`?pays=`, cf. lib/data/pays.ts)
+ * comme les autres filtres du produit : les onglets restent des composants
+ * serveur.
+ *
+ * Le pays ne ventile que le BRIEFING (onglet Tableau de bord). Les onglets sans
+ * briefing sont entièrement au niveau groupe : le bandeau `PerimetreGroupe`
+ * l'annonce en tête, quel que soit le pays choisi. */
+function page(section: string, rendre: (pays: Pays) => ReactNode, avecBriefing = false) {
   return function rendu(params: DcSectionParams): ReactNode {
     const pays = paysDe(params.pays);
     return (
@@ -20,7 +23,8 @@ function page(section: string, rendre: () => ReactNode) {
         <div className="dc-nav-row">
           <PaysNav basePath={`/dg/vision/${section}`} pays={pays} />
         </div>
-        {pays !== PAYS_AVEC_DONNEES ? <PaysIndisponible pays={pays} /> : rendre()}
+        {avecBriefing ? null : <PerimetreGroupe pays={pays} />}
+        {rendre(pays)}
       </>
     );
   };
@@ -37,10 +41,10 @@ function page(section: string, rendre: () => ReactNode) {
  * elle qui porte le briefing du jour (cf. defaultVisionSection).
  *
  * Seul paramètre d'URL lu par les onglets DG : le pays (`?pays=`), via le
- * wrapper `page` — les vues elles-mêmes ignorent `params`, comme le permet le
- * registre mutualisé. */
+ * wrapper `page`. Seul le Tableau de bord le consomme (briefing par entité) ;
+ * il pose lui-même le bandeau groupe sous le briefing, au-dessus des tuiles. */
 export const DG_SECTIONS: Record<string, (params: DcSectionParams) => ReactNode> = {
-  "tableau-de-bord": page("tableau-de-bord", () => <DgTableauDeBord />),
+  "tableau-de-bord": page("tableau-de-bord", (pays) => <DgTableauDeBord pays={pays} />, true),
   trajectoire: page("trajectoire", () => <DgTrajectoire />),
   pilotage: page("pilotage", () => <DgPilotage />),
   factures: page("factures", () => <DgFactures />),

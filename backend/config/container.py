@@ -30,6 +30,7 @@ class Container:
         self._warmup_task = None  # référence forte : sinon la tâche warm-up peut être GC avant exécution
         self._crm_repo = None
         self._odoo_adapter = None
+        self._nt360_adapter = None
         self._cache = None
         self._token_budget = None
         self._rag_engine = None
@@ -92,6 +93,8 @@ class Container:
             self._ged_watcher.stop()
         if self._odoo_adapter:
             await self._odoo_adapter.close()
+        if self._nt360_adapter:
+            await self._nt360_adapter.close()
         if self._ro_sql:
             await self._ro_sql.dispose()
 
@@ -170,6 +173,9 @@ class Container:
         from adapters.crm.odoo_adapter import OdooAdapter
         self._crm_repo = LocalCRMAdapter()
         self._odoo_adapter = OdooAdapter()
+        if settings.nt360_api_key:   # clé vide = intégration nt360 désactivée
+            from adapters.nt360.nt360_adapter import Nt360Adapter
+            self._nt360_adapter = Nt360Adapter()
         self._cache = RedisAdapter()
         self._token_budget = self._build_token_budget()
         # Reranker cross-encoder (P6) — instance toujours créée (modèle chargé
@@ -366,6 +372,11 @@ class Container:
     @property
     def odoo_adapter(self):
         return self._odoo_adapter
+
+    @property
+    def nt360_adapter(self):
+        """None tant que NT360_API_KEY n'est pas renseignée."""
+        return self._nt360_adapter
 
     @property
     def doc_registry(self):

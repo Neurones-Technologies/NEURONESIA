@@ -13,7 +13,7 @@ from modules.uc_briefing import facts, indicateurs, preferences, service, store
 class CRMMinimal:
     """Seul le CA YTD répond ; les autres sources tombent, `_safe` les absorbe."""
 
-    async def get_ytd_stats(self, year):
+    async def get_ytd_stats(self, year, **_):
         return {"revenue_xof": 1_000_000_000, "orders_count": 10, "as_of": "2026-08-17"}
 
     def __getattr__(self, nom):

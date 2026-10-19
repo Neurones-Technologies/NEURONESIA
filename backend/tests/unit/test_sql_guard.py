@@ -61,7 +61,7 @@ def test_join_vers_table_interdite_rejetee():
 
 def test_json_each_nest_pas_traite_comme_table():
     # json_each est une fonction table-valued, pas une table à filtrer.
-    sql = ("SELECT o.client_name FROM sale_orders o, json_each(o.order_lines) j "
+    sql = ("SELECT o.client_name FROM v_sale_orders o, json_each(o.order_lines) j "
            "WHERE json_extract(j.value,'$.product') LIKE '%Azure%'")
     assert validate_select(sql, ODOO_TABLES)
 

@@ -67,6 +67,11 @@ kb_aliases(id PK, entity_type, alias_norm, alias_raw, entity_id, status, score, 
 
 ODOO_TABLES: set[str] = {
     "clients", "contracts", "invoices", "projects",
-    "sale_orders", "purchase_orders", "opportunities", "dossiers",
+    "dossiers",
     "veille_sources", "veille_entries",
+    # Commandes : nt360 fait foi, Odoo détaille — cf. db/views.py. `sale_orders`
+    # (TTC, doublons, annulées) n'est plus exposée au text-to-SQL : v_sale_orders
+    # a les mêmes colonnes, contenu nt360.
+    "v_commandes", "v_sale_orders", "v_lignes_commande", "v_factures", "v_purchase_orders",
+    "v_opportunities",
 }

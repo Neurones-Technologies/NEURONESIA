@@ -1367,3 +1367,358 @@ class DataQualityAlertModel(Base):
     dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     dismissed_by: Mapped[str] = mapped_column(String(255), default="")
     dismissed_reason: Mapped[str] = mapped_column(String(500), default="")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# COUCHE nt360 (nt360_*) — copie de l'API lecture seule Neurones Technologies.
+# Source COMPLÉMENTAIRE à Odoo, jamais concurrente : les tables miroir Odoo ne
+# sont pas touchées. Chaque table est REMPLACÉE en entier à chaque synchro
+# (l'API n'offre aucun filtre « modifié depuis ») — cf. jobs/nt360_sync_job.py.
+# `raw` garde l'objet JSON complet : la doc v1 autorise l'ajout de champs sans
+# préavis, et le sondage en a déjà trouvé une vingtaine de non documentés.
+# Montants en XOF, HT (vérifié sur 12 commandes contre sale_orders.amount_untaxed).
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class Nt360CommandeModel(Base):
+    """Carnet de commandes consolidé nt360 — RÉFÉRENCE des commandes (montant,
+    client, commercial, BU). Odoo n'en fournit que le détail des lignes, joint par
+    N° FP : lire les vues v_commandes / v_lignes_commande (db/views.py)."""
+    __tablename__ = "nt360_commandes"
+
+    fp: Mapped[str] = mapped_column(String(50), primary_key=True)
+    client: Mapped[str] = mapped_column(String(255), default="", index=True)
+    affaire: Mapped[str] = mapped_column(Text, default="")
+    bu: Mapped[str] = mapped_column(String(100), default="")
+    am: Mapped[str] = mapped_column(String(255), default="")
+    pm: Mapped[str] = mapped_column(String(255), default="")
+    sales_team: Mapped[str] = mapped_column(String(100), default="")
+    # Entité du groupe (CI / BF / GN). Le champ `filiale` documenté n'est pas
+    # renvoyé par l'API : l'entité se déduit de `commandes?entite=…`, qui
+    # partitionne exactement le carnet (CI 2 658 + BF 465 + GN 23 = 3 146).
+    entite: Mapped[str] = mapped_column(String(10), default="", index=True)
+    cas: Mapped[float] = mapped_column(Float, default=0.0)        # montant commandé HT
+    facture: Mapped[float] = mapped_column(Float, default=0.0)
+    raf: Mapped[float] = mapped_column(Float, default=0.0)        # reste à facturer
+    year_po: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    date_commande: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    date_demarrage: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    date_contractuelle: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    date_fin_prev: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    couverture: Mapped[str] = mapped_column(String(50), default="")
+    pf_niveau: Mapped[str] = mapped_column(String(50), default="")
+    clickup_status: Mapped[str] = mapped_column(String(100), default="")
+    clickup_progress: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    clickup_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360FactureModel(Base):
+    """Facture client nt360 — RÉFÉRENCE du facturé, en HT (Odoo `invoices.amount`
+    est TTC : ratio 1,18 sur 2 325 factures au premier rapprochement).
+
+    Jointure Odoo : `numero` = invoices.invoice_name (94 %). nt360 ne date pas
+    les règlements (`reglements` vide) : la date de paiement et le reste dû TTC
+    restent lus dans Odoo, cf. v_factures."""
+    __tablename__ = "nt360_factures"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    numero: Mapped[str] = mapped_column(String(100), default="", index=True)
+    fp: Mapped[str] = mapped_column(String(50), default="", index=True)
+    dc: Mapped[str] = mapped_column(String(50), default="")
+    client: Mapped[str] = mapped_column(String(255), default="", index=True)
+    bu: Mapped[str] = mapped_column(String(100), default="")
+    filiale: Mapped[str] = mapped_column(String(10), default="")
+    date_facture: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    amount_ht: Mapped[float] = mapped_column(Float, default=0.0)          # XOF HT
+    currency: Mapped[str] = mapped_column(String(10), default="XOF")      # devise d'origine
+    amount_currency: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    fx_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    payment_status: Mapped[str] = mapped_column(String(50), default="")
+    paid: Mapped[bool] = mapped_column(Boolean, default=False)
+    regle: Mapped[float] = mapped_column(Float, default=0.0)              # HT
+    reste_a_payer: Mapped[float] = mapped_column(Float, default=0.0)      # HT
+    linked: Mapped[bool] = mapped_column(Boolean, default=False)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360JalonModel(Base):
+    """Une échéance de facturation projetée par nt360 (liste `milestones` dépliée).
+
+    ATTENTION : ce ne sont PAS des échéanciers contractuels. Au sondage, la somme
+    des échéances d'un FP vaut exactement son `raf`, réparti en rampe (1/15, 2/15…
+    5/15) sur août-décembre 2026, y compris pour des commandes de 2019. C'est la
+    projection de nt360 ; tout écran qui l'utilise doit la nommer comme telle.
+    """
+    __tablename__ = "nt360_jalons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    fp: Mapped[str] = mapped_column(String(50), index=True)
+    rang: Mapped[int] = mapped_column(Integer, default=0)
+    date_echeance: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360BcModel(Base):
+    """Bon de commande fournisseur nt360. `eta_contrat`/`eta_reel` renseignés sur
+    ~95 % des BC à la première synchro (2026-10-19) : base d'un suivi des retards
+    de livraison fournisseur (eta_reel > eta_contrat)."""
+    __tablename__ = "nt360_bc"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    bc_number: Mapped[str] = mapped_column(String(100), default="")
+    fp: Mapped[str] = mapped_column(String(50), default="", index=True)
+    dc: Mapped[str] = mapped_column(String(50), default="")
+    supplier: Mapped[str] = mapped_column(String(255), default="", index=True)
+    customer: Mapped[str] = mapped_column(String(255), default="")
+    filiale: Mapped[str] = mapped_column(String(10), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    expense_type: Mapped[str] = mapped_column(String(100), default="")
+    amount_xof: Mapped[float] = mapped_column(Float, default=0.0)
+    currency: Mapped[str] = mapped_column(String(10), default="XOF")
+    status: Mapped[str] = mapped_column(String(50), default="", index=True)
+    date_in: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    eta_contrat: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    eta_reel: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    source: Mapped[str] = mapped_column(String(50), default="")
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360ConsultationModel(Base):
+    """Consultation / appel d'offres suivi dans nt360, avec son issue."""
+    __tablename__ = "nt360_consultations"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    filiale: Mapped[str] = mapped_column(String(10), default="")
+    type: Mapped[str] = mapped_column(String(50), default="")
+    client: Mapped[str] = mapped_column(String(255), default="", index=True)
+    intitule: Mapped[str] = mapped_column(Text, default="")
+    secteur: Mapped[str] = mapped_column(String(100), default="")
+    technologies: Mapped[list] = mapped_column(JSON, default=list)
+    date_entree: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    date_soumission: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    date_depot: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    decision: Mapped[str] = mapped_column(String(50), default="")
+    statut: Mapped[str] = mapped_column(String(50), default="")
+    issue: Mapped[str] = mapped_column(String(50), default="", index=True)
+    motif_no_go: Mapped[str] = mapped_column(Text, default="")
+    motif_perte: Mapped[str] = mapped_column(Text, default="")
+    am: Mapped[str] = mapped_column(String(255), default="")
+    avant_vente: Mapped[str] = mapped_column(String(255), default="")
+    montant: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    concurrents: Mapped[list] = mapped_column(JSON, default=list)
+    attributaire: Mapped[str] = mapped_column(String(255), default="")
+    prix_attribue: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    caution_montant: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    opp_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)  # opp_<odoo_id>
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360OpportuniteModel(Base):
+    """Opportunité nt360 — RÉFÉRENCE du pipeline (nt360 est la source de vérité).
+
+    La liste `opportunities` n'a pas de pagination et plafonne à 500 par étape :
+    l'étape 6 (Gagné, 1 864 affaires) est tronquée. Triée par identifiant, elle
+    rend toutes les `odoo_crm.lead:*` puis coupe dans les `saisie_genord_<FP>`.
+    Ces dernières sont relues une à une à partir des N° FP de nt360_commandes
+    (`lecture = 'unitaire'`), cf. jobs/nt360_sync_job._sync_opportunites.
+
+    nt360 ne porte ni titre, ni date de création/modification, ni client_id :
+    ils sont repris d'Odoo quand l'opportunité y existe (v_opportunities).
+    """
+    __tablename__ = "nt360_opportunites"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)   # odoo_crm.lead:12900 | saisie_genord_FP_2022_6881
+    opp_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)  # opp_<odoo_id>
+    source: Mapped[str] = mapped_column(String(30), default="")      # odoo | saisie
+    client: Mapped[str] = mapped_column(String(255), default="", index=True)
+    am: Mapped[str] = mapped_column(String(255), default="")
+    bu: Mapped[str] = mapped_column(String(100), default="")
+    fp: Mapped[str] = mapped_column(String(50), default="", index=True)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    stage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    stage_label: Mapped[str] = mapped_column(String(100), default="")
+    probability: Mapped[float] = mapped_column(Float, default=0.0)
+    weighted: Mapped[float] = mapped_column(Float, default=0.0)
+    closing_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    forecast_category: Mapped[str] = mapped_column(String(50), default="")
+    lecture: Mapped[str] = mapped_column(String(10), default="liste")  # liste | unitaire
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360HistoriqueOppModel(Base):
+    """Changement d'étape d'une opportunité, horodaté par nt360 (depuis août 2026).
+
+    `opp_id` est ramené à la clé du miroir (`odoo_crm.lead:12900` → `opp_12900`)
+    pour joindre directement `opportunities`."""
+    __tablename__ = "nt360_historique_opps"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    opp_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    from_stage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    to_stage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    client: Mapped[str] = mapped_column(String(255), default="")
+    am: Mapped[str] = mapped_column(String(255), default="")
+    bu: Mapped[str] = mapped_column(String(100), default="")
+    at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ── Ressources nt360 en attente de droits ────────────────────────────────────
+# Synchronisées à chaque passage bien qu'aujourd'hui vides pour notre clé : le
+# jour où Neurones Technologies ouvre les droits, elles se remplissent seules à
+# la synchro suivante. Un 403 sur l'une d'elles est noté « non_autorisee » et
+# n'interrompt pas la synchro (cf. jobs/nt360_sync_job.RESSOURCES).
+
+
+class Nt360AlerteModel(Base):
+    """Alerte de pilotage calculée par nt360 (liste seule, sans identifiant).
+    Remplacée en entier à chaque synchro — y compris par une liste vide : une
+    alerte résolue doit disparaître."""
+    __tablename__ = "nt360_alertes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entite: Mapped[str] = mapped_column(String(10), default="", index=True)   # "" = groupe ; CI / BF / GN
+    type: Mapped[str] = mapped_column(String(100), default="", index=True)
+    severity: Mapped[str] = mapped_column(String(30), default="")
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    message: Mapped[str] = mapped_column(Text, default="")
+    refs: Mapped[list] = mapped_column(JSON, default=list)               # N° FP concernés
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360CompteModel(Base):
+    """Compte client nt360 (`accounts`). Pas de pagination côté API : une liste
+    qui atteint 500 est signalée incomplète et ne remplace rien."""
+    __tablename__ = "nt360_comptes"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), default="", index=True)
+    sector: Mapped[str] = mapped_column(String(100), default="")
+    country: Mapped[str] = mapped_column(String(100), default="")
+    parent_id: Mapped[str] = mapped_column(String(100), default="", index=True)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360ReglementModel(Base):
+    """Règlement client reçu — la date de paiement que nt360 ne donnait pas
+    jusqu'ici. Jointure facture : `numero` (= nt360_factures.numero)."""
+    __tablename__ = "nt360_reglements"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    facture_id: Mapped[str] = mapped_column(String(100), default="", index=True)
+    numero: Mapped[str] = mapped_column(String(100), default="", index=True)
+    client: Mapped[str] = mapped_column(String(255), default="")
+    date_reglement: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    montant: Mapped[float] = mapped_column(Float, default=0.0)
+    mode: Mapped[str] = mapped_column(String(50), default="")
+    reference: Mapped[str] = mapped_column(String(255), default="")
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360DemandeFacturationModel(Base):
+    """Demande de facturation (circuit avant émission de la facture)."""
+    __tablename__ = "nt360_demandes_facturation"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    fp: Mapped[str] = mapped_column(String(50), default="", index=True)
+    client: Mapped[str] = mapped_column(String(255), default="")
+    affaire: Mapped[str] = mapped_column(Text, default="")
+    montant: Mapped[float] = mapped_column(Float, default=0.0)
+    libelle: Mapped[str] = mapped_column(Text, default="")
+    date_souhaitee: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    jalon: Mapped[str] = mapped_column(String(255), default="")
+    statut: Mapped[str] = mapped_column(String(50), default="", index=True)
+    numero: Mapped[str] = mapped_column(String(100), default="")
+    motif: Mapped[str] = mapped_column(Text, default="")
+    creee_le: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reste_au_depot: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    demandeur_nom: Mapped[str] = mapped_column(String(255), default="")
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360FicheModel(Base):
+    """Fiche d'affaire et son circuit de validation."""
+    __tablename__ = "nt360_fiches"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    numero_fp: Mapped[str] = mapped_column(String(50), default="", index=True)
+    numero_dc: Mapped[str] = mapped_column(String(50), default="", index=True)
+    client: Mapped[str] = mapped_column(String(255), default="")
+    affaire: Mapped[str] = mapped_column(Text, default="")
+    commercial: Mapped[str] = mapped_column(String(255), default="")
+    po_client_ref: Mapped[str] = mapped_column(String(255), default="")
+    po_client_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    date_fiche: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    prix_vente_ht_xof: Mapped[float] = mapped_column(Float, default=0.0)
+    statut: Mapped[str] = mapped_column(String(50), default="", index=True)
+    etape_courante: Mapped[str] = mapped_column(String(100), default="")
+    terminee: Mapped[bool] = mapped_column(Boolean, default=False)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360PlafondFournisseurModel(Base):
+    """Plafond de crédit fournisseur (identifiant = nom du fournisseur)."""
+    __tablename__ = "nt360_plafonds_fournisseurs"
+
+    name: Mapped[str] = mapped_column(String(255), primary_key=True)
+    authorized: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    opening_balance: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    opening_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Nt360WebhookEvenementModel(Base):
+    """Événement reçu par webhook nt360 — journal ET clé d'idempotence.
+
+    La doc prévient qu'un même événement peut arriver deux fois (nt360 renvoie
+    en cas d'échec) : `cle` = event + identifiant de `data` (oppId, approvalId).
+    Une seconde réception est ignorée, sauf si la première a échoué à traiter.
+    """
+    __tablename__ = "nt360_webhook_evenements"
+
+    cle: Mapped[str] = mapped_column(String(200), primary_key=True)      # opp_won:odoo_crm.lead:12900
+    event: Mapped[str] = mapped_column(String(50), index=True)
+    objet_id: Mapped[str] = mapped_column(String(150), default="")
+    ts: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # horodatage nt360
+    recu_le: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    traite_le: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    nb_receptions: Mapped[int] = mapped_column(Integer, default=1)
+    statut: Mapped[str] = mapped_column(String(20), default="recu", index=True)  # recu|traite|erreur
+    detail: Mapped[str] = mapped_column(Text, default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class Nt360ObjectifModel(Base):
+    """Objectif annuel nt360, tel que publié (CA, facturé, marge).
+
+    Seul `target_cas` alimente `commercial_objectives` (kind "ca") ; les cibles de
+    facturation et de marge n'y ont pas de colonne et restent lisibles ici."""
+    __tablename__ = "nt360_objectifs"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    label: Mapped[str] = mapped_column(String(255), default="")
+    fiscal_year: Mapped[int] = mapped_column(Integer, index=True)
+    scope: Mapped[str] = mapped_column(String(50), default="")
+    scope_value: Mapped[str] = mapped_column(String(255), default="")
+    filiale: Mapped[str] = mapped_column(String(10), default="")
+    target_cas: Mapped[float] = mapped_column(Float, default=0.0)
+    target_invoiced: Mapped[float] = mapped_column(Float, default=0.0)
+    target_margin: Mapped[float] = mapped_column(Float, default=0.0)
+    target_margin_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

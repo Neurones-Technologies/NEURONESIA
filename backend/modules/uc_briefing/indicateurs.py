@@ -55,15 +55,18 @@ CE QUI N'EST PAS ICI, ET POURQUOI
 """
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import delete, select, text
 
+from config.settings import settings
 from core.montants import fcfa
 from db.database import AsyncSessionLocal
 from db.models import IndicatorSnapshotModel
+from modules.uc_briefing import bascule
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +98,9 @@ class Indicateur:
     sql_jour: str | None = None      # None = `sql_historique` sert aussi pour aujourd'hui
     remise_a_zero: str | None = None  # annuelle | mensuelle | None
     reserve: str = ""
+    # Réserve qui ne vaut que lorsque la vue lue retombe sur Odoo (nt360 jamais
+    # synchronisé) — ex. les avoirs, déduits par nt360 mais absents du miroir.
+    reserve_si_odoo: str = ""
     # Table de snapshot d'OBJETS dont dépend la reconstitution. Une date sans
     # snapshot n'est pas une date à zéro : `calculer` rend None. Sans ce garde-fou,
     # un backlog jamais capturé le 12 juin se lirait comme un backlog tombé à zéro
@@ -109,23 +115,23 @@ class Indicateur:
 
 # ── Flux : cumuls de faits datés, reconstituables sur tout l'historique ───────
 
-# `SUM(amount)` et non `amount_untaxed` : ce dernier vaut 0 sur les 3 108
-# commandes du miroir (Odoo ne le remonte pas). Le montant est donc TTC. C'est
-# aussi ce que fait `get_ytd_stats`, et deux définitions du CA commandé sur le
-# même écran seraient pires qu'une définition imparfaite documentée.
+# Commandé et facturé lisent les vues nt360 (db/views.py) : montants HT, avoirs
+# déduits, mêmes chiffres que nt360 et que `get_ytd_stats`. Deux définitions du
+# CA sur le même écran seraient pires qu'une seule. Encaissements et impayés
+# restent sur `invoices` (Odoo, TTC) : nt360 ne date aucun règlement.
 _CA_COMMANDE = """
-    SELECT COALESCE(SUM(amount), 0) FROM sale_orders
+    SELECT COALESCE(SUM(amount), 0) FROM v_sale_orders
     WHERE state IN ('sale', 'done') AND date_order IS NOT NULL
       AND date(date_order) <= date(:d) AND {periode}
 """
 _NB_COMMANDES = """
-    SELECT COUNT(*) FROM sale_orders
+    SELECT COUNT(*) FROM v_sale_orders
     WHERE state IN ('sale', 'done') AND date_order IS NOT NULL
       AND date(date_order) <= date(:d) AND {periode}
 """
 _CA_FACTURE = """
-    SELECT COALESCE(SUM(amount), 0) FROM invoices
-    WHERE status != 'cancelled' AND invoice_date IS NOT NULL
+    SELECT COALESCE(SUM(amount), 0) FROM v_factures
+    WHERE invoice_date IS NOT NULL
       AND date(invoice_date) <= date(:d) AND {periode}
 """
 # Une facture porte `payment_date` quand elle a été soldée : le cumul encaissé à
@@ -139,7 +145,7 @@ _ENCAISSEMENTS = """
       AND date(payment_date) <= date(:d) AND {periode}
 """
 _ACHATS = """
-    SELECT COALESCE(SUM(amount), 0) FROM purchase_orders
+    SELECT COALESCE(SUM(amount), 0) FROM v_purchase_orders
     WHERE state = 'purchase' AND date_order IS NOT NULL
       AND date(date_order) <= date(:d) AND {periode}
 """
@@ -150,7 +156,7 @@ _MOIS = "strftime('%Y-%m', {col}) = strftime('%Y-%m', :d)"
 # ── Stock : état à un instant ────────────────────────────────────────────────
 
 _PIPE_JOUR = f"""
-    SELECT COALESCE(SUM({{expr}}), 0) FROM opportunities
+    SELECT COALESCE(SUM({{expr}}), 0) FROM v_opportunities
     WHERE {_PIPE_OUVERT} {{echeance}}
 """
 _PIPE_HIST = f"""
@@ -215,12 +221,12 @@ _RESERVE_FOURNISSEUR = (
 )
 
 
-def _flux(cle, libelle, gabarit, col, remise, unite="xof", reserve="") -> Indicateur:
+def _flux(cle, libelle, gabarit, col, remise, unite="xof", reserve="", reserve_si_odoo="") -> Indicateur:
     periode = (_ANNEE if remise == "annuelle" else _MOIS).format(col=col)
     return Indicateur(
         cle=cle, libelle=libelle, unite=unite, nature="flux",
         sql_historique=gabarit.format(periode=periode),
-        remise_a_zero=remise, reserve=reserve,
+        remise_a_zero=remise, reserve=reserve, reserve_si_odoo=reserve_si_odoo,
     )
 
 
@@ -233,9 +239,9 @@ CATALOGUE: dict[str, Indicateur] = {ind.cle: ind for ind in [
     _flux("nb_commandes_ytd", "Commandes prises depuis le 1er janvier",
           _NB_COMMANDES, "date_order", "annuelle", unite="nb"),
     _flux("ca_facture_ytd", "CA facturé depuis le 1er janvier",
-          _CA_FACTURE, "invoice_date", "annuelle", reserve=_RESERVE_AVOIRS),
+          _CA_FACTURE, "invoice_date", "annuelle", reserve_si_odoo=_RESERVE_AVOIRS),
     _flux("ca_facture_mois", "CA facturé sur le mois en cours",
-          _CA_FACTURE, "invoice_date", "mensuelle", reserve=_RESERVE_AVOIRS),
+          _CA_FACTURE, "invoice_date", "mensuelle", reserve_si_odoo=_RESERVE_AVOIRS),
     _flux("encaissements_ytd", "Encaissements depuis le 1er janvier",
           _ENCAISSEMENTS, "payment_date", "annuelle",
           reserve="une facture bascule d'un coup le jour de son solde, les règlements "
@@ -351,6 +357,10 @@ async def _jours_snapshotes(table: str) -> set[date]:
             jours.add(brut)
         elif brut:
             jours.add(date.fromisoformat(str(brut)[:10]))
+    # Les photos de pipeline antérieures à la bascule nt360 décrivent un autre
+    # univers d'opportunités : elles ne sont plus des points de comparaison.
+    if table == "pipeline_snapshots" and (depuis := bascule.date_opportunites()):
+        jours = {j for j in jours if j >= depuis}
     _CACHE_JOURS[table] = jours
     return jours
 
@@ -444,6 +454,79 @@ async def reconstituer(depuis: date, jusqu_a: date | None = None) -> dict[str, i
         depuis, jusqu_a, compte["valeurs"], compte["jours"], compte["non_mesurables"],
     )
     return compte
+
+
+# ── Changement de base : Odoo TTC → nt360 HT ──────────────────────────────────
+# Les flux commandé/facturé lisent des vues qui passent d'Odoo (TTC, sans avoirs)
+# à nt360 (HT, avoirs déduits) à la première synchro nt360. L'historique déjà
+# enregistré reste, lui, sur l'ancienne base : sans recalcul, le delta comparerait
+# un HT du jour à un TTC de la veille et annoncerait une chute du CA d'environ
+# 1,4 Md qui n'a jamais eu lieu. Ces flux sont exactement recalculables : on les
+# rejoue entièrement, y compris les journées « mesurées ».
+# v2 : achats engagés (BC nt360, HT) ajoutés à la bascule.
+BASE_NT360 = "nt360-ht-v2"
+CLES_BASE_NT360 = (
+    "ca_commande_ytd", "ca_commande_mois", "nb_commandes_ytd",
+    "ca_facture_ytd", "ca_facture_mois", "achats_engages_ytd",
+)
+_MARQUEUR_BASE = settings.local_db_path.parent / "indicateurs_base.json"
+
+
+async def rebaser(cles: tuple[str, ...], depuis: date, jusqu_a: date | None = None) -> int:
+    """Efface puis recalcule l'historique de FLUX dont la définition a changé.
+
+    Réservé aux flux : un stock ne se recalcule pas après coup (cf. `reconstituer`),
+    l'effacer détruirait une mesure irremplaçable.
+    """
+    jusqu_a = jusqu_a or date.today()
+    if any(CATALOGUE[c].nature != "flux" for c in cles):
+        raise ValueError("rebaser() ne s'applique qu'aux flux")
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(IndicatorSnapshotModel).where(IndicatorSnapshotModel.cle.in_(list(cles)))
+        )
+        await session.commit()
+    vider_cache_snapshots()
+    total = 0
+    jour = depuis
+    while jour <= jusqu_a:
+        valeurs = {}
+        for cle in cles:
+            valeur = await calculer(cle, jour, historique=True)
+            if valeur is not None:
+                valeurs[cle] = valeur
+        if valeurs:
+            await enregistrer(jour, valeurs, origine="reconstitue")
+            total += len(valeurs)
+        jour += timedelta(days=1)
+    logger.info("Historique rebasé (%s) du %s au %s : %d valeurs", ", ".join(cles), depuis, jusqu_a, total)
+    return total
+
+
+async def assurer_base_nt360(fenetre_jours: int = 400) -> int | None:
+    """Rebase une seule fois l'historique des flux commandé/facturé sur nt360.
+
+    Appelée après une synchro nt360 réussie. Sans historique existant, il n'y a
+    rien à rebaser : le premier passage du job de nuit reconstituera directement
+    sur la bonne base. Rend le nombre de valeurs recalculées, None si déjà fait.
+    """
+    try:
+        if _MARQUEUR_BASE.exists() and json.loads(_MARQUEUR_BASE.read_text()).get("base") == BASE_NT360:
+            return None
+    except (OSError, ValueError):
+        pass
+    async with AsyncSessionLocal() as session:
+        existe = (await session.execute(
+            select(IndicatorSnapshotModel.id).where(
+                IndicatorSnapshotModel.cle.in_(list(CLES_BASE_NT360))).limit(1)
+        )).first()
+    total = 0
+    if existe:
+        aujourd_hui = date.today()
+        total = await rebaser(CLES_BASE_NT360, aujourd_hui - timedelta(days=fenetre_jours), aujourd_hui)
+    _MARQUEUR_BASE.parent.mkdir(parents=True, exist_ok=True)
+    _MARQUEUR_BASE.write_text(json.dumps({"base": BASE_NT360, "le": datetime.utcnow().isoformat()}))
+    return total
 
 
 # ── Lecture : le delta ────────────────────────────────────────────────────────
@@ -543,13 +626,23 @@ async def delta(cles: list[str], as_of: date | None = None) -> dict[str, dict]:
                 IndicatorSnapshotModel.snapshot_date <= as_of,
             )
         )).scalars().all()
+        repli_odoo = False
+        if any(CATALOGUE[c].reserve_si_odoo for c in voulues):
+            repli_odoo = not (await session.execute(
+                text("SELECT EXISTS (SELECT 1 FROM nt360_factures)")
+            )).scalar()
+    coupure_pipe = bascule.date_opportunites()
     par_cle: dict[str, dict[date, float]] = {}
     for ligne in lignes:
+        if (coupure_pipe and ligne.snapshot_date < coupure_pipe
+                and CATALOGUE[ligne.cle].source_snapshot == "pipeline_snapshots"):
+            continue    # valeur mesurée sur le pipeline Odoo, avant la bascule nt360
         par_cle.setdefault(ligne.cle, {})[ligne.snapshot_date] = ligne.valeur
 
     resultat: dict[str, dict] = {}
     for cle in voulues:
         ind = CATALOGUE[cle]
+        reserve = ind.reserve or (ind.reserve_si_odoo if repli_odoo else "")
         connues = par_cle.get(cle, {})
         valeur = connues.get(as_of)
         if valeur is None:
@@ -558,7 +651,7 @@ async def delta(cles: list[str], as_of: date | None = None) -> dict[str, dict]:
             valeur = await calculer(cle, as_of, historique=False)
         bloc: dict = {
             "cle": cle, "libelle": ind.libelle, "unite": ind.unite,
-            "nature": ind.nature, "valeur": valeur, "reserve": ind.reserve,
+            "nature": ind.nature, "valeur": valeur, "reserve": reserve,
         }
         for nom, (jours, tolerance) in _HORIZONS.items():
             point = (

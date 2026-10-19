@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 import jobs.pipeline_snapshot_job as pipeline_snapshot_job
 from db.database import Base
+from db.views import create_views
 from db.models import BacklogSnapshotModel, DossierModel, OpportunityModel, PipelineSnapshotModel
 
 
@@ -42,6 +43,7 @@ async def _run_scenario(runs: int):
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(create_views)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     await _seed(session_factory)

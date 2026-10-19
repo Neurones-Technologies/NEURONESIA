@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -134,6 +135,25 @@ def build_scheduler(
         max_instances=1,
     )
 
+    # Synchro nt360 : la doc impose « au plus une fois par heure » pour une
+    # synchro complète, d'où le plancher à 60 min. Premier passage une minute
+    # après le démarrage plutôt qu'au bout d'une heure.
+    if container is not None and getattr(container, "nt360_adapter", None) is not None:
+        nt360_interval = max(60, settings.nt360_sync_interval_minutes)
+        scheduler.add_job(
+            _sync_nt360_job,
+            args=[container],
+            trigger=IntervalTrigger(minutes=nt360_interval),
+            next_run_time=datetime.now() + timedelta(minutes=1),
+            id="nt360_sync",
+            name="Sync nt360 → SQLite local",
+            replace_existing=True,
+            misfire_grace_time=600,
+            coalesce=True,
+            max_instances=1,
+        )
+        logger.info("Sync nt360 programmée toutes les %d min", nt360_interval)
+
     logger.info(
         "Scheduler configuré : sync Odoo toutes les %d min (coalesce, max 1), scan GED à 2h00, "
         "purge quarantaine à 3h30 (rétention %d j), purge rédactions d'arbitrage à 3h45 "
@@ -147,6 +167,11 @@ def build_scheduler(
 async def _sync_odoo_job():
     from jobs.odoo_sync_job import run_odoo_sync
     await run_odoo_sync()
+
+
+async def _sync_nt360_job(container):
+    from jobs.nt360_sync_job import run_nt360_sync
+    await run_nt360_sync(container.nt360_adapter)
 
 
 async def _scan_ged_job(ged_indexer: GEDIndexer):
