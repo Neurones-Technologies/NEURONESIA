@@ -84,15 +84,30 @@ async def fetch_factures_clients() -> list[dict]:
 # ── Achats fournisseurs (charges engagées) ───────────────────────────────────
 
 async def fetch_achats() -> list[dict]:
-    """Commandes d'achat confirmées — la seule mesure de charge disponible.
+    """BC fournisseurs engagés, HT nt360 — base du BUDGET (marge brute de flux,
+    top charges, lignes budgétaires, burn-down), face au CA HT de `fetch_ca_mensuel`.
 
-    `dossier_id` est remonté bien qu'il ne soit renseigné que sur 4 commandes sur
-    2 133 : c'est précisément ce que le contrôle de qualité doit pouvoir compter.
+    Lus dans v_purchase_orders : BC nt360 engagés (émis, livrés, soldés) ; le N° DC
+    n'est porté que par ~45 % d'entre eux.
     """
-    rows = await _rows("""
+    return await _achats("v_purchase_orders")
+
+
+async def fetch_achats_ttc() -> list[dict]:
+    """BC fournisseurs, TTC Odoo — base du DPO et de la trésorerie UNIQUEMENT.
+
+    Ces deux lectures rapprochent les achats d'argent qui circule réellement
+    (dettes fournisseurs, encaissements clients), donc TTC. Des achats HT y
+    sous-estimeraient les décaissements d'environ 18 %.
+    """
+    return await _achats("purchase_orders")
+
+
+async def _achats(table: str) -> list[dict]:
+    rows = await _rows(f"""
         SELECT order_id, name, client_name, client_id, amount, currency,
                date_order, state, dossier_id
-        FROM purchase_orders
+        FROM {table}
     """)
     return [
         {
@@ -207,17 +222,11 @@ async def fetch_dossiers() -> list[dict]:
 
 # ── Chiffre d'affaires (base du DSO et du taux de marge) ────────────────────
 
-async def fetch_ca_mensuel(annee: int) -> list[dict]:
-    """CA signé par mois sur l'exercice — base du DSO en jours de chiffre.
-
-    Le DSO se calcule sur du CA, pas sur des factures : rapporter l'encours au
-    seul montant facturé donnerait un délai systématiquement faux dès qu'une part
-    du signé n'est pas encore facturée.
-    """
+async def _ca_mensuel(annee: int, table: str) -> list[dict]:
     rows = await _rows(f"""
         SELECT CAST(strftime('%m', date_order) AS INTEGER) AS mois,
                COUNT(*) AS nb, SUM(amount) AS montant
-        FROM sale_orders
+        FROM {table}
         WHERE date_order IS NOT NULL
           AND strftime('%Y', date_order) = :annee
           AND {_ETATS_CA}
@@ -225,6 +234,24 @@ async def fetch_ca_mensuel(annee: int) -> list[dict]:
         ORDER BY mois
     """, {"annee": str(annee)})
     return [{"mois": int(r[0]), "nb_commandes": int(r[1] or 0), "ca_xof": round(r[2] or 0)} for r in rows]
+
+
+async def fetch_ca_mensuel(annee: int) -> list[dict]:
+    """CA signé par mois sur l'exercice, HT nt360 — base de la marge brute de
+    flux et du burn-down, face aux achats HT de `fetch_achats`."""
+    return await _ca_mensuel(annee, "v_sale_orders")
+
+
+async def fetch_ca_mensuel_ttc(annee: int) -> list[dict]:
+    """CA signé par mois, TTC Odoo — base du DSO en jours de chiffre UNIQUEMENT.
+
+    Le DSO se calcule sur du CA, pas sur des factures : rapporter l'encours au
+    seul montant facturé donnerait un délai systématiquement faux dès qu'une part
+    du signé n'est pas encore facturée. L'encours (`invoices`) est TTC — c'est ce
+    que le client doit réellement, et nt360 ne date aucun règlement. Un CA HT au
+    dénominateur gonflerait le DSO d'environ 18 % : il reste donc TTC, sur Odoo.
+    """
+    return await _ca_mensuel(annee, "sale_orders")
 
 
 async def fetch_annees_disponibles() -> list[int]:
@@ -238,7 +265,7 @@ async def fetch_annees_disponibles() -> list[int]:
         SELECT DISTINCT annee FROM (
             SELECT strftime('%Y', invoice_date) AS annee FROM invoices WHERE invoice_date IS NOT NULL
             UNION
-            SELECT strftime('%Y', date_order) AS annee FROM purchase_orders WHERE date_order IS NOT NULL
+            SELECT strftime('%Y', date_order) AS annee FROM v_purchase_orders WHERE date_order IS NOT NULL
             UNION
             SELECT strftime('%Y', date_creation) AS annee FROM dossiers WHERE date_creation IS NOT NULL
         )

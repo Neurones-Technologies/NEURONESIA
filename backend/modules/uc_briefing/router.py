@@ -52,18 +52,33 @@ def _require_role_scope(current_user, role: str) -> None:
 
 
 @router.get("")
-async def get_briefing(request: Request, current_user: CurrentUser):
+async def get_briefing(request: Request, current_user: CurrentUser, pays: str | None = None):
+    """Briefing du rôle du demandeur. `pays` (ci / bf / gn) sert la section de
+    l'entité pour les rôles qui en ont une (le DG) ; ignoré pour les autres."""
     payload = store.load()
     if payload is None:
         # Tout premier démarrage : aucun run planifié n'a encore eu lieu.
         payload = await service.generate(_crm(request), _llm(request), triggered_by="cold_start")
 
     role = _role_of(current_user)
-    section = payload.get("sections", {}).get(role)
+    entite = (pays or "").upper()
+    if role in service.ROLES_PAR_ENTITE and entite in service.ENTITES:
+        section = payload.get("sections", {}).get(service.cle_section(role, entite))
+        if section is None:
+            # Snapshot antérieur aux sections d'entité : générée une fois, à la demande.
+            try:
+                section = await service.generate_entite(role, entite, _crm(request), _llm(request))
+            except Exception as exc:
+                logger.warning("Briefing %s@%s indisponible : %s", role, entite, exc)
+                section = None
+    else:
+        entite = None
+        section = payload.get("sections", {}).get(role)
     return {
-        "generated_at": payload.get("generated_at"),
-        "triggered_by": payload.get("triggered_by"),
+        "generated_at": (section or {}).get("generated_at") or payload.get("generated_at"),
+        "triggered_by": (section or {}).get("triggered_by") or payload.get("triggered_by"),
         "role": role,
+        "entite": entite,
         "section": section,
     }
 

@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { Pays, PAYS, PAYS_AVEC_DONNEES, paysLabel } from "@/lib/data/pays";
-import { Bento, Tile } from "@/components/ui/bento";
+import { Pays, PAYS, PAYS_PAR_DEFAUT, paysLabel } from "@/lib/data/pays";
 import { Note } from "@/components/ui/primitives";
 
 /** Sélecteur de pays — en tête de chaque page d'un cockpit.
@@ -35,7 +34,7 @@ export function PaysNav({
   const lien = (p: Pays) => {
     const q = new URLSearchParams();
     if (vue) q.set("vue", vue);
-    if (p !== PAYS_AVEC_DONNEES) q.set("pays", p);
+    if (p !== PAYS_PAR_DEFAUT) q.set("pays", p);
     if (periode) q.set("periode", periode);
     if (annee) q.set("annee", String(annee));
     const s = q.toString();
@@ -61,18 +60,17 @@ export function PaysNav({
   );
 }
 
-/** Écran de repli quand le pays sélectionné n'est pas encore raccordé au miroir
- * de données. Affiché À LA PLACE de la vue, pas en plus : des tuiles ivoiriennes
- * sous un sélecteur « Burkina Faso » se liraient comme des chiffres burkinabés. */
-export function PaysIndisponible({ pays }: { pays: Pays }) {
+/** Bandeau posé au-dessus des chiffres qui ne suivent PAS le sélecteur de pays.
+ *
+ * Seul le briefing DG est ventilé par entité (cf. lib/data/pays.ts). Les tuiles
+ * et les autres onglets lisent des sources sans entité — impayés Odoo,
+ * opportunités, dossiers — et restent au niveau groupe : sous un sélecteur
+ * « Burkina Faso », un chiffre non étiqueté se lirait comme un chiffre burkinabé. */
+export function PerimetreGroupe({ pays }: { pays: Pays }) {
   return (
-    <Bento>
-      <Tile span={12} title="Donnée non disponible">
-        <Note style={{ marginTop: 0 }}>
-          Les données de {paysLabel(pays)} ne sont pas encore raccordées au
-          cockpit. Seule la Côte d&apos;Ivoire est disponible pour le moment.
-        </Note>
-      </Tile>
-    </Bento>
+    <Note style={{ marginTop: 0, marginBottom: 16 }}>
+      <strong>Chiffres groupe</strong> (Côte d&apos;Ivoire, Burkina Faso, Guinée) — le filtre
+      « {paysLabel(pays)} » ne s&apos;applique qu&apos;au briefing.
+    </Note>
   );
 }

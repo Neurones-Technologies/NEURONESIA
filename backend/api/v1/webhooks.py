@@ -101,6 +101,52 @@ async def _handle_delete(model: str, ids: list[int]):
     logger.info("Webhook unlink : %d enregistrements supprimés (%s)", len(ids), model)
 
 
+# ── nt360 ────────────────────────────────────────────────────────────────────
+
+class Nt360WebhookPayload(BaseModel):
+    event: str
+    data: dict = {}
+    ts: str | None = None
+
+
+@router.post("/nt360/{jeton}")
+async def nt360_webhook(jeton: str, payload: Nt360WebhookPayload, request: Request,
+                        background_tasks: BackgroundTasks):
+    """Réception des événements nt360 (POST JSON, cf. doc API v1 « Webhooks »).
+
+    URL à communiquer à Neurones Technologies : /v1/webhooks/nt360/<NT360_WEBHOOK_TOKEN>.
+    La signature des appels n'existe pas encore côté nt360 : le jeton de l'URL
+    en tient lieu. Jeton absent ou faux → 404, sans dire si la route existe.
+
+    Répond 2xx immédiatement et traite en arrière-plan : nt360 renvoie tout
+    événement dont la réception échoue, un traitement lent provoquerait des
+    doublons. Le contenu de `data` n'est jamais écrit tel quel : il désigne
+    l'élément à RELIRE dans l'API (cf. jobs/nt360_webhook_job.py).
+    """
+    from jobs import nt360_webhook_job
+
+    attendu = settings.nt360_webhook_token
+    if not attendu or not hmac.compare_digest(jeton.encode(), attendu.encode()):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if payload.event not in nt360_webhook_job.EVENEMENTS:
+        # 2xx quand même : un événement d'une version future ne doit pas être
+        # renvoyé en boucle par nt360.
+        logger.info("Webhook nt360 ignoré : événement inconnu (%s)", payload.event)
+        return {"status": "ignored", "reason": f"événement non géré : {payload.event}"}
+
+    cle = await nt360_webhook_job.enregistrer(payload.event, payload.data, payload.ts)
+    if cle is None:
+        if nt360_webhook_job.cle_evenement(payload.event, payload.data) is None:
+            return {"status": "ignored", "reason": "identifiant absent de data"}
+        return {"status": "duplicate"}
+
+    container = getattr(request.app.state, "container", None)
+    adapter = getattr(container, "nt360_adapter", None) if container else None
+    background_tasks.add_task(nt360_webhook_job.traiter, cle, adapter)
+    return {"status": "accepted", "cle": cle}
+
+
 @router.post("/odoo/force-sync")
 async def force_full_sync(background_tasks: BackgroundTasks, request: Request):
     """Déclenche une synchronisation complète immédiate (admin uniquement)."""

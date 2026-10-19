@@ -16,11 +16,17 @@ export interface Briefing {
   generated_at: string | null;
   triggered_by: string | null;
   role: string;
+  /** Entité du briefing (CI / BF / GN) quand un pays a été demandé et que le
+   * rôle en a un (DG) ; `null` = briefing groupe. */
+  entite?: string | null;
   section: BriefingSection | null;
 }
 
-export async function getBriefing(): Promise<Briefing | null> {
-  return apiFetch<Briefing | null>("/v1/briefing", { allowForbidden: true });
+/** `pays` (ci / bf / gn) : briefing de l'entité, pour les rôles qui en ont un
+ * (le DG). Ignoré par le backend pour les autres rôles. */
+export async function getBriefing(pays?: string): Promise<Briefing | null> {
+  const q = pays ? `?pays=${encodeURIComponent(pays)}` : "";
+  return apiFetch<Briefing | null>(`/v1/briefing${q}`, { allowForbidden: true });
 }
 
 /** Un élément que le débrief peut contenir, avec son état pour ce rôle. Le

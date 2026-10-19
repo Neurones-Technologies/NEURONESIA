@@ -26,6 +26,17 @@ _FACTS_BUILDERS = {
     "commercial": facts.build_commercial_facts,
 }
 
+# Briefings DG par entité (sélecteur « Pays » du cockpit DG) : stockés à côté
+# de la section groupe sous la clé `dg@CI`, `dg@BF`, `dg@GN`. Seul le DG a un
+# sélecteur de pays ; les autres rôles restent au niveau groupe.
+ENTITES = ("CI", "BF", "GN")
+ROLES_PAR_ENTITE = ("dg",)
+
+
+def cle_section(role: str, entite: str | None = None) -> str:
+    return f"{role}@{entite}" if entite else role
+
+
 # Un verrou par rôle : deux relances rapprochées depuis l'écran Réglages
 # lanceraient sinon deux générations concurrentes qui s'écraseraient l'une
 # l'autre dans store.save. Même motif que uc_daily_analysis.store._lock_for.
@@ -39,8 +50,12 @@ def _lock_for(role: str) -> asyncio.Lock:
     return lock
 
 
-async def _build_section(role: str, crm, llm, composition: facts.Composition | None = None) -> dict:
-    built = await _FACTS_BUILDERS[role](crm, composition)
+async def _build_section(role: str, crm, llm, composition: facts.Composition | None = None,
+                         entite: str | None = None) -> dict:
+    if entite:
+        built = await _FACTS_BUILDERS[role](crm, composition, entite=entite)
+    else:
+        built = await _FACTS_BUILDERS[role](crm, composition)
     action = built.get("action")
     consigne = composition.consigne if composition else ""
     pilote = composition.pilote if composition else False
@@ -52,12 +67,19 @@ async def _build_section(role: str, crm, llm, composition: facts.Composition | N
     # lu par les cockpits (facts / bullets / resume / action / analysis) n'a
     # aucune raison de s'élargir pour un besoin interne au prompt.
     blocs = built.get("blocs")
-    resume, analysis = await asyncio.gather(
-        build_brief_resume(llm, role, built["bullets"], action,
-                           consigne=consigne, pilote=pilote, blocs=blocs),
-        build_daily_analysis(llm, role, built["bullets"],
-                             consigne=consigne, pilote=pilote, blocs=blocs),
-    )
+    if entite:
+        # Section d'entité : le cockpit n'en affiche que le résumé. L'analyse
+        # longue (un appel LLM de plus par entité et par nuit) n'est pas produite.
+        resume = await build_brief_resume(llm, role, built["bullets"], action,
+                                          consigne=consigne, pilote=pilote, blocs=blocs)
+        analysis = ""
+    else:
+        resume, analysis = await asyncio.gather(
+            build_brief_resume(llm, role, built["bullets"], action,
+                               consigne=consigne, pilote=pilote, blocs=blocs),
+            build_daily_analysis(llm, role, built["bullets"],
+                                 consigne=consigne, pilote=pilote, blocs=blocs),
+        )
     # 6e ligne du résumé : le rythme du CA commandé (cf.
     # facts._cadence_ca_commande). Ajoutée APRÈS la rédaction, jamais soumise au
     # modèle : les cinq premières lignes sont un texte, celle-ci est une mesure.
@@ -114,19 +136,23 @@ async def generate(crm, llm, triggered_by: str = "schedule") -> dict:
         role: _composition_depuis(documents.get(role), tous_seuils.get(role))
         for role in ROLES
     }
+    cibles = [(role, None) for role in ROLES] + [
+        (role, entite) for role in ROLES_PAR_ENTITE for entite in ENTITES
+    ]
     results = await asyncio.gather(
-        *(_build_section(role, crm, llm, compositions[role]) for role in ROLES),
+        *(_build_section(role, crm, llm, compositions[role], entite) for role, entite in cibles),
         return_exceptions=True,
     )
 
     sections: dict = {}
     failed: list[str] = []
-    for role, res in zip(ROLES, results):
+    for (role, entite), res in zip(cibles, results):
+        cle = cle_section(role, entite)
         if isinstance(res, Exception):
-            logger.warning("Briefing — section '%s' en échec : %s", role, res)
-            failed.append(role)
+            logger.warning("Briefing — section '%s' en échec : %s", cle, res)
+            failed.append(cle)
         else:
-            sections[role] = res
+            sections[cle] = res
 
     maintenant = datetime.now(timezone.utc).isoformat()
     for section in sections.values():
@@ -169,21 +195,62 @@ async def generate_role(role: str, crm, llm, triggered_by: str = "manual") -> di
         composition = _composition_depuis(
             await preferences.load(role), await seuils_mod.charger(role)
         )
-        section = await _build_section(role, crm, llm, composition)
-        section["generated_at"] = datetime.now(timezone.utc).isoformat()
-        section["triggered_by"] = triggered_by
-
+        # Le DG régénère aussi ses sections d'entité : une relance après un
+        # changement de réglages doit valoir pour le pays affiché, pas seulement
+        # pour la section groupe.
+        cibles = [None] + (list(ENTITES) if role in ROLES_PAR_ENTITE else [])
+        construites = await asyncio.gather(
+            *(_build_section(role, crm, llm, composition, entite) for entite in cibles),
+            return_exceptions=True,
+        )
+        maintenant = datetime.now(timezone.utc).isoformat()
         payload = store.load() or {
             "generated_at": None, "triggered_by": None, "sections": {}, "sections_en_echec": [],
         }
-        payload.setdefault("sections", {})[role] = section
-        payload["sections_en_echec"] = [
-            r for r in payload.get("sections_en_echec", []) if r != role
-        ]
+        echecs = set(payload.get("sections_en_echec", []))
+        for entite, res in zip(cibles, construites):
+            cle = cle_section(role, entite)
+            if isinstance(res, Exception):
+                if entite is None:
+                    raise res
+                logger.warning("Briefing — section '%s' en échec : %s", cle, res)
+                echecs.add(cle)
+                continue
+            res["generated_at"], res["triggered_by"] = maintenant, triggered_by
+            payload.setdefault("sections", {})[cle] = res
+            echecs.discard(cle)
+        payload["sections_en_echec"] = sorted(echecs)
         store.save(payload)
+        section = payload["sections"][role]
 
     logger.info(
         "Briefing du rôle '%s' régénéré (%s) : %d puce(s)",
         role, triggered_by, len(section.get("bullets", [])),
     )
+    return section
+
+
+async def generate_entite(role: str, entite: str, crm, llm, triggered_by: str = "a_la_demande") -> dict:
+    """Construit UNE section d'entité absente du snapshot et la fusionne.
+
+    Cas du premier affichage d'un pays après le déploiement : le snapshot de la
+    nuit a été produit avant que les sections d'entité existent. Sans ce repli,
+    le cockpit afficherait « pas encore généré » jusqu'au cron de minuit.
+    """
+    if role not in ROLES_PAR_ENTITE or entite not in ENTITES:
+        raise ValueError(f"Section d'entité inconnue : {role}@{entite}")
+    async with _lock_for(cle_section(role, entite)):
+        payload = store.load() or {
+            "generated_at": None, "triggered_by": None, "sections": {}, "sections_en_echec": [],
+        }
+        deja = payload.get("sections", {}).get(cle_section(role, entite))
+        if deja:
+            return deja   # générée entre-temps par un autre appel
+        composition = _composition_depuis(await preferences.load(role), await seuils_mod.charger(role))
+        section = await _build_section(role, crm, llm, composition, entite)
+        section["generated_at"] = datetime.now(timezone.utc).isoformat()
+        section["triggered_by"] = triggered_by
+        payload = store.load() or payload
+        payload.setdefault("sections", {})[cle_section(role, entite)] = section
+        store.save(payload)
     return section

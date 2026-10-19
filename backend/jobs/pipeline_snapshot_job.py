@@ -4,7 +4,8 @@ from datetime import datetime
 from sqlalchemy import delete, select
 
 from db.database import AsyncSessionLocal
-from db.models import BacklogSnapshotModel, DossierModel, OpportunityModel, PipelineSnapshotModel
+from db.models import BacklogSnapshotModel, DossierModel, PipelineSnapshotModel
+from db.views import VOpportunityModel
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ async def run_pipeline_snapshot() -> None:
             delete(BacklogSnapshotModel).where(BacklogSnapshotModel.snapshot_date == snapshot_date)
         )
 
-        opportunities = (await session.execute(select(OpportunityModel))).scalars().all()
+        opportunities = (await session.execute(select(VOpportunityModel))).scalars().all()
         for opp in opportunities:
             session.add(PipelineSnapshotModel(
                 snapshot_date=snapshot_date,

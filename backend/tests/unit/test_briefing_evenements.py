@@ -17,6 +17,7 @@ from db.models import (
     InvoiceModel, OpportunityModel, PipelineSnapshotModel, PurchaseOrderModel, SaleOrderModel,
 )
 from modules.uc_briefing import evenements
+from tests.unit.nt360_semences import avec_nt360, create_views
 
 AUJOURD_HUI = date(2026, 8, 27)
 
@@ -31,9 +32,10 @@ async def _dans_la_base(corps, semer):
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(create_views)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
-        session.add_all(semer())
+        session.add_all(avec_nt360(semer()))
         await session.commit()
 
     import db.database as database

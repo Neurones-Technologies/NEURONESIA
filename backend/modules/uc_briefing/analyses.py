@@ -246,14 +246,14 @@ async def sous_traitance_par_dossier(limite: int = 5) -> dict:
                CASE WHEN d.ca_definitif > 0 THEN d.ca_definitif ELSE d.ca_provisoire END,
                CASE WHEN d.ca_definitif > 0 THEN 'définitif' ELSE 'provisoire' END,
                d.perc_marge_provisoire
-        FROM purchase_orders p JOIN dossiers d ON d.dossier_ref = p.dossier_id
+        FROM v_purchase_orders p JOIN dossiers d ON d.dossier_ref = p.dossier_id
         WHERE p.state = 'purchase' AND p.dossier_id IS NOT NULL AND p.dossier_id != ''
         GROUP BY p.dossier_id
         ORDER BY SUM(p.amount) DESC
     """, {})
     couverture = (await _lignes("""
         SELECT SUM(CASE WHEN dossier_id IS NOT NULL AND dossier_id != '' THEN 1 ELSE 0 END),
-               COUNT(*) FROM purchase_orders WHERE state = 'purchase'
+               COUNT(*) FROM v_purchase_orders WHERE state = 'purchase'
     """, {}))[0]
     rattaches, total = couverture[0] or 0, couverture[1] or 0
 
@@ -315,25 +315,36 @@ async def visibilite_carnet(as_of: date | None = None, fenetre_mois: int = 3) ->
     }
 
 
-async def book_to_bill(as_of: date | None = None, fenetre_mois: int = 12) -> dict:
+async def book_to_bill(as_of: date | None = None, fenetre_mois: int = 12, entite: str | None = None) -> dict:
     """Commandé rapporté au facturé sur la même fenêtre — remplit-on le carnet
     plus vite qu'on ne le vide ?
 
-    Le numérateur est TTC (`amount_untaxed` vaut 0 sur toutes les commandes du
-    miroir) et le dénominateur l'est aussi : le ratio est donc homogène, même si
-    aucun des deux termes ne l'est au sens comptable. La réserve le dit.
+    Les deux termes viennent des vues nt360 (HT, avoirs déduits). Chacune
+    retombe sur Odoo (TTC) tant que nt360 n'a jamais été synchronisé : le ratio
+    n'est publié que si les deux termes sont sur la MÊME base — un HT rapporté à
+    un TTC fausserait le ratio d'environ 15 % sans que rien ne le signale.
     """
     as_of = as_of or date.today()
-    p = {"a": as_of.isoformat(), "recul": f"-{fenetre_mois} months"}
-    commande = float((await _lignes("""
-        SELECT COALESCE(SUM(amount), 0) FROM sale_orders
+    p = {"a": as_of.isoformat(), "recul": f"-{fenetre_mois} months", "e": entite}
+    # Par entité : commandes par `entite`, factures par leur `filiale` nt360 —
+    # la ventilation que nt360 applique lui-même dans ses synthèses par entité.
+    filtre_cmd = "AND entite = :e" if entite else ""
+    filtre_fac = "AND filiale = :e" if entite else ""
+    cmd_nt360, fac_nt360 = (await _lignes("""
+        SELECT EXISTS (SELECT 1 FROM nt360_commandes), EXISTS (SELECT 1 FROM nt360_factures)
+    """, {}))[0]
+    if bool(cmd_nt360) != bool(fac_nt360):
+        return {"mesurable": False,
+                "raison": "commandé et facturé ne sont pas encore sur la même base (nt360 partiel)"}
+    commande = float((await _lignes(f"""
+        SELECT COALESCE(SUM(amount), 0) FROM v_sale_orders
         WHERE state IN ('sale', 'done') AND date_order IS NOT NULL
-          AND date(date_order) > date(:a, :recul) AND date(date_order) <= date(:a)
+          AND date(date_order) > date(:a, :recul) AND date(date_order) <= date(:a) {filtre_cmd}
     """, p))[0][0] or 0)
-    facture = float((await _lignes("""
-        SELECT COALESCE(SUM(amount), 0) FROM invoices
-        WHERE status != 'cancelled' AND invoice_date IS NOT NULL
-          AND date(invoice_date) > date(:a, :recul) AND date(invoice_date) <= date(:a)
+    facture = float((await _lignes(f"""
+        SELECT COALESCE(SUM(amount), 0) FROM v_factures
+        WHERE invoice_date IS NOT NULL
+          AND date(invoice_date) > date(:a, :recul) AND date(invoice_date) <= date(:a) {filtre_fac}
     """, p))[0][0] or 0)
     if not facture:
         return {"mesurable": False, "raison": f"aucune facture sur {fenetre_mois} mois"}
@@ -343,6 +354,69 @@ async def book_to_bill(as_of: date | None = None, fenetre_mois: int = 12) -> dic
         "commande_xof": commande,
         "facture_xof": facture,
         "ratio": round(commande / facture, 2),
-        "reserve": "commandé et facturé sont tous deux TTC — le ratio est homogène, "
-                   "les montants ne sont pas des bases HT",
+        "reserve": (
+            "commandé et facturé HT selon nt360, avoirs déduits" if cmd_nt360 else
+            "commandé et facturé sont tous deux TTC — le ratio est homogène, "
+            "les montants ne sont pas des bases HT"
+        ),
+    }
+
+
+async def objectifs_annuels(annee: int | None = None, as_of: date | None = None,
+                            entite: str | None = None) -> dict | None:
+    """Objectifs annuels de l'équipe — ce qui manquait à tout taux d'atteinte.
+
+    - Commandes : `commercial_objectives` (équipe, CA, annuel, révision active).
+      C'est la table que lit uc_commercial/objectifs.py, et elle respecte la
+      priorité d'un objectif saisi à la main sur celui importé de nt360.
+    - Facturation et marge : `nt360_objectifs` (périmètre global, somme des
+      entités) — `commercial_objectives` n'a pas de colonne pour ces cibles.
+
+    `part_annee_ecoulee_pct` accompagne toujours les cibles : comparer un réalisé
+    d'octobre à une cible annuelle pleine fabrique un retard qui n'existe pas.
+    Rend None quand aucune cible n'existe pour l'exercice.
+
+    `entite` (CI / BF / GN) restreint aux cibles de l'entité : les objectifs
+    nt360 sont publiés par filiale, et reportés avec scope_ref = filiale.
+    """
+    as_of = as_of or date.today()
+    annee = annee or as_of.year
+    filtre_cmd = "AND scope_ref = :e" if entite else ""
+    filtre_fac = "AND filiale = :e" if entite else ""
+    cmd = (await _lignes(f"""
+        SELECT COALESCE(SUM(target_amount_xof), 0), COUNT(*),
+               COALESCE(SUM(created_by = 'nt360'), 0)
+        FROM commercial_objectives
+        WHERE scope = 'equipe' AND kind = 'ca' AND period_type = 'annee'
+          AND period_year = :y AND superseded = 0 {filtre_cmd}
+    """, {"y": annee, "e": entite}))[0]
+    individuels = (await _lignes("""
+        SELECT COUNT(*) FROM commercial_objectives
+        WHERE scope = 'commercial' AND kind = 'ca' AND period_year = :y AND superseded = 0
+    """, {"y": annee}))[0][0] or 0
+    fac = (await _lignes(f"""
+        SELECT COALESCE(SUM(target_invoiced), 0), COALESCE(SUM(target_margin), 0)
+        FROM nt360_objectifs WHERE fiscal_year = :y AND scope = 'global' {filtre_fac}
+    """, {"y": annee, "e": entite}))[0]
+    cible_cmd, nb_cmd, nb_nt360 = float(cmd[0] or 0), cmd[1] or 0, cmd[2] or 0
+    cible_fac, cible_marge = float(fac[0] or 0), float(fac[1] or 0)
+    if not cible_cmd and not cible_fac:
+        return None
+
+    debut, fin = date(annee, 1, 1), date(annee, 12, 31)
+    if as_of < debut:
+        ecoule = 0.0
+    elif as_of > fin:
+        ecoule = 100.0
+    else:
+        ecoule = round(((as_of - debut).days + 1) / ((fin - debut).days + 1) * 100, 1)
+    return {
+        "annee": annee,
+        "commandes_xof": cible_cmd or None,
+        "facturation_xof": cible_fac or None,
+        "marge_xof": cible_marge or None,
+        # Origine de la cible de commandes : un objectif saisi à la main l'emporte.
+        "origine_commandes": ("nt360" if nb_cmd and nb_nt360 == nb_cmd else "saisi") if nb_cmd else None,
+        "nb_objectifs_individuels": individuels,
+        "part_annee_ecoulee_pct": ecoule,
     }

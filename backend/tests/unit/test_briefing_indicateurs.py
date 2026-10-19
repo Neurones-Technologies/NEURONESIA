@@ -19,6 +19,7 @@ from db.models import (
     PipelineSnapshotModel, SaleOrderModel,
 )
 from modules.uc_briefing import indicateurs
+from tests.unit.nt360_semences import avec_nt360, create_views
 
 AUJOURD_HUI = date(2026, 8, 27)
 
@@ -30,6 +31,7 @@ async def _base():
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(create_views)
     return engine, async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -40,7 +42,7 @@ def _dt(jour: date):
 
 async def _semer(factory):
     async with factory() as session:
-        session.add_all([
+        session.add_all(avec_nt360([
             # Trois commandes étalées : le cumul du 10/08 doit valoir 300, celui
             # du 20/08 500, et celui du 27/08 500 — c'est ce que la
             # reconstitution doit retrouver sans qu'aucun snapshot n'ait été pris.
@@ -73,7 +75,7 @@ async def _semer(factory):
                              deadline=_dt(date(2026, 1, 1))),
             DossierModel(dossier_ref="DC/1", odoo_id=1, client_name="CIE",
                          backlog=700.0, reste_a_encaisser=400.0),
-        ])
+        ]))
         await session.commit()
 
 
@@ -122,6 +124,45 @@ def test_flux_se_reconstitue_sans_aucun_snapshot():
         ]
     veille, dix, vingt, aujourd_hui = asyncio.run(_dans_la_base(corps))
     assert (veille, dix, vingt, aujourd_hui) == (100.0, 300.0, 500.0, 500.0)
+
+
+def test_rebaser_remplace_lhistorique_de_lancienne_base():
+    """Après la bascule Odoo TTC → nt360 HT, une valeur MESURÉE sur l'ancienne
+    base doit être recalculée : sinon le delta comparerait deux bases."""
+    from db.models import IndicatorSnapshotModel
+    from sqlalchemy import select
+
+    async def corps(factory):
+        await indicateurs.enregistrer(date(2026, 8, 20), {"ca_commande_ytd": 999.0}, origine="mesure")
+        await indicateurs.enregistrer(date(2026, 8, 20), {"impayes_echus": 42.0}, origine="mesure")
+        await indicateurs.rebaser(("ca_commande_ytd",), date(2026, 8, 19), date(2026, 8, 20))
+        async with factory() as s:
+            return {(r.snapshot_date, r.cle): (r.valeur, r.origine)
+                    for r in (await s.scalars(select(IndicatorSnapshotModel))).all()}
+    lignes = asyncio.run(_dans_la_base(corps))
+    assert lignes[(date(2026, 8, 20), "ca_commande_ytd")] == (500.0, "reconstitue")
+    assert lignes[(date(2026, 8, 19), "ca_commande_ytd")] == (300.0, "reconstitue")
+    assert lignes[(date(2026, 8, 20), "impayes_echus")] == (42.0, "mesure")    # stock intouché
+
+
+def test_rebaser_refuse_un_stock():
+    async def corps(_):
+        with pytest.raises(ValueError):
+            await indicateurs.rebaser(("impayes_echus",), date(2026, 8, 19))
+    asyncio.run(_dans_la_base(corps))
+
+
+def test_base_nt360_ne_se_rebase_qu_une_fois(tmp_path, monkeypatch):
+    monkeypatch.setattr(indicateurs, "_MARQUEUR_BASE", tmp_path / "indicateurs_base.json")
+
+    async def corps(_):
+        await indicateurs.enregistrer(date(2026, 8, 20), {"ca_commande_ytd": 999.0}, origine="mesure")
+        premier = await indicateurs.assurer_base_nt360(fenetre_jours=2)
+        second = await indicateurs.assurer_base_nt360(fenetre_jours=2)
+        return premier, second
+    premier, second = asyncio.run(_dans_la_base(corps))
+    assert premier is not None and premier > 0
+    assert second is None
 
 
 def test_flux_ne_franchit_pas_l_exercice():

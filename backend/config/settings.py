@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     odoo_sync_interval_minutes: int = 2  # sync incrémentale rapide
     odoo_webhook_secret: str = ""        # HMAC secret pour les webhooks Odoo
 
+    # nt360 (API lecture seule Neurones Technologies) — SOURCE COMPLÉMENTAIRE à Odoo :
+    # objectifs, jalons, BC, consultations, historique d'étapes. Clé vide = intégration
+    # désactivée. La doc impose une synchro complète au plus une fois par heure.
+    nt360_base_url: str = "https://europe-west1-propulse-game.cloudfunctions.net/api/v1"
+    nt360_api_key: str = ""
+    nt360_sync_interval_minutes: int = 60
+    # Jeton secret de l'URL de webhook (POST /v1/webhooks/nt360/<jeton>) : la doc
+    # v1 n'offre pas encore de signature et recommande une URL difficile à
+    # deviner. Vide = route désactivée (404). Générer : `openssl rand -hex 32`.
+    nt360_webhook_token: str = ""
+
     # ── Partenaires intra-groupe exclus du miroir ────────────────────────────
     # Ni synchronisés depuis Odoo, ni conservés en base locale. Odoo (la source)
     # n'est jamais modifié : ces entités continuent d'y vivre normalement.

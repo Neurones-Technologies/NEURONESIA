@@ -56,6 +56,10 @@ async def init_db():
         # En dernier : lit sale_orders (colonnes ajoutées juste au-dessus) pour
         # amorcer sale_order_lines sans attendre une synchro Odoo complète.
         await conn.run_sync(_backfill_sale_order_lines)
+        await conn.run_sync(_migrate_nt360)
+        # Vues nt360 × Odoo : lisent les colonnes de sale_order_lines migrées plus haut.
+        from db.views import create_views
+        await conn.run_sync(create_views)
 
 
 # Colonnes IA S2I ajoutées après coup au Watch-Tracker. `create_all` ne modifie
@@ -190,6 +194,29 @@ _OPPORTUNITY_NEW_COLUMNS = {
     "date_closed": "DATETIME",
     "write_date": "DATETIME",
 }
+
+
+# Colonnes ajoutées aux tables nt360 après leur première création : `entite`
+# (CI / BF / GN), déduite du filtre `?entite=` de l'API. Les vues lisent ces
+# colonnes : la migration passe AVANT create_views.
+_NT360_NEW_COLUMNS = {
+    "nt360_commandes": {"entite": "VARCHAR(10) NOT NULL DEFAULT ''"},
+    "nt360_alertes": {"entite": "VARCHAR(10) NOT NULL DEFAULT ''"},
+}
+
+
+def _migrate_nt360(sync_conn):
+    inspector = inspect(sync_conn)
+    tables = set(inspector.get_table_names())
+    for table, colonnes in _NT360_NEW_COLUMNS.items():
+        if table not in tables:
+            continue
+        existing = {c["name"] for c in inspector.get_columns(table)}
+        for name, ddl in colonnes.items():
+            if name not in existing:
+                sync_conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+                sync_conn.exec_driver_sql(f"CREATE INDEX IF NOT EXISTS ix_{table}_{name} ON {table} ({name})")
+                logger.info("Migration %s : colonne '%s' ajoutée", table, name)
 
 
 def _migrate_opportunities(sync_conn):

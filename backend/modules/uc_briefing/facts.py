@@ -281,6 +281,7 @@ _DG_SOURCES: dict[str, tuple[str, ...]] = {
     "opportunites": ("echeances_affaires",),
     "collecte": ("delai_encaissement",),
     "par_commercial": ("performance_commerciaux",),
+    "objectifs": ("performance_commerciaux",),
     "secteurs": ("mix_sectoriel",),
     "mensuel": ("rythme_mensuel",),
     "hot_leads": ("affaires_imminentes",),
@@ -295,11 +296,57 @@ _DG_SOURCES: dict[str, tuple[str, ...]] = {
 _DG_DELTAS = ["ca_commande_ytd", "ca_facture_ytd", "impayes_echus", "backlog",
               "pipe_actif_brut", "reste_a_encaisser"]
 
+# ── Briefing DG d'une entité (CI / BF / GN) ──────────────────────────────────
+# Éléments dont TOUTES les sources se ventilent par entité : commandes nt360
+# (colonne `entite`), factures nt360 (`filiale`), objectifs par filiale. Les
+# autres reposent sur des données sans entité — impayés et encaissements Odoo,
+# opportunités, dossiers, arbitrages, fournisseurs, variations historisées pour
+# le groupe — et sont RETIRÉS du briefing d'entité plutôt que d'y glisser un
+# chiffre groupe qui se lirait comme un chiffre du pays.
+_DG_PAR_ENTITE = {
+    "ca_ytd", "concentration", "rupture_rythme", "retention_clients", "ca_pluriannuel",
+    "performance_commerciaux", "mix_sectoriel", "rythme_mensuel", "book_to_bill",
+    "questions_sans_reponse",
+}
+
+_NOM_ENTITE = {"CI": "Côte d'Ivoire", "BF": "Burkina Faso", "GN": "Guinée"}
+
+
+def _restreindre_a_entite(c: "Composition", role: str) -> tuple["Composition", list[str]]:
+    """Composition limitée aux éléments ventilables par entité, et la liste des
+    éléments qui auraient été actifs mais ne le sont pas faute d'entité."""
+    actifs = [e.id for e in preferences.CATALOGUE.get(role, []) if c.actif(e.id)]
+    gardes = [i for i in actifs if i in _DG_PAR_ENTITE]
+    retires = [i for i in actifs if i not in _DG_PAR_ENTITE]
+    return Composition(gardes, c.consigne, c.pilote, c._seuils), retires
+
+
+def _puce_perimetre_entite(facts: dict, puces: "Puces", role: str, entite: str, retires: list[str]) -> None:
+    """Dit, en une ligne, ce que le briefing d'entité ne contient pas et pourquoi.
+
+    Taire ces sujets ferait croire qu'il n'y a rien à signaler sur les impayés
+    ou la trésorerie du pays ; les y laisser au niveau groupe ferait lire un
+    chiffre groupe comme un chiffre du pays. Les nommer est la seule voie juste.
+    """
+    if not retires:
+        return
+    libelles = {e.id: e.libelle for e in preferences.CATALOGUE.get(role, [])}
+    noms = [libelles.get(i, i).lower() for i in retires]
+    facts["elements_groupe_seulement"] = retires
+    liste = ", ".join(noms[:-1]) + " et " + noms[-1] if len(noms) > 1 else noms[0]
+    puces.ajouter(
+        "perimetre_entite",
+        f"Périmètre {_NOM_ENTITE.get(entite, entite)} : ce briefing ne porte que des chiffres de "
+        f"l'entité. {liste[0].upper() + liste[1:]} ne sont pas ventilés par entité dans les "
+        f"données et restent lisibles au niveau groupe.",
+    )
+
+
 _MOIS = ("", "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
          "août", "septembre", "octobre", "novembre", "décembre")
 
 
-async def _ca_pluriannuel(crm, annee: int, nb: int = 5) -> list[dict]:
+async def _ca_pluriannuel(crm, annee: int, nb: int = 5, entite: str | None = None) -> list[dict]:
     """CA commandé des `nb` derniers exercices, du plus ancien au plus récent.
 
     Séquentiel et non `gather` : sur le miroir SQLite, le parallélisme est
@@ -309,7 +356,7 @@ async def _ca_pluriannuel(crm, annee: int, nb: int = 5) -> list[dict]:
     """
     serie = []
     for a in range(annee - nb + 1, annee + 1):
-        stats = await crm.get_year_stats(a)
+        stats = await crm.get_year_stats(a, **({"entite": entite} if entite else {}))
         serie.append({"annee": a, "ca_xof": stats["revenue_xof"], "nb_commandes": stats["orders_count"]})
     return serie
 
@@ -366,7 +413,7 @@ def _action_du_jour(croisement_top, arb_top, rupture_top, position_nette_xof) ->
     )
 
 
-async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
+async def build_dg_facts(crm, composition: Composition | None = None, entite: str | None = None) -> dict:
     role = "dg"
     """Sept faits nommés, datés et seuillés — le mandat du DG est l'arbitrage
     et l'atterrissage de l'exercice, pas la lecture d'agrégats de stock sans
@@ -374,19 +421,27 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
     c = composition or Composition()
     y = datetime.now().year
     arret = datetime.now().date()
+    # Briefing d'une entité (CI / BF / GN) : seuls les éléments dont TOUTES les
+    # sources se ventilent par entité restent actifs (cf. _DG_PAR_ENTITE).
+    retires: list[str] = []
+    if entite:
+        c, retires = _restreindre_a_entite(c, role)
+    # `entite` n'est transmis que s'il est posé : le briefing groupe appelle ses
+    # sources exactement comme avant (signatures inchangées pour les appelants).
+    ent = {"entite": entite} if entite else {}
 
     src = await _resoudre(
         {
-            "ytd": (lambda: crm.get_ytd_stats(y), None),
-            "ytd_n1": (lambda: crm.get_ytd_stats(y - 1), None),
-            "rupture": (lambda: crm.get_account_rhythm_breaks(), _RUPTURE_VIDE),
+            "ytd": (lambda: crm.get_ytd_stats(y, **ent), None),
+            "ytd_n1": (lambda: crm.get_ytd_stats(y - 1, **ent), None),
+            "rupture": (lambda: crm.get_account_rhythm_breaks(**ent), _RUPTURE_VIDE),
             "margins": (lambda: crm.get_margin_stats(), None),
-            "top_clients": (lambda: crm.get_top_clients(limit=10, year=y), []),
+            "top_clients": (lambda: crm.get_top_clients(limit=10, year=y, **ent), []),
             "exposure": (lambda: crm.get_unpaid_exposure(), None),
             "arbitrage": (lambda: arbitrage_service.compute_file(crm, exclude_internal=True), None),
-            "retention": (lambda: crm.get_client_retention(year=y), None),
+            "retention": (lambda: crm.get_client_retention(year=y, **ent), None),
             "fournisseurs": (lambda: crm.get_supplier_intelligence(limit=5), None),
-            "pluriannuel": (lambda: _ca_pluriannuel(crm, y), []),
+            "pluriannuel": (lambda: _ca_pluriannuel(crm, y, **ent), []),
             "marge_exercice": (lambda: crm.get_margin_stats(year=y), None),
             "forecast": (lambda: crm.get_quarterly_forecast(), None),
             "win_rate": (lambda: crm.get_win_rate(), None),
@@ -398,20 +453,23 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
             # argument que l'onglet DG « Pilotage », qui doit dire le même délai
             # que cette puce — les montants en attente restent hors borne.
             "collecte": (lambda: crm.get_invoice_collection_stats(exercice=y), None),
-            "par_commercial": (lambda: crm.get_revenue_by_salesperson(year=y), []),
-            "secteurs": (lambda: crm.get_revenue_by_sector(year=y, limit=10), []),
-            "mensuel": (lambda: crm.get_monthly_revenue(y), []),
+            "par_commercial": (lambda: crm.get_revenue_by_salesperson(year=y, **ent), []),
+            "objectifs": (lambda: analyses.objectifs_annuels(y, **ent), None),
+            "secteurs": (lambda: crm.get_revenue_by_sector(year=y, limit=10, **ent), []),
+            "mensuel": (lambda: crm.get_monthly_revenue(y, **ent), []),
             "hot_leads": (lambda: crm.get_hot_leads(limit=5), []),
             # Comme la file d'arbitrage : un module voisin, pas une méthode du
             # CRM — mêmes chiffres que l'écran Relation commerciale du DAF.
             "situation_factures": (lambda: daf_situation.situation_factures(), None),
             "visibilite": (lambda: analyses.visibilite_carnet(), None),
-            "btb": (lambda: analyses.book_to_bill(), None),
+            "btb": (lambda: analyses.book_to_bill(**ent), None),
         },
         _DG_SOURCES,
         c,
     )
-    deltas = await _deltas(_DG_DELTAS)
+    # Les variations sont historisées pour le GROUPE : sur un briefing d'entité,
+    # « vs hier » comparerait un chiffre d'entité à un chiffre groupe.
+    deltas = {} if entite else await _deltas(_DG_DELTAS)
     ytd, ytd_n1, rupture = src["ytd"], src["ytd_n1"], src["rupture"]
     margins, top_clients, exposure, arb = src["margins"], src["top_clients"], src["exposure"], src["arbitrage"]
     retention, fournisseurs = src["retention"], src["fournisseurs"]
@@ -754,10 +812,11 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         )
 
     # 16 — réalisé par commercial  [élément : performance_commerciaux]
-    # Même helper que le DC : la table d'objectifs étant vide, la puce répartit
-    # le réalisé et le dit.
+    # Même helper que le DC : taux d'atteinte de l'objectif d'équipe, et
+    # répartition du réalisé par commercial (aucun objectif individuel).
     if c.actif("performance_commerciaux"):
-        _couverture_objectifs(facts, puces.pour("performance_commerciaux"), src["par_commercial"], y)
+        _couverture_objectifs(facts, puces.pour("performance_commerciaux"), src["par_commercial"], y,
+                              src["objectifs"])
 
     # 17 — mix sectoriel  [élément : mix_sectoriel]
     secteurs = src["secteurs"]
@@ -936,6 +995,10 @@ async def build_dg_facts(crm, composition: Composition | None = None) -> dict:
         position_nette,
     )
 
+    if entite:
+        facts["entite"] = entite
+        _puce_perimetre_entite(facts, puces, role, entite, retires)
+
     return {"facts": facts, "bullets": puces.liste(), "blocs": puces.par_bloc(),
             "action": action, "cadence": _cadence_ca_commande(deltas)}
 
@@ -999,14 +1062,16 @@ def _echeances(facts: dict, bullets: list[str], opportunities: list[dict], jours
     )
 
 
-def _couverture_objectifs(facts: dict, bullets: list[str], par_commercial: list[dict], annee: int) -> None:
-    """Couverture de l'équipe commerciale, promise par ROLE_FOCUS et jamais tenue.
+def _couverture_objectifs(facts: dict, bullets: list[str], par_commercial: list[dict], annee: int,
+                          objectifs: dict | None = None) -> None:
+    """Couverture de l'équipe commerciale, promise par ROLE_FOCUS.
 
-    ATTENTION — la table `commercial_objectives` est VIDE : il n'existe aucun
-    objectif saisi. La puce ne compare donc pas à un objectif mais RÉPARTIT le
-    réalisé, et le dit. Annoncer une « couverture » calculée sur un objectif
-    dérivé sans le signaler reproduirait exactement le reproche que
-    uc_commercial/objectifs.py documente à propos de ce briefing.
+    L'objectif d'ÉQUIPE existe (importé de nt360, ou saisi) : la puce donne son
+    taux d'atteinte, avec la part de l'année écoulée. Il n'existe en revanche
+    aucun objectif INDIVIDUEL (nt360 ne publie que des cibles globales) : la
+    ventilation par commercial reste une RÉPARTITION du réalisé, et la puce le
+    dit. Annoncer une « couverture » individuelle calculée sur un objectif dérivé
+    reproduirait le reproche que uc_commercial/objectifs.py documente.
     """
     actifs = [c for c in (par_commercial or []) if c.get("ca_total_xof")]
     if not actifs:
@@ -1021,13 +1086,27 @@ def _couverture_objectifs(facts: dict, bullets: list[str], par_commercial: list[
         "couverture_top_commercial": tete["commercial"],
         "couverture_top_ca_xof": tete["ca_total_xof"],
         "couverture_top_part_pct": round(part, 1) if part is not None else None,
-        "couverture_objectif_saisi": False,
+        "couverture_objectif_saisi": bool(objectifs and objectifs.get("commandes_xof")),
     })
+    cible = (objectifs or {}).get("commandes_xof")
+    taux = _atteinte(total, cible)
+    if cible and taux is not None:
+        facts.update({"couverture_objectif_equipe_xof": cible, "couverture_atteinte_equipe_pct": taux})
+        suite = (
+            f" — objectif d'équipe {annee} : {fcfa(cible)} FCFA, atteint à {taux:.0f} % pour "
+            f"{objectifs['part_annee_ecoulee_pct']:.0f} % de l'année écoulée"
+            + ("" if objectifs.get("nb_objectifs_individuels") else
+               " ; sans objectif individuel, la ventilation par commercial est une répartition du "
+               "réalisé, pas un taux d'atteinte.")
+        )
+        suite = suite if suite.endswith(".") else suite + "."
+    else:
+        suite = " — aucun objectif n'étant saisi en base, c'est une répartition du réalisé, pas un taux d'atteinte."
     bullets.append(
         f"Réalisé {annee} par commercial : {fcfa(total)} FCFA sur {len(actifs)} commerciaux, "
         f"{tete['commercial']} en tête à {fcfa(tete['ca_total_xof'])} FCFA"
         + (f" ({part:.0f}% du total)" if part is not None else "")
-        + " — aucun objectif n'étant saisi en base, c'est une répartition du réalisé, pas un taux d'atteinte."
+        + suite
     )
 
 
@@ -1340,6 +1419,7 @@ _DC_SOURCES: dict[str, tuple[str, ...]] = {
     "lost": ("pertes_par_client",),
     "hot_leads": ("top_lead",),
     "par_commercial": ("couverture_objectifs",),
+    "objectifs": ("couverture_objectifs",),
     "par_produit": ("mix_offre",),
     "mouvements": ("mouvements_recents",),
     "hygiene": ("hygiene_pipe",),
@@ -1366,6 +1446,7 @@ async def build_dir_commercial_facts(crm, composition: Composition | None = None
             "lost": (lambda: crm.get_lost_deals(limit=5), None),
             "hot_leads": (lambda: crm.get_hot_leads(limit=5), []),
             "par_commercial": (lambda: crm.get_revenue_by_salesperson(year=y), []),
+            "objectifs": (lambda: analyses.objectifs_annuels(y), None),
             "par_produit": (lambda: crm.get_revenue_by_product(year=y, limit=10), []),
             # Fenêtre de 7 jours et non « hier » : à deux commandes par jour
             # ouvré et un jour sur trois sans mouvement, un briefing qui ne
@@ -1472,7 +1553,8 @@ async def build_dir_commercial_facts(crm, composition: Composition | None = None
         _echeances(facts, puces.pour("echeances_opportunites"), opportunities, jours=int(c.seuil("echeance_fenetre_jours")))
 
     if c.actif("couverture_objectifs"):
-        _couverture_objectifs(facts, puces.pour("couverture_objectifs"), src["par_commercial"], y)
+        _couverture_objectifs(facts, puces.pour("couverture_objectifs"), src["par_commercial"], y,
+                              src["objectifs"])
 
     if c.actif("mix_offre"):
         _mix_offre(facts, puces.pour("mix_offre"), src["par_produit"], y, cle="mix")
@@ -1503,7 +1585,34 @@ async def build_dir_commercial_facts(crm, composition: Composition | None = None
             "cadence": _cadence_ca_commande(deltas)}
 
 
-def _puce_ca_facture(facts: dict, puces: Puces, deltas: dict) -> None:
+def _atteinte(realise: float | None, cible: float | None) -> float | None:
+    if realise is None or not cible:
+        return None
+    return round(realise / cible * 100, 1)
+
+
+def _phrase_objectifs(objectifs: dict, facture_ytd: float | None, commande_ytd: float | None) -> str:
+    """« à 80 % de l'année écoulée, objectif 2026 de facturation atteint à 29 %
+    (15,0 Md FCFA) et de commandes à 61 % (13,8 Md FCFA) ». La part écoulée est
+    TOUJOURS citée, en tête : un réalisé d'octobre rapporté à une cible annuelle
+    pleine ressemble sinon à un échec."""
+    morceaux = []
+    for libelle, cible, realise in (
+        ("de facturation", objectifs.get("facturation_xof"), facture_ytd),
+        ("de commandes", objectifs.get("commandes_xof"), commande_ytd),
+    ):
+        taux = _atteinte(realise, cible)
+        if cible and taux is not None:
+            morceaux.append(f"{libelle} à {taux:.0f} % ({fcfa(cible)} FCFA)")
+    if not morceaux:
+        return ""
+    return (
+        f"à {objectifs['part_annee_ecoulee_pct']:.0f} % de l'année écoulée, objectif "
+        f"{objectifs['annee']} " + " et ".join(morceaux)
+    )
+
+
+def _puce_ca_facture(facts: dict, puces: Puces, deltas: dict, objectifs: dict | None = None) -> None:
     """« Où en est le CA facturé du mois ? » — facturé, encaissé, et commandé.
 
     Les trois ensemble parce qu'ils ne disent la même chose qu'assemblés :
@@ -1511,12 +1620,12 @@ def _puce_ca_facture(facts: dict, puces: Puces, deltas: dict) -> None:
     qu'on ne commande est un problème de production. Séparés, chacun se lit
     comme une performance.
 
-    L'objectif manque au tableau, et il manquera tant que
-    `commercial_objectives` sera vide — le dériver du réalisé ferait passer une
-    hypothèse pour une cible votée. La puce le dit plutôt que de le taire.
+    Objectifs : ceux de `analyses.objectifs_annuels` (importés de nt360 ou saisis).
+    Sans cible pour l'exercice, la puce le dit plutôt que d'en dériver une du
+    réalisé, ce qui ferait passer une hypothèse pour une cible votée.
 
-    Réserve portée dans le texte : les avoirs ne sont pas déduits, et leur poids
-    est passé de 1 % à 28 % du facturé brut entre 2019 et 2026.
+    Réserve portée dans le texte quand le facturé retombe sur Odoo : les avoirs
+    n'y sont pas déduits (nt360 les déduit), cf. indicateurs.reserve_si_odoo.
     """
     facture = deltas.get("ca_facture_mois") or {}
     if facture.get("valeur") is None:
@@ -1529,8 +1638,17 @@ def _puce_ca_facture(facts: dict, puces: Puces, deltas: dict) -> None:
         "facture_ytd_xof": facture_ytd.get("valeur"),
         "encaisse_mois_xof": encaisse.get("valeur"),
         "commande_ytd_xof": commande_ytd.get("valeur"),
-        "objectif_saisi": False,
+        "objectif_saisi": bool(objectifs),
     })
+    if objectifs:
+        facts.update({
+            "objectif_facturation_xof": objectifs.get("facturation_xof"),
+            "objectif_commandes_xof": objectifs.get("commandes_xof"),
+            "atteinte_facturation_pct": _atteinte(facture_ytd.get("valeur"), objectifs.get("facturation_xof")),
+            "atteinte_commandes_pct": _atteinte(commande_ytd.get("valeur"), objectifs.get("commandes_xof")),
+            "part_annee_ecoulee_pct": objectifs.get("part_annee_ecoulee_pct"),
+            "objectif_origine": objectifs.get("origine_commandes"),
+        })
     texte = (
         f"CA facturé : {fcfa(facture['valeur'])} FCFA sur le mois"
         + _var(deltas, "ca_facture_mois", "j1")
@@ -1548,10 +1666,15 @@ def _puce_ca_facture(facts: dict, puces: Puces, deltas: dict) -> None:
             texte += f" ; {fcfa(encaisse['valeur'])} FCFA encaissés sur le mois"
         else:
             texte += " ; aucun règlement enregistré ce mois-ci"
+    # La réserve sur les avoirs ne vaut qu'en repli Odoo (nt360 les déduit) :
+    # elle vient de l'indicateur, jamais d'un texte figé ici.
+    reserve = facture.get("reserve")
+    phrase = _phrase_objectifs(objectifs, facture_ytd.get("valeur"), commande_ytd.get("valeur")) if objectifs else ""
+    if not phrase:
+        phrase = "aucun objectif n'étant saisi pour l'exercice, il n'y a pas de taux d'atteinte"
     puces.ajouter(
         "ca_facture_periode",
-        texte + ". Aucun objectif n'étant saisi en base, il n'y a pas de taux "
-                "d'atteinte ; et les avoirs ne sont pas déduits."
+        texte + ". " + phrase[0].upper() + phrase[1:] + (f" ; {reserve}." if reserve else ".")
     )
 
 
@@ -1680,6 +1803,7 @@ _DF_SOURCES: dict[str, tuple[str, ...]] = {
     "relances": ("relances_du_jour",),
     "dso": ("dso_glissant",),
     "visibilite": ("attente_facturation",),
+    "objectifs": ("ca_facture_periode",),
 }
 
 _DF_DELTAS = ["impayes_echus", "impayes_echus_90j", "ca_facture_ytd",
@@ -1705,6 +1829,7 @@ async def build_dir_financier_facts(crm, composition: Composition | None = None)
                     retard_min_jours=int(c.seuil("retard_relance_jours"))), None),
             "dso": (lambda: analyses.dso_glissant(), None),
             "visibilite": (lambda: analyses.visibilite_carnet(), None),
+            "objectifs": (lambda: analyses.objectifs_annuels(), None),
         },
         _DF_SOURCES,
         c,
@@ -1809,7 +1934,7 @@ async def build_dir_financier_facts(crm, composition: Composition | None = None)
         _puce_dso(facts, puces.pour("dso_glissant"), src["dso"])
 
     if c.actif("ca_facture_periode"):
-        _puce_ca_facture(facts, puces, deltas)
+        _puce_ca_facture(facts, puces, deltas, src["objectifs"])
 
     if c.actif("attente_facturation"):
         _puce_attente_facturation(facts, puces, "attente_facturation", src["visibilite"])

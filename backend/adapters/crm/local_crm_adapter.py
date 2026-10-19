@@ -7,12 +7,27 @@ from sqlalchemy import select, or_
 from core.ports.crm_repository import CRMRepository
 from core.domain.client import Client, Contract, Invoice, Project, ContractStatus, InvoiceStatus
 from db.database import AsyncSessionLocal
+from db.views import VPurchaseOrderModel, VSaleOrderModel
 from db.models import (
-    ClientModel, ContractModel, InvoiceModel, ProjectModel, SaleOrderModel, DossierModel,
-    SupplierModel, PurchaseOrderModel,
+    ClientModel, ContractModel, InvoiceModel, ProjectModel, DossierModel,
+    SupplierModel,
 )
 
 logger = logging.getLogger(__name__)
+
+# Entités du groupe (filtre `?entite=` de nt360, colonne `entite` des vues).
+ENTITES = ("CI", "BF", "GN")
+
+
+def _ventes(entite: str | None = None) -> str:
+    """Source des commandes à mettre après FROM : la vue entière, ou restreinte
+    à une entité. La valeur est insérée dans le SQL : elle n'est acceptée que
+    depuis la liste blanche ENTITES."""
+    if entite is None:
+        return "v_sale_orders"
+    if entite not in ENTITES:
+        raise ValueError(f"Entité inconnue : {entite!r}")
+    return f"(SELECT * FROM v_sale_orders WHERE entite = '{entite}')"
 
 # ---- M1 « rupture de rythme » (première implémentation ; le moteur était
 #      documenté dans frontend/src/lib/data/engines.ts sans code derrière) ----
@@ -116,12 +131,12 @@ class LocalCRMAdapter(CRMRepository):
         from sqlalchemy import extract
         async with AsyncSessionLocal() as session:
             q = (
-                select(SaleOrderModel)
-                .where(SaleOrderModel.client_id == client_id)
+                select(VSaleOrderModel)
+                .where(VSaleOrderModel.client_id == client_id)
             )
             if year is not None:
-                q = q.where(extract("year", SaleOrderModel.date_order) == year)
-            q = q.order_by(SaleOrderModel.date_order.desc()).limit(50)
+                q = q.where(extract("year", VSaleOrderModel.date_order) == year)
+            q = q.order_by(VSaleOrderModel.date_order.desc()).limit(50)
             result = await session.execute(q)
             return [
                 {
@@ -138,12 +153,16 @@ class LocalCRMAdapter(CRMRepository):
                 for r in result.scalars()
             ]
 
-    async def get_year_stats(self, year: int, exclude_internal: bool = False) -> dict:
+    async def get_year_stats(self, year: int, exclude_internal: bool = False,
+                             entite: str | None = None) -> dict:
         from sqlalchemy import func, extract
         async with AsyncSessionLocal() as session:
-            year_filter = extract("year", SaleOrderModel.date_order) == year
-            state_filter = SaleOrderModel.state.in_(["sale", "done"])
+            year_filter = extract("year", VSaleOrderModel.date_order) == year
+            state_filter = VSaleOrderModel.state.in_(["sale", "done"])
             filters = [year_filter, state_filter]
+            if entite is not None:
+                _ventes(entite)     # même liste blanche que les requêtes SQL
+                filters.append(VSaleOrderModel.entite == entite)
             if exclude_internal:
                 # Récupère les client_ids des entités internes (NEURONES*)
                 internal_ids_result = await session.execute(
@@ -151,15 +170,15 @@ class LocalCRMAdapter(CRMRepository):
                 )
                 internal_ids = [r[0] for r in internal_ids_result.all()]
                 if internal_ids:
-                    filters.append(~SaleOrderModel.client_id.in_(internal_ids))
+                    filters.append(~VSaleOrderModel.client_id.in_(internal_ids))
             clients_with_orders = (await session.execute(
-                select(func.count(func.distinct(SaleOrderModel.client_id))).where(*filters)
+                select(func.count(func.distinct(VSaleOrderModel.client_id))).where(*filters)
             )).scalar() or 0
             orders_count = (await session.execute(
-                select(func.count()).select_from(SaleOrderModel).where(*filters)
+                select(func.count()).select_from(VSaleOrderModel).where(*filters)
             )).scalar() or 0
             revenue = (await session.execute(
-                select(func.sum(SaleOrderModel.amount)).where(*filters)
+                select(func.sum(VSaleOrderModel.amount)).where(*filters)
             )).scalar() or 0
         return {
             "year": year,
@@ -169,7 +188,7 @@ class LocalCRMAdapter(CRMRepository):
         }
 
     async def get_ytd_stats(self, year: int, as_of: date | None = None,
-                            exclude_internal: bool = False) -> dict:
+                            exclude_internal: bool = False, entite: str | None = None) -> dict:
         """CA commandé arrêté au même jour calendaire que `as_of` (aujourd'hui
         par défaut) — le seul agrégat comparable à N-1 en cours d'exercice.
         get_year_stats(2026) vaut 7 mois écoulés et get_year_stats(2025) 12
@@ -184,7 +203,7 @@ class LocalCRMAdapter(CRMRepository):
         exclude_clause = "AND (c.name IS NULL OR c.name NOT LIKE '%NEURONES%')" if exclude_internal else ""
         sql = f"""
             SELECT COUNT(DISTINCT o.client_id), COUNT(*), COALESCE(SUM(o.amount), 0)
-            FROM sale_orders o
+            FROM {_ventes(entite)} o
             {join_clients}
             WHERE o.state IN ('sale', 'done')
               AND strftime('%Y', o.date_order) = :year
@@ -206,17 +225,17 @@ class LocalCRMAdapter(CRMRepository):
         from sqlalchemy import func, extract, and_
         async with AsyncSessionLocal() as session:
             period_filter = and_(
-                extract("year", SaleOrderModel.date_order) == year,
-                extract("month", SaleOrderModel.date_order) == month,
+                extract("year", VSaleOrderModel.date_order) == year,
+                extract("month", VSaleOrderModel.date_order) == month,
             )
             clients_with_orders = (await session.execute(
-                select(func.count(func.distinct(SaleOrderModel.client_id))).where(period_filter)
+                select(func.count(func.distinct(VSaleOrderModel.client_id))).where(period_filter)
             )).scalar() or 0
             orders_count = (await session.execute(
-                select(func.count()).select_from(SaleOrderModel).where(period_filter)
+                select(func.count()).select_from(VSaleOrderModel).where(period_filter)
             )).scalar() or 0
             revenue = (await session.execute(
-                select(func.sum(SaleOrderModel.amount)).where(period_filter)
+                select(func.sum(VSaleOrderModel.amount)).where(period_filter)
             )).scalar() or 0
         return {
             "year": year,
@@ -229,9 +248,9 @@ class LocalCRMAdapter(CRMRepository):
     async def get_order_by_ref(self, ref: str) -> dict | None:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                select(SaleOrderModel, ClientModel)
-                .join(ClientModel, SaleOrderModel.client_id == ClientModel.client_id, isouter=True)
-                .where(SaleOrderModel.name == ref)
+                select(VSaleOrderModel, ClientModel)
+                .join(ClientModel, VSaleOrderModel.client_id == ClientModel.client_id, isouter=True)
+                .where(VSaleOrderModel.name == ref)
                 .limit(1)
             )
             row = result.first()
@@ -280,8 +299,8 @@ class LocalCRMAdapter(CRMRepository):
             paid_count = (await session.execute(
                 sa_select(func.count()).select_from(InvoiceModel).where(InvoiceModel.status == "paid")
             )).scalar()
-            orders_count = (await session.execute(sa_select(func.count()).select_from(SaleOrderModel))).scalar()
-            total_revenue = (await session.execute(sa_select(func.sum(SaleOrderModel.amount)))).scalar() or 0
+            orders_count = (await session.execute(sa_select(func.count()).select_from(VSaleOrderModel))).scalar()
+            total_revenue = (await session.execute(sa_select(func.sum(VSaleOrderModel.amount)))).scalar() or 0
         return {
             "clients": clients_count,
             "invoices": invoices_count,
@@ -294,12 +313,12 @@ class LocalCRMAdapter(CRMRepository):
         from sqlalchemy import extract
         async with AsyncSessionLocal() as session:
             q = (
-                select(SaleOrderModel, ClientModel)
-                .join(ClientModel, SaleOrderModel.client_id == ClientModel.client_id, isouter=True)
-                .order_by(SaleOrderModel.date_order.desc())
+                select(VSaleOrderModel, ClientModel)
+                .join(ClientModel, VSaleOrderModel.client_id == ClientModel.client_id, isouter=True)
+                .order_by(VSaleOrderModel.date_order.desc())
             )
             if year is not None:
-                q = q.where(extract("year", SaleOrderModel.date_order) == year)
+                q = q.where(extract("year", VSaleOrderModel.date_order) == year)
             q = q.limit(limit)
             result = await session.execute(q)
             return [
@@ -317,15 +336,16 @@ class LocalCRMAdapter(CRMRepository):
                 for o, c in result.all()
             ]
 
-    async def get_top_clients(self, limit: int = 5, year: int | None = None) -> list[dict]:
+    async def get_top_clients(self, limit: int = 5, year: int | None = None,
+                              entite: str | None = None) -> list[dict]:
         from sqlalchemy import text
         async with AsyncSessionLocal() as session:
-            base_sql = """
+            base_sql = f"""
                 SELECT o.client_id, o.client_name,
                        COUNT(o.order_id) as nb_commandes,
                        SUM(o.amount) as ca_total,
                        MAX(COALESCE(NULLIF(c.country, ''), 'Autres/non renseigné')) as pays
-                FROM sale_orders o
+                FROM {_ventes(entite)} o
                 LEFT JOIN clients c ON o.client_id = c.client_id
                 WHERE o.state IN ('sale', 'done')
             """
@@ -360,7 +380,7 @@ class LocalCRMAdapter(CRMRepository):
             base_sql = """
                 SELECT o.name, o.client_name, o.amount, o.date_order,
                        COALESCE(NULLIF(c.country, ''), 'Autres/non renseigné') as pays
-                FROM sale_orders o
+                FROM v_sale_orders o
                 LEFT JOIN clients c ON o.client_id = c.client_id
                 WHERE o.state IN ('sale', 'done')
             """
@@ -466,6 +486,7 @@ class LocalCRMAdapter(CRMRepository):
         facteur_mediane: float = RUPTURE_FACTEUR_MEDIANE,
         min_ca_annuel_xof: float = RUPTURE_MIN_CA_ANNUEL_XOF,
         limit: int = 20,
+        entite: str | None = None,
     ) -> dict:
         """Détecte les comptes majeurs dont le rythme de commande a décroché
         (moteur M1). Deux requêtes seulement (aucune boucle SQL par client) :
@@ -485,12 +506,12 @@ class LocalCRMAdapter(CRMRepository):
             as_of = datetime.now().date()
 
         async with AsyncSessionLocal() as session:
-            hist_sql = _text("""
+            hist_sql = _text(f"""
                 SELECT o.client_id,
                        COALESCE(NULLIF(TRIM(c.name), ''), o.client_name) AS nom,
                        substr(o.date_order, 1, 10) AS jour,
                        o.amount
-                FROM sale_orders o
+                FROM {_ventes(entite)} o
                 LEFT JOIN clients c ON o.client_id = c.client_id
                 WHERE o.state IN ('sale', 'done')
                   AND o.date_order >= date(:as_of, :fenetre)
@@ -836,7 +857,7 @@ class LocalCRMAdapter(CRMRepository):
             sql_total = (
                 "SELECT COUNT(*), SUM(expected_revenue), "
                 "SUM(expected_revenue * probability / 100) "
-                f"FROM opportunities WHERE {_PIPE_OUVERT}"
+                f"FROM v_opportunities WHERE {_PIPE_OUVERT}"
             )
             r = (await session.execute(text(sql_total))).fetchone()
             total_nb = r[0] or 0
@@ -846,7 +867,7 @@ class LocalCRMAdapter(CRMRepository):
             sql_stage = """
                 SELECT stage, COUNT(*) as nb, SUM(expected_revenue) as ca_brut,
                        SUM(expected_revenue * probability / 100) as ca_pondere
-                FROM opportunities GROUP BY stage ORDER BY ca_brut DESC
+                FROM v_opportunities GROUP BY stage ORDER BY ca_brut DESC
             """
             stages = [
                 {"stade": row[0], "nb": row[1], "ca_brut_xof": round(row[2] or 0), "ca_pondere_xof": round(row[3] or 0)}
@@ -854,7 +875,7 @@ class LocalCRMAdapter(CRMRepository):
             ]
             sql_seller = """
                 SELECT salesperson_name, COUNT(*) as nb, SUM(expected_revenue) as ca_brut
-                FROM opportunities WHERE salesperson_name != ''
+                FROM v_opportunities WHERE salesperson_name != ''
                 GROUP BY salesperson_name ORDER BY ca_brut DESC LIMIT 30
             """
             raw_sellers = [
@@ -886,7 +907,7 @@ class LocalCRMAdapter(CRMRepository):
             SELECT name, client_name, stage, expected_revenue, probability,
                    (expected_revenue * probability / 100) as score_pondere,
                    salesperson_name, deadline
-            FROM opportunities
+            FROM v_opportunities
             WHERE probability > 0 AND expected_revenue > 0 {_SQL_OPPORTUNITE_OUVERTE}
             ORDER BY score_pondere DESC LIMIT :limit
         """
@@ -906,14 +927,15 @@ class LocalCRMAdapter(CRMRepository):
             for r in rows
         ]
 
-    async def get_revenue_by_salesperson(self, year: int | None = None, quarter: int | None = None) -> list[dict]:
+    async def get_revenue_by_salesperson(self, year: int | None = None, quarter: int | None = None,
+                                         entite: str | None = None) -> list[dict]:
         from sqlalchemy import text
-        sql = """
+        sql = f"""
             SELECT salesperson_name,
                    SUM(amount) as ca_total,
                    COUNT(*) as nb_commandes,
                    COUNT(DISTINCT client_id) as nb_clients
-            FROM sale_orders
+            FROM {_ventes(entite)}
             WHERE salesperson_name IS NOT NULL AND salesperson_name != ''
               AND state NOT IN ('cancel', 'draft')
         """
@@ -962,9 +984,9 @@ class LocalCRMAdapter(CRMRepository):
 
             from sqlalchemy import func
             last_order_q = select(
-                SaleOrderModel.client_id,
-                func.max(SaleOrderModel.date_order).label("last_order")
-            ).group_by(SaleOrderModel.client_id)
+                VSaleOrderModel.client_id,
+                func.max(VSaleOrderModel.date_order).label("last_order")
+            ).group_by(VSaleOrderModel.client_id)
             last_orders = {r[0]: r[1] for r in (await session.execute(last_order_q)).all()}
 
         today = datetime.utcnow().replace(tzinfo=None)
@@ -1038,14 +1060,15 @@ class LocalCRMAdapter(CRMRepository):
         scores.sort(key=lambda x: x["score_risque"], reverse=True)
         return scores[:limit]
 
-    async def get_revenue_by_sector(self, year: int | None = None, limit: int = 20) -> list[dict]:
+    async def get_revenue_by_sector(self, year: int | None = None, limit: int = 20,
+                                    entite: str | None = None) -> list[dict]:
         from sqlalchemy import text
-        sql = """
+        sql = f"""
             SELECT COALESCE(c.sector, 'Non renseigné') as secteur,
                    SUM(o.amount) as ca_total,
                    COUNT(DISTINCT o.client_id) as nb_clients,
                    COUNT(*) as nb_commandes
-            FROM sale_orders o
+            FROM {_ventes(entite)} o
             LEFT JOIN clients c ON o.client_id = c.client_id
             WHERE o.state NOT IN ('cancel', 'draft')
         """
@@ -1082,7 +1105,7 @@ class LocalCRMAdapter(CRMRepository):
         sql = """
             SELECT strftime('%Y', date_order) as yr, strftime('%m', date_order) as mo,
                    SUM(amount) as ca
-            FROM sale_orders
+            FROM v_sale_orders
             WHERE state NOT IN ('cancel', 'draft')
               AND date_order >= date('now', '-12 months')
             GROUP BY yr, mo ORDER BY yr, mo
@@ -1147,18 +1170,16 @@ class LocalCRMAdapter(CRMRepository):
     async def get_cross_sell_opportunities(self, product_anchor: str, product_target: str | None = None, limit: int = 20) -> list[dict]:
         from sqlalchemy import text
         # Clients ayant acheté product_anchor
-        # Lecture sur sale_order_lines et non sur le JSON `sale_orders.order_lines` :
-        # une ligne = un enregistrement, donc le LIKE porte sur le libellé du PRODUIT
-        # et pas sur le blob de la commande entière. `display_type IS NULL` écarte
-        # les titres de section et les notes du devis (27 % des lignes du miroir).
+        # Lecture sur v_lignes_commande (commandes nt360 détaillées par les lignes
+        # Odoo) et non sur un JSON de commande : une ligne = un enregistrement, donc
+        # le LIKE porte sur le libellé du PRODUIT. La vue écarte déjà les titres de
+        # section et notes du devis, et ne contient que des commandes nt360 valides.
         sql_anchor = """
             SELECT sol.client_id, sol.client_name,
                    MAX(sol.date_order) as last_anchor_purchase,
                    COUNT(DISTINCT sol.order_id) as nb_achats_anchor
-            FROM sale_order_lines sol
+            FROM v_lignes_commande sol
             WHERE lower(sol.product_name) LIKE lower(:anchor)
-              AND sol.display_type IS NULL
-              AND sol.state NOT IN ('cancel', 'draft')
             GROUP BY sol.client_id, sol.client_name
         """
         async with AsyncSessionLocal() as session:
@@ -1171,10 +1192,8 @@ class LocalCRMAdapter(CRMRepository):
             if product_target:
                 # Clients qui ont AUSSI acheté product_target
                 sql_target = """
-                    SELECT DISTINCT sol.client_id FROM sale_order_lines sol
+                    SELECT DISTINCT sol.client_id FROM v_lignes_commande sol
                     WHERE lower(sol.product_name) LIKE lower(:target)
-                      AND sol.display_type IS NULL
-                      AND sol.state NOT IN ('cancel', 'draft')
                 """
                 target_rows = (await session.execute(text(sql_target), {"target": f"%{product_target}%"})).fetchall()
                 already_bought = {r[0] for r in target_rows}
@@ -1206,16 +1225,15 @@ class LocalCRMAdapter(CRMRepository):
         # dont 22 M seulement sont du Cisco.
         sql = """
             SELECT o.name, o.client_name, o.amount, o.date_order, o.state,
-                   SUM(sol.subtotal_xof) as matched_amount,
+                   SUM(sol.montant_ht) as matched_amount,
                    json_group_array(json_object(
                        'product', sol.product_name,
                        'qty', sol.qty,
-                       'subtotal_xof', sol.subtotal_xof
+                       'subtotal_xof', sol.montant_ht
                    )) as matching_lines
-            FROM sale_order_lines sol
-            JOIN sale_orders o ON o.order_id = sol.order_id
+            FROM v_lignes_commande sol
+            JOIN v_sale_orders o ON o.order_id = sol.order_id
             WHERE lower(sol.product_name) LIKE lower(:query)
-              AND sol.display_type IS NULL
         """
         params: dict = {"query": f"%{product_query}%"}
         if year:
@@ -1243,18 +1261,18 @@ class LocalCRMAdapter(CRMRepository):
 
     async def get_revenue_by_product(self, year: int | None = None, limit: int = 30) -> list[dict]:
         from sqlalchemy import text
-        # `state NOT IN ('cancel','draft')` : absent de la version JSON de cette
-        # requête, ce qui faisait entrer des devis annulés dans le CA par produit.
+        # v_lignes_commande : commandes nt360 uniquement (ni devis ni annulées),
+        # montants recalés sur le HT nt360. Les lignes « non détaillé » (sans
+        # libellé produit Odoo) sont écartées par product_name != 'non détaillé'.
         sql = """
             SELECT sol.product_name as product,
-                   SUM(sol.subtotal_xof) as total_revenue,
+                   SUM(sol.montant_ht) as total_revenue,
                    COUNT(DISTINCT sol.order_id) as order_count,
                    SUM(sol.qty) as qty_total
-            FROM sale_order_lines sol
+            FROM v_lignes_commande sol
             WHERE sol.product_name != ''
-              AND sol.subtotal_xof > 0
-              AND sol.display_type IS NULL
-              AND sol.state NOT IN ('cancel', 'draft')
+              AND sol.origine = 'odoo'
+              AND sol.montant_ht > 0
         """
         params: dict = {}
         if year:
@@ -1275,7 +1293,7 @@ class LocalCRMAdapter(CRMRepository):
             for r in rows
         ]
 
-    async def get_client_retention(self, year: int | None = None) -> dict:
+    async def get_client_retention(self, year: int | None = None, entite: str | None = None) -> dict:
         """
         Calcule la rétention, le churn et les nouveaux clients entre deux années consécutives.
         Retourne aussi la liste détaillée des clients perdus et des nouveaux clients.
@@ -1287,9 +1305,9 @@ class LocalCRMAdapter(CRMRepository):
 
         async with AsyncSessionLocal() as session:
             # Clients actifs en année de référence (N-1)
-            sql_ref = """
+            sql_ref = f"""
                 SELECT DISTINCT o.client_id, c.name
-                FROM sale_orders o
+                FROM {_ventes(entite)} o
                 LEFT JOIN clients c ON o.client_id = c.client_id
                 WHERE strftime('%Y', o.date_order) = :yr
                   AND o.state NOT IN ('cancel', 'draft')
@@ -1377,7 +1395,7 @@ class LocalCRMAdapter(CRMRepository):
                 return None
             # Chercher par référence BDC (FP/YYYY/XXXX)
             r = await session.execute(
-                select(SaleOrderModel).where(SaleOrderModel.name == ref.upper())
+                select(VSaleOrderModel).where(VSaleOrderModel.name == ref.upper())
             )
             so = r.scalar_one_or_none()
             if so and so.dossier_id:
@@ -1642,7 +1660,7 @@ class LocalCRMAdapter(CRMRepository):
                        SUM(CASE WHEN created_at IS NOT NULL
                                  AND julianday('now') - julianday(created_at) > 365
                             THEN 1 ELSE 0 END)
-                FROM opportunities GROUP BY stage
+                FROM v_opportunities GROUP BY stage
             """))).fetchall()
 
         closed = {"__won__", "__lost__", "__cancelled__", "__suspended__"}
@@ -1677,7 +1695,7 @@ class LocalCRMAdapter(CRMRepository):
         from sqlalchemy import text
         async with AsyncSessionLocal() as session:
             rows = (await session.execute(text(
-                "SELECT stage, COUNT(*), SUM(expected_revenue) FROM opportunities GROUP BY stage"
+                "SELECT stage, COUNT(*), SUM(expected_revenue) FROM v_opportunities GROUP BY stage"
             ))).fetchall()
 
         won_nb = lost_nb = 0
@@ -1705,7 +1723,7 @@ class LocalCRMAdapter(CRMRepository):
     async def get_lost_deals(self, limit: int = 20) -> dict:
         """Opportunités perdues (historique) : top N + agrégats par client et par commercial."""
         from sqlalchemy import text
-        sql = "SELECT name, client_name, stage, expected_revenue, salesperson_name FROM opportunities"
+        sql = "SELECT name, client_name, stage, expected_revenue, salesperson_name FROM v_opportunities"
         async with AsyncSessionLocal() as session:
             rows = (await session.execute(text(sql))).fetchall()
 
@@ -1748,7 +1766,7 @@ class LocalCRMAdapter(CRMRepository):
         }
 
     async def get_order_lines(self, limit: int = 20000) -> list[dict]:
-        """Lignes de commande réelles (sale_orders non annulées). Pas de tri par
+        """Lignes des commandes nt360 (v_lignes_commande, montants HT recalés). Pas de tri par
         date/LIMIT restrictif utile ici : les analyses transversales (montée en
         valeur) ont besoin de voir aussi les commandes anciennes (obsolescence).
 
@@ -1759,13 +1777,9 @@ class LocalCRMAdapter(CRMRepository):
         ce calcul en cache au lieu de le rétrécir)."""
         from sqlalchemy import text
         sql = """
-            SELECT o.client_id, o.client_name,
-                   json_extract(j.value, '$.product') as product,
-                   CAST(json_extract(j.value, '$.subtotal') AS REAL) as subtotal,
-                   o.date_order
-            FROM sale_orders o, json_each(o.order_lines) j
-            WHERE o.state NOT IN ('cancel', 'draft')
-              AND json_extract(j.value, '$.product') IS NOT NULL
+            SELECT client_id, client_name, product_name, montant_ht, date_order
+            FROM v_lignes_commande
+            WHERE origine = 'odoo' AND product_name != ''
             LIMIT :limit
         """
         async with AsyncSessionLocal() as session:
@@ -1795,7 +1809,7 @@ class LocalCRMAdapter(CRMRepository):
             SELECT client_name, SUM(amount), COUNT(*), MAX(date_order), MIN(date_order),
                    SUM(CASE WHEN date_order >= :depuis_12m THEN amount ELSE 0 END),
                    COUNT(CASE WHEN date_order >= :depuis_12m THEN 1 END)
-            FROM purchase_orders
+            FROM v_purchase_orders
             WHERE client_name IS NOT NULL AND client_name != ''
             GROUP BY client_name
             ORDER BY SUM(amount) DESC
@@ -1806,7 +1820,7 @@ class LocalCRMAdapter(CRMRepository):
             suppliers = []
             for name, total, nb, last_date, first_date, montant_12m, nb_12m in rows:
                 detail_sql = """
-                    SELECT name, amount, date_order FROM purchase_orders
+                    SELECT name, amount, date_order FROM v_purchase_orders
                     WHERE client_name = :name
                     ORDER BY date_order DESC LIMIT 5
                 """
@@ -1846,14 +1860,14 @@ class LocalCRMAdapter(CRMRepository):
             # ── Base : volume d'achats par fournisseur (pour le taux de dépendance) ──
             base_rows = (await session.execute(text("""
                 SELECT client_name, SUM(amount), COUNT(*)
-                FROM purchase_orders
+                FROM v_purchase_orders
                 WHERE client_name IS NOT NULL AND client_name != ''
                 GROUP BY client_name
                 ORDER BY SUM(amount) DESC
                 LIMIT :limit
             """), {"limit": limit})).fetchall()
             total_achats = (await session.execute(text(
-                "SELECT SUM(amount) FROM purchase_orders"
+                "SELECT SUM(amount) FROM v_purchase_orders"
             ))).scalar() or 0
 
             result = []
@@ -1863,7 +1877,7 @@ class LocalCRMAdapter(CRMRepository):
                 # partner_id vendeur), suppliers.supplier_id est le MÊME partner_id.
                 # Odoo prod porte des homonymes (deux fiches « SOGELUX ») : on préfère
                 # la fiche réellement référencée par les BDC, sinon la première.
-                ids_bdc = select(PurchaseOrderModel.client_id).where(PurchaseOrderModel.client_name == name)
+                ids_bdc = select(VPurchaseOrderModel.client_id).where(VPurchaseOrderModel.client_name == name)
                 sup_row = (await session.execute(
                     select(SupplierModel)
                     .where(SupplierModel.name == name)
@@ -1920,7 +1934,7 @@ class LocalCRMAdapter(CRMRepository):
                                CASE WHEN d.marge_definitive != 0 THEN d.marge_definitive
                                     WHEN d.marge_provisoire != 0 THEN d.marge_provisoire
                                     ELSE d.marge_previsionnelle END AS marge
-                        FROM purchase_orders po
+                        FROM v_purchase_orders po
                         JOIN dossiers d ON po.dossier_id = d.dossier_ref
                         WHERE po.client_name = :name AND po.dossier_id IS NOT NULL
                     """), {"name": name})).fetchall()
@@ -1947,7 +1961,7 @@ class LocalCRMAdapter(CRMRepository):
                 if name:
                     risk_rows = (await session.execute(text("""
                         SELECT po.dossier_id, COUNT(DISTINCT po.client_name) as nb_fournisseurs
-                        FROM purchase_orders po
+                        FROM v_purchase_orders po
                         JOIN dossiers d ON po.dossier_id = d.dossier_ref
                         WHERE po.dossier_id IS NOT NULL AND d.state = 'confirmed'
                         GROUP BY po.dossier_id
@@ -1956,7 +1970,7 @@ class LocalCRMAdapter(CRMRepository):
                     dossiers_uniques = {row[0] for row in risk_rows}
                     if dossiers_uniques:
                         mine = (await session.execute(text("""
-                            SELECT DISTINCT dossier_id FROM purchase_orders
+                            SELECT DISTINCT dossier_id FROM v_purchase_orders
                             WHERE client_name = :name AND dossier_id IS NOT NULL
                         """), {"name": name})).fetchall()
                         dossiers_a_risque = len({r[0] for r in mine} & dossiers_uniques)
@@ -2148,7 +2162,7 @@ class LocalCRMAdapter(CRMRepository):
                        SUM(CASE WHEN strftime('%Y', date_order) = :annee THEN amount ELSE 0 END) AS ca_ex,
                        SUM(CASE WHEN strftime('%Y', date_order) = :annee THEN 1 ELSE 0 END) AS nb_cmd_ex,
                        MAX(CASE WHEN strftime('%Y', date_order) = :annee THEN date_order END) AS last_order_ex
-                FROM sale_orders
+                FROM v_sale_orders
                 WHERE client_id IS NOT NULL AND client_id != ''
                   AND state IN ('sale', 'done')
                   AND date(date_order) <= date(:jour)
@@ -2158,7 +2172,7 @@ class LocalCRMAdapter(CRMRepository):
                 SELECT client_id, client_name FROM (
                     SELECT client_id, client_name,
                            ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_order DESC) rg
-                    FROM sale_orders
+                    FROM v_sale_orders
                     WHERE client_name IS NOT NULL AND client_name != ''
                 ) WHERE rg = 1
             ),
@@ -2166,7 +2180,7 @@ class LocalCRMAdapter(CRMRepository):
                 SELECT client_id, salesperson_name FROM (
                     SELECT client_id, salesperson_name,
                            ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_order DESC) rg
-                    FROM sale_orders
+                    FROM v_sale_orders
                     WHERE salesperson_name IS NOT NULL AND salesperson_name != ''
                 ) WHERE rg = 1
             ),
@@ -2184,7 +2198,7 @@ class LocalCRMAdapter(CRMRepository):
             -- MOTIF, jamais par égalité, sous peine de perdre 681 affaires gagnées.
             opp_par_compte AS (
                 SELECT client_id, COUNT(*) AS nb, SUM(expected_revenue) AS mnt
-                FROM opportunities
+                FROM v_opportunities
                 WHERE client_id IS NOT NULL AND client_id != ''
                   AND lower(COALESCE(stage, '')) NOT LIKE '%gagn%'
                   AND lower(COALESCE(stage, '')) NOT LIKE '%won%'
@@ -2263,14 +2277,14 @@ class LocalCRMAdapter(CRMRepository):
             top.append({"pays": "Autres/non renseigné", "nb_clients": autres})
         return top
 
-    async def get_monthly_revenue(self, year: int) -> list[dict]:
+    async def get_monthly_revenue(self, year: int, entite: str | None = None) -> list[dict]:
         """Série CA commandé par mois pour une année (graphe d'évolution du dashboard)."""
         from sqlalchemy import text
-        sql = text("""
+        sql = text(f"""
             SELECT strftime('%m', date_order) as mo,
                    SUM(amount) as ca,
                    COUNT(*) as nb
-            FROM sale_orders
+            FROM {_ventes(entite)}
             WHERE state IN ('sale', 'done')
               AND strftime('%Y', date_order) = :year
             GROUP BY mo ORDER BY mo
@@ -2288,7 +2302,7 @@ class LocalCRMAdapter(CRMRepository):
         sql = text("""
             SELECT strftime('%m', date_order) as mo, client_name,
                    COUNT(*) as nb_commandes, SUM(amount) as ca
-            FROM sale_orders
+            FROM v_sale_orders
             WHERE state IN ('sale', 'done')
               AND strftime('%Y', date_order) = :year
             GROUP BY mo, client_id, client_name
@@ -2317,7 +2331,7 @@ class LocalCRMAdapter(CRMRepository):
         sql = """
             SELECT name, client_name, stage, expected_revenue, probability,
                    salesperson_name, deadline, created_at
-            FROM opportunities
+            FROM v_opportunities
             WHERE 1=1
         """
         params: dict = {"limit": limit}
@@ -2359,7 +2373,7 @@ class LocalCRMAdapter(CRMRepository):
         sql = """
             SELECT name, client_name, stage, expected_revenue, probability,
                    salesperson_name, deadline, created_at, offer_family
-            FROM opportunities
+            FROM v_opportunities
         """
         async with AsyncSessionLocal() as session:
             rows = (await session.execute(text(sql))).fetchall()
