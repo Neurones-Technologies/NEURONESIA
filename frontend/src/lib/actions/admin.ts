@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { AdminActionState } from "@/lib/actions/admin-state";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { ROLE_LABELS } from "@/lib/auth/roles";
+import { libellePaysCompte } from "@/lib/data/pays";
 
 /** Actions de l'écran Comptes.
  *
@@ -66,6 +67,7 @@ export async function createUserAction(
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const fullName = String(formData.get("full_name") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
+  const pays = String(formData.get("pays") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   if (!email || !email.includes("@")) {
@@ -82,11 +84,11 @@ export async function createUserAction(
     return ko(`Mot de passe trop court — ${MDP_MIN} caractères au minimum.`, "password");
   }
 
-  let cree: { email: string; role: string };
+  let cree: { email: string; role: string; pays: string };
   try {
-    cree = await apiFetch<{ email: string; role: string }>("/v1/auth/users", {
+    cree = await apiFetch<{ email: string; role: string; pays: string }>("/v1/auth/users", {
       method: "POST",
-      body: JSON.stringify({ email, password, full_name: fullName, role }),
+      body: JSON.stringify({ email, password, full_name: fullName, role, pays }),
     });
   } catch (error) {
     return fromError(error, "Le compte n'a pas pu être créé. Rien n'a été enregistré.");
@@ -94,7 +96,7 @@ export async function createUserAction(
 
   revalider(profile);
   return ok(
-    `Compte ${cree.email} créé avec le rôle ${libelleRole(cree.role)}. ` +
+    `Compte ${cree.email} créé avec le rôle ${libelleRole(cree.role)}, périmètre ${libellePaysCompte(cree.pays)}. ` +
       "Communiquez-lui son mot de passe par un autre canal : il n'est plus lisible nulle part."
   );
 }
@@ -113,6 +115,7 @@ export async function updateUserAction(
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const fullName = String(formData.get("full_name") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
+  const pays = String(formData.get("pays") ?? "").trim();
 
   if (!email || !email.includes("@")) {
     return ko("Saisissez une adresse e-mail valide.", "email");
@@ -123,7 +126,7 @@ export async function updateUserAction(
   try {
     await apiFetch(`/v1/auth/users/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ email, full_name: fullName, role }),
+      body: JSON.stringify({ email, full_name: fullName, role, pays }),
     });
   } catch (error) {
     return fromError(error, "La modification n'a pas pu être enregistrée. Rien n'a changé.");
@@ -131,7 +134,7 @@ export async function updateUserAction(
 
   revalider(profile);
   return ok(
-    `Compte modifié — rôle ${libelleRole(role)}. Le changement s'applique à la requête suivante : ` +
+    `Compte modifié — rôle ${libelleRole(role)}, périmètre ${libellePaysCompte(pays)}. Le changement s'applique à la requête suivante : ` +
       "la session en cours de cette personne voit son périmètre changer sans se reconnecter."
   );
 }

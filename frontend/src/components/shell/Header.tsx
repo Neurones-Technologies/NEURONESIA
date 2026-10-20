@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/sections";
 import { GroupNav, SectionNav } from "./SectionNav";
 import { UserMenu } from "./UserMenu";
+import { PerimetreBar } from "./PerimetreBar";
 
 function currentSectionKey(pathname: string, profile: ProfileKey): string {
   const rest = pathname.replace(`/${profile}/`, "").replace(`/${profile}`, "");
@@ -44,7 +45,16 @@ export function Header({
   user,
 }: {
   profile: ProfileKey;
-  user: { code: string; fullName: string; roleLabel: string; isAdmin: boolean; menuLabel: string };
+  user: {
+    code: string;
+    fullName: string;
+    roleLabel: string;
+    isAdmin: boolean;
+    menuLabel: string;
+    role: string;
+    perimetre: string | null;
+    paysVerrouille: boolean;
+  };
 }) {
   const pathname = usePathname();
 
@@ -79,13 +89,16 @@ export function Header({
   ) : null;
 
   const utilisateur = (
-    <UserMenu
-      profile={profile}
-      code={user.code}
-      fullName={user.fullName}
-      roleLabel={user.roleLabel}
-      isAdmin={user.isAdmin}
-    />
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+      <PerimetreBar role={user.role} perimetre={user.perimetre} verrouille={user.paysVerrouille} />
+      <UserMenu
+        profile={profile}
+        code={user.code}
+        fullName={user.fullName}
+        roleLabel={user.roleLabel}
+        isAdmin={user.isAdmin}
+      />
+    </div>
   );
 
   // Un chapitre à un seul écran n'affiche pas de seconde rangée : elle ne

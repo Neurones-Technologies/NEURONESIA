@@ -25,3 +25,5 @@ class User:
     is_active: bool
     created_at: datetime
     last_login: datetime | None = None
+    # CI / BF / GN : périmètre imposé à toutes les pages du compte ; "" = groupe.
+    pays: str = ""

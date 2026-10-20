@@ -146,6 +146,14 @@ async def tableau_relation_commerciale(
     )
     socle = await _socle_creances(factures, an, aujourdhui)
 
+    # Périmètre pays : les factures fournisseurs ne portent pas de pays. Un DPO
+    # par pays rapporterait la dette fournisseurs du GROUPE aux achats du pays —
+    # un ratio faux. Il n'est donc pas calculé (forme « non mesurable » habituelle).
+    from core.services.perimetre import entite_courante
+    entite = entite_courante()
+    if entite:
+        factures_fournisseurs = []
+
     dso, dpo, balance, payeurs, serie_encours, serie_dso = await asyncio.gather(
         _hors_boucle(mod_relation.build_dso, factures, socle, aujourdhui, an),
         _hors_boucle(mod_relation.build_dpo, factures_fournisseurs, achats, delais, aujourdhui, an),
@@ -157,6 +165,12 @@ async def tableau_relation_commerciale(
             statique.CIBLES_PERFORMANCE["dso_jours"],
         ),
     )
+    if entite:
+        dpo["raison"] = (
+            "Les factures fournisseurs ne portent pas de pays : le DPO n'est pas calculable "
+            "pour un seul pays. Il reste lisible au niveau groupe."
+        )
+        dpo["perimetre"] = "groupe_seulement"
     return {
         "annee": an,
         "as_of": aujourdhui.isoformat(),
@@ -179,6 +193,7 @@ async def tableau_relation_commerciale(
             "ecart_jours": (
                 round(dso["delai_encaissement_moyen_jours"] - dpo["dpo_jours"], 1)
                 if dso["delai_encaissement_moyen_jours"] is not None and dpo["dpo_jours"] is not None
+                and not entite   # périmètre pays : DPO non calculable (cf. plus haut)
                 else None
             ),
             "lecture": (

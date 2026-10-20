@@ -127,7 +127,15 @@ async def daily_cached(
     LLM. Chemin de secours (tout premier démarrage, job en échec, variante
     inédite comme un filtre de période inhabituel) : on calcule, on enregistre,
     et les affichages suivants de la journée relisent la base.
+
+    Périmètre pays : la narration d'un compte rattaché à un pays (ou d'un compte
+    groupe ayant choisi un pays) est une variante distincte (`…@BF`), générée au
+    premier affichage de la journée puis figée — jamais la narration groupe.
     """
+    from core.services.perimetre import entite_courante
+    entite = entite_courante()
+    if entite:
+        variant = f"{variant}@{entite}"
     hit = await load(key, variant)
     if hit is not None:
         return hit

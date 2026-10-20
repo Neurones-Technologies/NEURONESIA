@@ -96,6 +96,15 @@ def _var(deltas: dict | None, cle: str, horizon: str = "j1") -> str:
 async def _deltas(cles: list[str], arret: datetime | None = None) -> dict:
     """Variations des indicateurs demandés. Une historisation absente ou en
     panne retire les suffixes, jamais les puces."""
+    # Sous un périmètre pays (briefing d'un compte rattaché à un pays), l'historique
+    # groupe n'est pas comparable : valeurs du jour seules, recalculées sur le pays.
+    from core.services.perimetre import entite_courante
+    if entite_courante():
+        try:
+            return await indicateurs.valeurs_du_jour(cles, as_of=(arret.date() if arret else None))
+        except Exception as exc:
+            logger.warning("Faits briefing — valeurs du jour indisponibles : %s", exc)
+            return {}
     try:
         return await indicateurs.delta(cles, as_of=(arret.date() if arret else None))
     except Exception as exc:
@@ -2306,3 +2315,70 @@ async def build_commercial_facts(crm, composition: Composition | None = None) ->
         _puce_couverture(facts, puces, role)
 
     return {"facts": facts, "bullets": puces.liste(), "blocs": puces.par_bloc()}
+
+
+# ── Briefing d'une entité pour les profils hors DG ───────────────────────────
+# Un compte rattaché à un pays (ou un compte groupe ayant choisi un pays) reçoit
+# le briefing de SON pays. Le builder du rôle tourne sous le périmètre de
+# l'entité : la connexion restreint alors toute lecture de vue au pays
+# (core/services/perimetre.py), et les indicateurs servent leur valeur du jour
+# sans comparaison (cf. _deltas). Restent les sources SANS pays, dont les
+# éléments sont retirés — et nommés — plutôt que de glisser un chiffre groupe :
+#   fournisseurs : BC filtrés mais factures fournisseurs du groupe (ratio mixte) ;
+#   mouvements   : diff de photos de pipeline et achats bruts, sans pays.
+_SOURCES_SANS_PAYS: dict[str, set[str]] = {
+    "dir_commercial": {"mouvements"},
+    "dir_financier": {"fournisseurs"},
+    "dir_operations": {"fournisseurs"},
+    "commercial": {"mouvements"},
+}
+
+
+def _sources_du_role(role: str) -> dict[str, tuple[str, ...]]:
+    return {
+        "dir_commercial": _DC_SOURCES, "dir_financier": _DF_SOURCES,
+        "dir_operations": _DO_SOURCES, "commercial": _AM_SOURCES,
+    }[role]
+
+
+def elements_sans_pays(role: str) -> set[str]:
+    """Éléments du rôle qui reposent sur au moins une source sans pays."""
+    sources = _sources_du_role(role)
+    return {e for s in _SOURCES_SANS_PAYS.get(role, ()) for e in sources.get(s, ())}
+
+
+async def build_facts_entite(role: str, crm, composition: Composition | None, entite: str) -> dict:
+    """Faits du rôle pour une seule entité (CI / BF / GN)."""
+    from core.services import perimetre
+    from modules.uc_briefing.service import _FACTS_BUILDERS
+
+    c = composition or Composition()
+    exclus = elements_sans_pays(role)
+    actifs = [e.id for e in preferences.CATALOGUE.get(role, []) if c.actif(e.id)]
+    retires = [i for i in actifs if i in exclus]
+    restreinte = Composition([i for i in actifs if i not in exclus], c.consigne, c.pilote, c._seuils)
+
+    jeton = perimetre.definir(entite)
+    try:
+        built = await _FACTS_BUILDERS[role](crm, restreinte)
+    finally:
+        perimetre.reinitialiser(jeton)
+
+    built["facts"]["entite"] = entite
+    if retires:
+        libelles = {e.id: e.libelle for e in preferences.CATALOGUE.get(role, [])}
+        noms = [libelles.get(i, i).lower() for i in retires]
+        liste = ", ".join(noms[:-1]) + " et " + noms[-1] if len(noms) > 1 else noms[0]
+        texte = (
+            f"Périmètre {_NOM_ENTITE.get(entite, entite)} : ce briefing ne porte que des chiffres de "
+            f"l'entité. {liste[0].upper() + liste[1:]} "
+            f"{'ne sont pas ventilés' if len(noms) > 1 else 'n’est pas ventilé'} par entité dans les "
+            f"données et {'restent lisibles' if len(noms) > 1 else 'reste lisible'} au niveau groupe."
+        )
+        built["facts"]["elements_groupe_seulement"] = retires
+        built["bullets"] = [*built["bullets"], texte]
+        if isinstance(built.get("blocs"), dict):
+            built["blocs"].setdefault("complement", []).append(texte)
+    # Pas de cadence : elle dit un mouvement, et l'historique est celui du groupe.
+    built["cadence"] = ""
+    return built

@@ -62,6 +62,7 @@ class Invoice:
     invoice_name: Optional[str] = None
     payment_date: Optional[datetime] = None
     amount_residual: float = 0.0
+    equipe: str = ""   # équipe commerciale Odoo (team_id) — rattachement par pays
 
 
 @dataclass

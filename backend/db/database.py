@@ -20,6 +20,12 @@ engine = create_async_engine(
     connect_args={"timeout": 30, "check_same_thread": False},
 )
 
+# Périmètre pays : toute lecture d'une vue portant `entite` est restreinte au pays
+# de la requête en cours (compte rattaché à un pays) — cf. core/services/perimetre.py.
+from core.services.perimetre import installer as _installer_perimetre  # noqa: E402
+
+_installer_perimetre(engine.sync_engine)
+
 
 @event.listens_for(engine.sync_engine, "connect")
 def _enable_sqlite_pragmas(dbapi_conn, _):
@@ -119,6 +125,7 @@ _SALE_ORDER_NEW_COLUMNS = {
     "provision": "FLOAT NOT NULL DEFAULT 0.0",
     "margin_amount": "FLOAT NOT NULL DEFAULT 0.0",
     "margin_pct": "FLOAT NOT NULL DEFAULT 0.0",
+    "equipe": "VARCHAR(100) NOT NULL DEFAULT ''",   # team_id Odoo (rattachement pays)
 }
 
 
@@ -193,6 +200,7 @@ _OPPORTUNITY_NEW_COLUMNS = {
     "offer_family": "VARCHAR(30)",
     "date_closed": "DATETIME",
     "write_date": "DATETIME",
+    "equipe": "VARCHAR(100) NOT NULL DEFAULT ''",   # team_id Odoo (rattachement pays)
 }
 
 
@@ -202,6 +210,10 @@ _OPPORTUNITY_NEW_COLUMNS = {
 _NT360_NEW_COLUMNS = {
     "nt360_commandes": {"entite": "VARCHAR(10) NOT NULL DEFAULT ''"},
     "nt360_alertes": {"entite": "VARCHAR(10) NOT NULL DEFAULT ''"},
+    # Miroir Odoo sans fonction de migration dédiée : équipe commerciale (team_id).
+    "invoices": {"equipe": "VARCHAR(100) NOT NULL DEFAULT ''"},
+    # Pays du compte ("" = groupe) — périmètre imposé à ses pages.
+    "users": {"pays": "VARCHAR(10) NOT NULL DEFAULT ''"},
 }
 
 

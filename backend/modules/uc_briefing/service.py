@@ -31,6 +31,10 @@ _FACTS_BUILDERS = {
 # sélecteur de pays ; les autres rôles restent au niveau groupe.
 ENTITES = ("CI", "BF", "GN")
 ROLES_PAR_ENTITE = ("dg",)
+# Les autres rôles ont aussi un briefing par entité — celui d'un compte rattaché
+# à un pays (ou d'un compte groupe ayant choisi un pays) — mais il n'est pas
+# produit chaque nuit : il est généré au premier affichage puis conservé
+# (generate_entite), pour ne pas payer 12 rédactions LLM de plus par nuit.
 
 
 def cle_section(role: str, entite: str | None = None) -> str:
@@ -52,8 +56,10 @@ def _lock_for(role: str) -> asyncio.Lock:
 
 async def _build_section(role: str, crm, llm, composition: facts.Composition | None = None,
                          entite: str | None = None) -> dict:
-    if entite:
+    if entite and role in ROLES_PAR_ENTITE:
         built = await _FACTS_BUILDERS[role](crm, composition, entite=entite)
+    elif entite:
+        built = await facts.build_facts_entite(role, crm, composition, entite)
     else:
         built = await _FACTS_BUILDERS[role](crm, composition)
     action = built.get("action")
@@ -208,6 +214,11 @@ async def generate_role(role: str, crm, llm, triggered_by: str = "manual") -> di
             "generated_at": None, "triggered_by": None, "sections": {}, "sections_en_echec": [],
         }
         echecs = set(payload.get("sections_en_echec", []))
+        if role not in ROLES_PAR_ENTITE:
+            # Sections d'entité générées à la demande : périmées par la relance
+            # (nouveaux réglages), elles seront refaites au prochain affichage.
+            for entite in ENTITES:
+                payload.get("sections", {}).pop(cle_section(role, entite), None)
         for entite, res in zip(cibles, construites):
             cle = cle_section(role, entite)
             if isinstance(res, Exception):
@@ -237,7 +248,7 @@ async def generate_entite(role: str, entite: str, crm, llm, triggered_by: str = 
     nuit a été produit avant que les sections d'entité existent. Sans ce repli,
     le cockpit afficherait « pas encore généré » jusqu'au cron de minuit.
     """
-    if role not in ROLES_PAR_ENTITE or entite not in ENTITES:
+    if role not in ROLES or entite not in ENTITES:
         raise ValueError(f"Section d'entité inconnue : {role}@{entite}")
     async with _lock_for(cle_section(role, entite)):
         payload = store.load() or {

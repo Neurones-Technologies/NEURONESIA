@@ -148,7 +148,7 @@ async def _query_db(question: str):
                 sales = [tuple(r) for r in sales]
 
             async with db.execute(
-                "SELECT invoice_id, amount, currency, status FROM invoices "
+                "SELECT invoice_id, amount, currency, status FROM v_creances "
                 "WHERE client_id = ? ORDER BY due_date DESC LIMIT 50",
                 (cid,)
             ) as cur:
@@ -214,7 +214,7 @@ async def get_client(name: str):
                 sales = [dict(r) for r in await cur.fetchall()]
 
             async with db.execute(
-                "SELECT invoice_id, amount, currency, status FROM invoices "
+                "SELECT invoice_id, amount, currency, status FROM v_creances "
                 "WHERE client_id = ? ORDER BY due_date DESC LIMIT 20",
                 (cid,)
             ) as cur:

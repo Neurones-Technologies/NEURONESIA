@@ -20,6 +20,7 @@ from datetime import date
 
 from sqlalchemy import text
 
+from core.montants import fcfa
 from db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
@@ -68,20 +69,20 @@ async def balance_agee(as_of: date | None = None, contentieux_jours: int = 90) -
     resultat: dict = {"mesurable": True, "as_of": as_of.isoformat(), "tranches": {}}
     for nom, condition in tranches.items():
         ligne = (await _lignes(
-            f"SELECT COUNT(*), COALESCE(SUM(amount_residual), 0) FROM invoices "
+            f"SELECT COUNT(*), COALESCE(SUM(amount_residual), 0) FROM v_creances "
             f"WHERE {_OUVERTE} AND {condition}", p
         ))[0]
         resultat["tranches"][nom] = {"nb": ligne[0] or 0, "montant_xof": float(ligne[1] or 0)}
 
     total = (await _lignes(
-        f"SELECT COUNT(*), COALESCE(SUM(amount_residual), 0) FROM invoices WHERE {_OUVERTE}", p
+        f"SELECT COUNT(*), COALESCE(SUM(amount_residual), 0) FROM v_creances WHERE {_OUVERTE}", p
     ))[0]
     resultat["nb_total"] = total[0] or 0
     resultat["montant_total_xof"] = float(total[1] or 0)
 
     # Sous-ensemble transversal, réglé par rôle.
     cont = (await _lignes(
-        f"SELECT COUNT(*), COALESCE(SUM(amount_residual), 0) FROM invoices "
+        f"SELECT COUNT(*), COALESCE(SUM(amount_residual), 0) FROM v_creances "
         f"WHERE {_OUVERTE} AND {age} > :c", p
     ))[0]
     resultat["contentieux"] = {
@@ -93,7 +94,7 @@ async def balance_agee(as_of: date | None = None, contentieux_jours: int = 90) -
     }
 
     intra = (await _lignes(
-        "SELECT COUNT(*), COALESCE(SUM(i.amount_residual), 0) FROM invoices i "
+        "SELECT COUNT(*), COALESCE(SUM(i.amount_residual), 0) FROM v_creances i "
         "LEFT JOIN clients c ON c.client_id = i.client_id "
         "WHERE i.status != 'cancelled' AND i.amount_residual > 0 AND i.due_date IS NOT NULL "
         "AND c.name LIKE '%NEURONES%'", p
@@ -119,7 +120,7 @@ async def relances_du_jour(as_of: date | None = None, retard_min_jours: int = 30
     lignes = await _lignes("""
         SELECT COALESCE(c.name, '—'), COUNT(*), COALESCE(SUM(i.amount_residual), 0),
                MAX(CAST(julianday(date(:a)) - julianday(date(i.due_date)) AS INTEGER))
-        FROM invoices i LEFT JOIN clients c ON c.client_id = i.client_id
+        FROM v_creances i LEFT JOIN clients c ON c.client_id = i.client_id
         WHERE i.status != 'cancelled' AND i.amount_residual > 0 AND i.due_date IS NOT NULL
           AND julianday(date(:a)) - julianday(date(i.due_date)) > :r
         GROUP BY i.client_id
@@ -157,7 +158,7 @@ async def dso_glissant(as_of: date | None = None, fenetre_mois: int = 12) -> dic
             SELECT COUNT(*),
                    COALESCE(SUM((julianday(date(payment_date)) - julianday(date(invoice_date))) * amount), 0),
                    COALESCE(SUM(amount), 0)
-            FROM invoices
+            FROM v_creances
             WHERE status != 'cancelled' AND payment_date IS NOT NULL AND invoice_date IS NOT NULL
               AND date(payment_date) > date(:a, :debut) AND date(payment_date) <= date(:a, :fin)
         """, {"a": as_of.isoformat(), "debut": debut, "fin": fin}))[0]
@@ -201,7 +202,7 @@ async def derive_budgetaire(limite: int = 5, seuil_consommation_pct: float = 90)
                ca_definitif, depense_definitive,
                perc_marge_previsionnelle, perc_marge_definitive,
                depense_definitive / depense_provisoire * 100.0
-        FROM dossiers
+        FROM v_dossiers
         WHERE depense_provisoire > 0 AND depense_definitive > 0
           AND depense_definitive / depense_provisoire * 100.0 >= :s
         ORDER BY depense_definitive DESC
@@ -246,7 +247,7 @@ async def sous_traitance_par_dossier(limite: int = 5) -> dict:
                CASE WHEN d.ca_definitif > 0 THEN d.ca_definitif ELSE d.ca_provisoire END,
                CASE WHEN d.ca_definitif > 0 THEN 'définitif' ELSE 'provisoire' END,
                d.perc_marge_provisoire
-        FROM v_purchase_orders p JOIN dossiers d ON d.dossier_ref = p.dossier_id
+        FROM v_purchase_orders p JOIN v_dossiers d ON d.dossier_ref = p.dossier_id
         WHERE p.state = 'purchase' AND p.dossier_id IS NOT NULL AND p.dossier_id != ''
         GROUP BY p.dossier_id
         ORDER BY SUM(p.amount) DESC
@@ -284,6 +285,10 @@ async def sous_traitance_par_dossier(limite: int = 5) -> dict:
     }
 
 
+# Au-delà, « mois de visibilité » ne mesure plus un délai (cf. visibilite_carnet).
+VISIBILITE_MAX_MOIS = 120
+
+
 async def visibilite_carnet(as_of: date | None = None, fenetre_mois: int = 3) -> dict:
     """Combien de mois de facturation le carnet couvre — la question du DG.
 
@@ -293,18 +298,26 @@ async def visibilite_carnet(as_of: date | None = None, fenetre_mois: int = 3) ->
     """
     as_of = as_of or date.today()
     ligne = (await _lignes("""
-        SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM invoices
+        SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM v_creances
         WHERE status != 'cancelled' AND invoice_date IS NOT NULL
           AND date(invoice_date) > date(:a, :recul) AND date(invoice_date) <= date(:a)
     """, {"a": as_of.isoformat(), "recul": f"-{fenetre_mois} months"}))[0]
     facture, nb = float(ligne[0] or 0), ligne[1] or 0
     backlog = float((await _lignes(
-        "SELECT COALESCE(SUM(backlog), 0) FROM dossiers", {}))[0][0] or 0)
+        "SELECT COALESCE(SUM(backlog), 0) FROM v_dossiers", {}))[0][0] or 0)
 
     moyenne = facture / fenetre_mois if facture else 0
     if not moyenne:
         return {"mesurable": False, "backlog_xof": backlog,
                 "raison": f"aucune facture émise sur les {fenetre_mois} derniers mois"}
+    # Au-delà de dix ans de carnet, le chiffre ne dit plus un délai mais l'absence
+    # de facturation dans les données (cas du Burkina : 11,9 Md de carnet pour
+    # 0,3 M facturés par mois, soit « 38 960 mois »). On le dit plutôt que de
+    # l'afficher.
+    if backlog / moyenne > VISIBILITE_MAX_MOIS:
+        return {"mesurable": False, "backlog_xof": backlog,
+                "raison": (f"facturation trop faible dans les données ({fcfa(moyenne)} FCFA par mois) "
+                           "pour convertir le carnet en délai")}
     return {
         "mesurable": True,
         "backlog_xof": backlog,
@@ -326,10 +339,10 @@ async def book_to_bill(as_of: date | None = None, fenetre_mois: int = 12, entite
     """
     as_of = as_of or date.today()
     p = {"a": as_of.isoformat(), "recul": f"-{fenetre_mois} months", "e": entite}
-    # Par entité : commandes par `entite`, factures par leur `filiale` nt360 —
-    # la ventilation que nt360 applique lui-même dans ses synthèses par entité.
+    # Par entité : commandes et factures par leur `entite` (factures : filiale
+    # nt360, à défaut le pays de la commande de même FP — cf. v_factures).
     filtre_cmd = "AND entite = :e" if entite else ""
-    filtre_fac = "AND filiale = :e" if entite else ""
+    filtre_fac = "AND entite = :e" if entite else ""
     cmd_nt360, fac_nt360 = (await _lignes("""
         SELECT EXISTS (SELECT 1 FROM nt360_commandes), EXISTS (SELECT 1 FROM nt360_factures)
     """, {}))[0]
@@ -381,6 +394,11 @@ async def objectifs_annuels(annee: int | None = None, as_of: date | None = None,
     """
     as_of = as_of or date.today()
     annee = annee or as_of.year
+    if entite is None:
+        # Briefing sous périmètre pays : les cibles de l'entité, pas celles du groupe
+        # (commercial_objectives n'est pas une vue, la connexion ne la filtre pas).
+        from core.services.perimetre import entite_courante
+        entite = entite_courante()
     filtre_cmd = "AND scope_ref = :e" if entite else ""
     filtre_fac = "AND filiale = :e" if entite else ""
     cmd = (await _lignes(f"""

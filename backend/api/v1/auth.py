@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.auth.jwt_adapter import create_access_token, hash_password, verify_password
 from api.v1.dependencies import get_current_user, invalidate_user_cache
+from core.services import perimetre
 from config.rate_limit import limiter
 from config.permissions import (
     DEFAULT_MODULE_ACCESS,
@@ -51,6 +52,8 @@ class CreateUserRequest(BaseModel):
     password: str
     full_name: str = ""
     role: str = "user"
+    # CI / BF / GN, ou "" / "groupe" = tous pays. Toujours groupe pour DG et admin.
+    pays: str = ""
 
 
 class UpdateUserRequest(BaseModel):
@@ -60,6 +63,7 @@ class UpdateUserRequest(BaseModel):
     role: str | None = None
     is_active: bool | None = None
     password: str | None = None
+    pays: str | None = None
 
 
 _VALID_ROLES = {r.value for r in UserRole}
@@ -81,12 +85,37 @@ def _validate_role(role: str) -> str:
     return role
 
 
+# Rôles dont le périmètre est TOUJOURS le groupe : le DG pilote les trois
+# entités (son cockpit garde son propre sélecteur), l'admin administre tout.
+_ROLES_GROUPE = {"dg", "admin"}
+
+
+def _valider_pays(pays: str | None, role: str) -> str:
+    """Normalise le pays d'un compte : "" (groupe) ou CI / BF / GN."""
+    from core.services.entites import ENTITES
+    valeur = (pays or "").strip().upper()
+    if valeur in ("", "GROUPE"):
+        return ""
+    if valeur not in ENTITES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Pays inconnu : {pays} (valides : groupe, {', '.join(ENTITES)})",
+        )
+    if role in _ROLES_GROUPE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Un compte {role.upper()} est toujours rattaché au groupe : pas de pays.",
+        )
+    return valeur
+
+
 def _user_payload(user: UserModel, views: list[str] | None) -> dict:
     return {
         "id": user.id,
         "email": user.email,
         "full_name": user.full_name,
         "role": user.role,
+        "pays": user.pays or "",
         # None = accès total (admin) — le front filtre sa sidebar avec cette liste
         "allowed_views": views,
     }
@@ -134,6 +163,11 @@ async def me(
         "email": current_user.email,
         "full_name": current_user.full_name,
         "role": role,
+        "pays": current_user.pays or "",
+        # Périmètre effectivement appliqué à CETTE requête : le pays du compte
+        # (imposé), ou celui choisi par un compte groupe, ou None = groupe.
+        "perimetre": perimetre.entite_courante(),
+        "pays_verrouille": bool(current_user.pays) and role not in _ROLES_GROUPE,
         "allowed_views": await allowed_views(session, role),
         "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
     }
@@ -151,6 +185,7 @@ def _admin_user_payload(u: UserModel) -> dict:
         "email": u.email,
         "full_name": u.full_name,
         "role": u.role,
+        "pays": u.pays or "",
         "is_active": u.is_active,
         "last_login": u.last_login.isoformat() if u.last_login else None,
         "created_at": u.created_at.isoformat() if u.created_at else None,
@@ -231,6 +266,7 @@ async def create_user(
             detail="Mot de passe trop court (6 caractères minimum)",
         )
     role = _validate_role(body.role)
+    pays = _valider_pays(body.pays, role)
 
     existing = await session.execute(select(UserModel).where(UserModel.email == email))
     if existing.scalar_one_or_none():
@@ -241,6 +277,7 @@ async def create_user(
         full_name=body.full_name.strip(),
         hashed_password=hash_password(body.password),
         role=role,
+        pays=pays,
     )
     session.add(new_user)
     # `flush` avant l'audit : la ligne du journal porte l'id du compte créé, que
@@ -252,7 +289,8 @@ async def create_user(
         AUDIT_USER_CREATE,
         target_email=new_user.email,
         target_id=new_user.id,
-        details={"role": new_user.role, "full_name": new_user.full_name},
+        details={"role": new_user.role, "full_name": new_user.full_name,
+                 **({"pays": new_user.pays} if new_user.pays else {})},
     )
     await session.commit()
     await session.refresh(new_user)
@@ -267,6 +305,8 @@ async def list_users(
     actif: bool | None = Query(None, description="true = comptes actifs, false = désactivés"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    # En dernier : les appelants directs (tests) passent les filtres par position.
+    pays: str | None = Query(None, description="Filtre sur le pays du compte : CI, BF, GN ou groupe"),
 ):
     """Liste les utilisateurs (admin uniquement), filtrable.
 
@@ -293,6 +333,10 @@ async def list_users(
         )
     if role:
         stmt = stmt.where(UserModel.role == _validate_role(role))
+    # `isinstance` : appelée hors FastAPI (tests), la valeur par défaut est l'objet Query.
+    if isinstance(pays, str) and pays.strip():
+        valeur = "" if pays.strip().lower() == "groupe" else pays.strip().upper()
+        stmt = stmt.where(UserModel.pays == valeur)
     if actif is not None:
         stmt = stmt.where(UserModel.is_active.is_(actif))
 
@@ -592,6 +636,17 @@ async def update_user(
         if role != user.role:
             changes["role"] = {"avant": user.role, "apres": role}
             user.role = role
+
+    # Pays : demandé explicitement, ou remis à « groupe » quand le compte devient
+    # DG / admin (un pays y serait refusé, autant ne pas le laisser traîner).
+    nouveau_pays = user.pays or ""
+    if body.pays is not None:
+        nouveau_pays = _valider_pays(body.pays, user.role)
+    elif user.role in _ROLES_GROUPE:
+        nouveau_pays = ""
+    if nouveau_pays != (user.pays or ""):
+        changes["pays"] = {"avant": user.pays or "groupe", "apres": nouveau_pays or "groupe"}
+        user.pays = nouveau_pays
 
     if body.is_active is not None:
         if body.is_active != user.is_active:

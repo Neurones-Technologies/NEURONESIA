@@ -870,6 +870,76 @@
       "analysis": "",
       "generated_at": "2026-10-19T13:22:02.579546+00:00",
       "triggered_by": "a_la_demande"
+    },
+    "dir_commercial@CI": {
+      "facts": {
+        "pipeline_total_xof": 19803265978,
+        "pipeline_pondere_xof": 10116033359,
+        "nb_opportunites_ouvertes": 224,
+        "pipeline_actif_xof": 66964087.0,
+        "pipeline_actif_pondere_xof": 34605018.8,
+        "taux_victoire_nb_pct": 98.1,
+        "taux_victoire_valeur_pct": 90.4,
+        "echeances_fenetre_jours": 60,
+        "echeances_nb": 0,
+        "hygiene_seuil_jours": 15,
+        "hygiene_a_relancer_nb": 0,
+        "hygiene_a_relancer_xof": 0,
+        "hygiene_a_assainir_nb": 221,
+        "hygiene_a_assainir_xof": 19736301891.0,
+        "hygiene_sans_echeance_nb": 0,
+        "ca_commande_periode_mois_xof": 303091929.0,
+        "ca_commande_periode_ytd_xof": 5475396932.0,
+        "ca_commande_periode_nb": 246,
+        "carnet_backlog_xof": 1810895166.742946,
+        "carnet_reste_a_encaisser_xof": 10910735795.0,
+        "dependance_top3_pct": 50.0,
+        "dependance_top5_pct": 57.8,
+        "dependance_seuil_pct": 50,
+        "dependance_top1_client": "ENERGIES",
+        "dependance_top1_pct": 38.3,
+        "questions_couvertes": 8,
+        "questions_sans_reponse": [
+          {
+            "question": "Quels devis vont expirer ?",
+            "cause": "aucun devis n'est synchronisé, toutes les commandes du miroir sont déjà confirmées"
+          },
+          {
+            "question": "Est-ce que je vends au bon prix (TJM) ?",
+            "cause": "sans objet — l'activité se fait en intégration, pas en régie"
+          },
+          {
+            "question": "Mon pipe couvre-t-il mon objectif ?",
+            "cause": "l'objectif d'équipe est importé de nt360, mais la couverture du reste à faire par le pipe n'est pas encore calculée"
+          }
+        ],
+        "entite": "CI",
+        "elements_groupe_seulement": [
+          "mouvements_recents"
+        ]
+      },
+      "bullets": [
+        "CA commandé : 303 M FCFA depuis le 1er du mois, 5,48 Md FCFA depuis le 1er janvier, sur 246 commandes.",
+        "Carnet de commandes : 1,81 Md FCFA vendus et pas encore facturés, dont 10,9 Md FCFA restent à encaisser sur les dossiers ouverts.",
+        "Pipeline ouvert : 19,8 Md FCFA brut, 10,1 Md FCFA pondéré (224 opportunités) — dont 67,0 M FCFA seulement sur des affaires dont l'échéance n'est pas encore passée.",
+        "Taux de victoire : 98.1% en nombre, 90.4% en valeur.",
+        "Aucune affaire encore dans les temps ne dort depuis plus de 15 j. En regard, 221 opportunité(s) restées ouvertes pour 19,7 Md FCFA ont une échéance déjà dépassée : tant qu'elles ne sont pas clôturées, tout montant de pipeline publié les inclut.",
+        "Aucune opportunité ouverte n'arrive à échéance dans les 60 prochains jours.",
+        "Dépendance clients : le top 3 pèse 50% des 5,48 Md FCFA commandés, le top 5 58% face au seuil de vigilance de 50% — ENERGIES premier à 38%.",
+        "3 question(s) du briefing restent sans réponse aujourd'hui : « Quels devis vont expirer ? » — aucun devis n'est synchronisé, toutes les commandes du miroir sont déjà confirmées ; « Est-ce que je vends au bon prix (TJM) ? » — sans objet — l'activité se fait en intégration, pas en régie ; « Mon pipe couvre-t-il mon objectif ? » — l'objectif d'équipe est importé de nt360, mais la couverture du reste à faire par le pipe n'est pas encore calculée.",
+        "Périmètre Côte d'Ivoire : ce briefing ne porte que des chiffres de l'entité. Ce qui a bougé n’est pas ventilé par entité dans les données et reste lisible au niveau groupe."
+      ],
+      "action": null,
+      "resume": [
+        "CA commandé : 303 M FCFA depuis le 1er du mois, 5,48 Md FCFA depuis le 1er janvier, sur 246 commandes.",
+        "Carnet de commandes : 1,81 Md FCFA vendus et pas encore facturés, dont 10,9 Md FCFA restent à encaisser sur les dossiers ouverts.",
+        "Pipeline ouvert : 19,8 Md FCFA brut, 10,1 Md FCFA pondéré (224 opportunités) — dont 67,0 M FCFA seulement sur des affaires dont l'échéance n'est pas encore passée.",
+        "Taux de victoire : 98.1% en nombre, 90.4% en valeur.",
+        "Aucune affaire encore dans les temps ne dort depuis plus de 15 j. En regard, 221 opportunité(s) restées ouvertes pour 19,7 Md FCFA ont une échéance déjà dépassée : tant qu'elles ne sont pas clôturées, tout montant de pipeline publié les inclut."
+      ],
+      "analysis": "",
+      "generated_at": "2026-10-19T17:37:16.651204+00:00",
+      "triggered_by": "a_la_demande"
     }
   },
   "sections_en_echec": []

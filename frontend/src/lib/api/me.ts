@@ -9,6 +9,13 @@ export interface Me {
   role: string;
   /** `null` = aucune restriction de périmètre (administrateur). */
   allowed_views: string[] | null;
+  /** Pays du compte (CI / BF / GN), "" = groupe. */
+  pays: string;
+  /** Pays effectivement appliqué à la requête (imposé, ou choisi par un compte
+   * groupe) ; `null` = groupe. */
+  perimetre: string | null;
+  /** `true` = pays imposé par l'administrateur, le sélecteur est verrouillé. */
+  pays_verrouille: boolean;
   last_login: string | null;
 }
 

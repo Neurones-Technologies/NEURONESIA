@@ -18,6 +18,15 @@ export async function getSessionToken(): Promise<string | null> {
   return store.get("session")?.value ?? null;
 }
 
+/** Pays choisi par un compte GROUPE dans le sélecteur de périmètre (cookie `pays`,
+ * cf. lib/actions/pays.ts). Transmis à chaque appel par l'en-tête `X-Pays` : le
+ * backend l'applique aux comptes groupe et l'IGNORE pour un compte rattaché à un
+ * pays, le DG et l'admin — le périmètre imposé ne dépend jamais du navigateur. */
+export async function getPaysChoisi(): Promise<string | null> {
+  const store = await cookies();
+  return store.get("pays")?.value ?? null;
+}
+
 interface ApiFetchInit extends RequestInit {
   /** Ignore un 403 (accès refusé par le rôle) et renvoie `null` au lieu de lever. */
   allowForbidden?: boolean;
@@ -25,6 +34,7 @@ interface ApiFetchInit extends RequestInit {
 
 export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promise<T> {
   const token = await getSessionToken();
+  const pays = await getPaysChoisi();
   const { allowForbidden, ...rest } = init;
 
   let res: Response;
@@ -33,6 +43,7 @@ export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promis
       ...rest,
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(pays ? { "X-Pays": pays } : {}),
         ...(rest.body ? { "Content-Type": "application/json" } : {}),
         ...rest.headers,
       },

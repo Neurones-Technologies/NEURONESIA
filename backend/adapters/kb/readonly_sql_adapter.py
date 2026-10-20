@@ -41,6 +41,11 @@ class ReadOnlySqlAdapter:
             cur.execute("PRAGMA busy_timeout=30000")
             cur.close()
 
+        # Même périmètre pays que la base principale : la requête de l'assistant
+        # ne doit pas voir plus que les écrans du compte (core/services/perimetre.py).
+        from core.services.perimetre import installer
+        installer(self._engine.sync_engine)
+
     async def query(self, sql: str, allowed_tables: set[str]) -> dict:
         """
         Valide puis exécute un SELECT borné à `allowed_tables`. Renvoie

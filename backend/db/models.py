@@ -63,6 +63,7 @@ class InvoiceModel(Base):
     invoice_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     payment_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     amount_residual: Mapped[float] = mapped_column(Float, default=0.0)  # montant restant à payer
+    equipe: Mapped[str] = mapped_column(String(100), default="")   # team_id Odoo
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -101,6 +102,9 @@ class SaleOrderModel(Base):
     date_order: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     state: Mapped[str] = mapped_column(String(50), default="sale")  # draft/sale/done/cancel
     salesperson_name: Mapped[str] = mapped_column(String(255), default="")
+    # Équipe commerciale Odoo (team_id). Sales CIV / BF / GN désignent un pays,
+    # les équipes fonctionnelles (BU, Sales AM…) non — cf. core/services/entites.py.
+    equipe: Mapped[str] = mapped_column(String(100), default="")
     dossier_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     order_lines: Mapped[list] = mapped_column(JSON, default=list)
     invoice_ids: Mapped[list] = mapped_column(JSON, default=list)  # IDs Odoo des account.move liées (sale.order.invoice_ids)
@@ -282,6 +286,9 @@ class UserModel(Base):
     full_name: Mapped[str] = mapped_column(String(255), default="")
     hashed_password: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(50), default="user")   # "admin" | "user" | "viewer"
+    # Pays du compte (CI / BF / GN) : périmètre IMPOSÉ à toutes ses pages.
+    # "" = groupe (tous pays, sélecteur libre). Toujours "" pour le DG et l'admin.
+    pays: Mapped[str] = mapped_column(String(10), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -457,6 +464,7 @@ class OpportunityModel(Base):
     expected_revenue: Mapped[float] = mapped_column(Float, default=0.0)
     probability: Mapped[float] = mapped_column(Float, default=0.0)   # 0–100
     salesperson_name: Mapped[str] = mapped_column(String(255), default="")
+    equipe: Mapped[str] = mapped_column(String(100), default="")   # team_id Odoo
     deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Datation du CYCLE de vente (crm.lead.date_closed / write_date) : `date_closed`

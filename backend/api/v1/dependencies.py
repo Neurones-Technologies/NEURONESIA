@@ -2,13 +2,15 @@ import logging
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.auth.jwt_adapter import decode_token
 from core.domain.user import User, UserRole
+from core.services import perimetre
+from core.services.entites import ENTITES
 from db.database import get_session
 from db.models import UserModel
 
@@ -50,9 +52,37 @@ def invalidate_user_cache(user_id: int | None = None) -> None:
         _user_cache.pop(user_id, None)
 
 
+# Rôles toujours au niveau groupe : le DG pilote les trois entités (son cockpit
+# garde son propre sélecteur, cf. briefing ?pays=), l'admin administre tout.
+_ROLES_GROUPE = {"dg", "admin"}
+
+
+def poser_perimetre(user: User, pays_demande: str | None = None) -> str | None:
+    """Fixe l'entité imposée à la requête en cours (core/services/perimetre.py).
+
+    - DG / admin : groupe, toujours ;
+    - compte rattaché à un pays : CE pays, quoi que demande l'appelant — un
+      en-tête ou une URL modifiée ne lui ouvre pas les autres pays ;
+    - compte groupe : le pays choisi dans le sélecteur (en-tête X-Pays), sinon
+      le groupe.
+    Rend l'entité posée (None = groupe).
+    """
+    role = user.role.value if hasattr(user.role, "value") else str(user.role)
+    if role in _ROLES_GROUPE:
+        entite = None
+    elif user.pays:
+        entite = user.pays if user.pays in ENTITES else None
+    else:
+        demande = (pays_demande or "").strip().upper()
+        entite = demande if demande in ENTITES else None
+    perimetre.definir(entite)
+    return entite
+
+
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     session: AsyncSession = Depends(get_session),
+    x_pays: Annotated[str | None, Header(alias="X-Pays")] = None,
 ) -> User:
     if not credentials:
         raise HTTPException(
@@ -70,6 +100,7 @@ async def get_current_user(
 
     cached = _get_cached_user(user_id)
     if cached is not None:
+        poser_perimetre(cached, x_pays)
         return cached
 
     result = await session.execute(select(UserModel).where(UserModel.id == user_id))
@@ -93,8 +124,10 @@ async def get_current_user(
         is_active=user_row.is_active,
         created_at=user_row.created_at,
         last_login=user_row.last_login,
+        pays=user_row.pays or "",
     )
     _cache_user(user_id, user)
+    poser_perimetre(user, x_pays)
     return user
 
 

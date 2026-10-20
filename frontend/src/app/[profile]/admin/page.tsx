@@ -33,6 +33,7 @@ export default async function AdminPage({
   searchParams: Promise<{
     q?: string;
     role?: string;
+    pays?: string;
     actif?: string;
     compte?: string;
     nouveau?: string;
@@ -57,6 +58,7 @@ export default async function AdminPage({
         filters={{
           q: query.q?.trim() || undefined,
           role: query.role || undefined,
+          pays: query.pays || undefined,
           actif: query.actif === "oui" ? true : query.actif === "non" ? false : undefined,
         }}
         selected={selected}

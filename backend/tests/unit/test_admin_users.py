@@ -661,3 +661,73 @@ async def test_la_fiche_ne_montre_que_le_journal_du_compte_affiche(session):
 
     fiche = await auth_api.get_user_detail(a.id, admin, session)
     assert [ligne["target_email"] for ligne in fiche["journal"]] == ["a@nt.ci"]
+
+
+# ── Pays du compte ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_creation_avec_pays_normalise_et_journalise(session):
+    admin = _acteur(await _seed(session, "admin@nt.ci", role="admin"))
+    cree = await auth_api.create_user(
+        auth_api.CreateUserRequest(email="bf@nt.ci", password="secret1", role="commercial", pays=" bf "),
+        admin, session,
+    )
+    assert cree["pays"] == "BF"
+    assert (await _journal(session))[-1].details["pays"] == "BF"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("role", "pays"), [("dg", "CI"), ("admin", "BF"), ("commercial", "FR")])
+async def test_pays_refuse_pour_dg_admin_ou_inconnu(session, role, pays):
+    admin = _acteur(await _seed(session, "admin@nt.ci", role="admin"))
+    with pytest.raises(HTTPException) as exc:
+        await auth_api.create_user(
+            auth_api.CreateUserRequest(email="x@nt.ci", password="secret1", role=role, pays=pays),
+            admin, session,
+        )
+    assert exc.value.status_code == 400
+    assert (await session.execute(select(UserModel).where(UserModel.email == "x@nt.ci"))).scalar() is None
+
+
+@pytest.mark.asyncio
+async def test_groupe_est_le_defaut_et_s_ecrit_vide(session):
+    admin = _acteur(await _seed(session, "admin@nt.ci", role="admin"))
+    for i, pays in enumerate(("", "groupe", "GROUPE")):
+        cree = await auth_api.create_user(
+            auth_api.CreateUserRequest(email=f"g{i}@nt.ci", password="secret1", role="dir_financier", pays=pays),
+            admin, session,
+        )
+        assert cree["pays"] == ""
+
+
+@pytest.mark.asyncio
+async def test_modification_du_pays_journalisee_et_cache_purge(session):
+    admin = _acteur(await _seed(session, "admin@nt.ci", role="admin"))
+    cible = await _seed(session, "c@nt.ci", role="commercial")
+    deps._cache_user(cible.id, _acteur(cible))
+    modifie = await auth_api.update_user(cible.id, auth_api.UpdateUserRequest(pays="GN"), admin, session)
+    assert modifie["pays"] == "GN" and deps._get_cached_user(cible.id) is None
+    assert (await _journal(session))[-1].details == {"pays": {"avant": "groupe", "apres": "GN"}}
+
+
+@pytest.mark.asyncio
+async def test_passer_dg_remet_le_compte_au_groupe(session):
+    admin = _acteur(await _seed(session, "admin@nt.ci", role="admin"))
+    cible = await _seed(session, "c@nt.ci", role="commercial")
+    await auth_api.update_user(cible.id, auth_api.UpdateUserRequest(pays="BF"), admin, session)
+    modifie = await auth_api.update_user(cible.id, auth_api.UpdateUserRequest(role="dg"), admin, session)
+    assert (modifie["role"], modifie["pays"]) == ("dg", "")
+    assert (await _journal(session))[-1].details["pays"] == {"avant": "BF", "apres": "groupe"}
+
+
+@pytest.mark.asyncio
+async def test_liste_filtre_par_pays(session):
+    admin = _acteur(await _seed(session, "admin@nt.ci", role="admin"))
+    bf = await _seed(session, "bf@nt.ci", role="commercial", jours=1)
+    bf.pays = "BF"
+    await session.commit()
+    await _seed(session, "groupe@nt.ci", role="dir_financier", jours=2)
+    assert [u["email"] for u in (await auth_api.list_users(None, None, None, admin, session, pays="BF"))["users"]] == ["bf@nt.ci"]
+    assert [u["email"] for u in (await auth_api.list_users(None, None, None, admin, session, pays="groupe"))["users"]] == [
+        "admin@nt.ci", "groupe@nt.ci"]

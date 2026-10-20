@@ -145,7 +145,8 @@ async def _sync_invoices_by_ids(odoo: OdooAdapter, ids: list[int]):
         "account.move", "search_read",
         [[["id", "in", ids], ["move_type", "=", "out_invoice"]]],
         {"fields": ["id", "name", "partner_id", "amount_total", "amount_residual",
-                    "currency_id", "invoice_date", "invoice_date_due", "payment_state"]},
+                    "currency_id", "invoice_date", "invoice_date_due", "payment_state",
+                    "team_id"]},
     )
     from adapters.crm.odoo_adapter import OdooAdapter as _OA
     async with AsyncSessionLocal() as session:
@@ -158,6 +159,7 @@ async def _sync_invoices_by_ids(odoo: OdooAdapter, ids: list[int]):
             existing = await session.get(InvoiceModel, inv.invoice_id)
             if existing:
                 existing.status = inv.status.value
+                existing.equipe = inv.equipe
                 existing.amount = amount_xof
                 existing.amount_residual = residual_xof
                 existing.synced_at = datetime.utcnow()
@@ -171,7 +173,7 @@ async def _sync_invoices_by_ids(odoo: OdooAdapter, ids: list[int]):
                     amount=amount_xof, amount_residual=residual_xof,
                     currency=inv.currency, due_date=inv.due_date,
                     status=inv.status.value, invoice_date=inv.invoice_date,
-                    invoice_name=inv.invoice_name,
+                    invoice_name=inv.invoice_name, equipe=inv.equipe,
                 ))
         await session.commit()
     logger.info("Webhook : %d factures mises à jour (montants en XOF)", len(records))
@@ -309,7 +311,7 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
             "sale.order", "search_read",
             [[["id", "in", ids]]],
             {"fields": ["id", "name", "partner_id", "amount_total",
-                        "currency_id", "date_order", "state", "user_id", "dossier_id",
+                        "currency_id", "date_order", "state", "user_id", "team_id", "dossier_id",
                         "invoice_ids"] + extra},
         )
     except RuntimeError as e:
@@ -318,7 +320,7 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
                 "sale.order", "search_read",
                 [[["id", "in", ids]]],
                 {"fields": ["id", "name", "partner_id", "amount_total",
-                            "currency_id", "date_order", "state", "user_id",
+                            "currency_id", "date_order", "state", "user_id", "team_id",
                             "invoice_ids"] + extra},
             )
         else:
@@ -335,6 +337,7 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
                 continue
             date_order = _parse_date(so.get("date_order"))
             salesperson = _get_odoo_name(so.get("user_id"))
+            equipe = _get_odoo_name(so.get("team_id"))
             dossier = _get_odoo_name(so.get("dossier_id")) or None
             lines = lines_by_order.get(so["id"], [])
             invoice_ids = so.get("invoice_ids") or []
@@ -349,6 +352,7 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
                 existing.amount_untaxed = untaxed_xof
                 existing.name = so["name"]
                 existing.salesperson_name = salesperson
+                existing.equipe = equipe
                 existing.dossier_id = dossier
                 existing.order_lines = lines
                 existing.invoice_ids = invoice_ids
@@ -367,6 +371,7 @@ async def _sync_sale_orders_by_ids(odoo: OdooAdapter, ids: list[int]):
                     date_order=date_order,
                     state=so.get("state", "sale"),
                     salesperson_name=salesperson,
+                    equipe=equipe,
                     dossier_id=dossier,
                     order_lines=lines,
                     invoice_ids=invoice_ids,
@@ -663,6 +668,7 @@ async def run_odoo_sync(force_full: bool = False):
                 existing = await session.get(InvoiceModel, inv.invoice_id)
                 if existing:
                     existing.status = inv.status.value
+                    existing.equipe = inv.equipe
                     existing.amount = amount_xof
                     existing.amount_residual = residual_xof
                     existing.synced_at = sync_start
@@ -675,7 +681,7 @@ async def run_odoo_sync(force_full: bool = False):
                         invoice_id=inv.invoice_id, odoo_id=inv.odoo_id, client_id=inv.client_id,
                         amount=amount_xof, currency=inv.currency, due_date=inv.due_date,
                         status=inv.status.value, invoice_date=inv.invoice_date,
-                        invoice_name=inv.invoice_name,
+                        invoice_name=inv.invoice_name, equipe=inv.equipe,
                         amount_residual=residual_xof,
                     ))
                     new_inv += 1
@@ -723,6 +729,7 @@ async def run_odoo_sync(force_full: bool = False):
                 order_id = f"so_{so['id']}"
                 date_order = _parse_date(so.get("date_order"))
                 salesperson = _get_odoo_name(so.get("user_id"))
+                equipe = _get_odoo_name(so.get("team_id"))
                 dossier = _get_odoo_name(so.get("dossier_id")) or None
                 lines = lines_by_order.get(so["id"], [])
                 invoice_ids = so.get("invoice_ids") or []
@@ -751,6 +758,7 @@ async def run_odoo_sync(force_full: bool = False):
                     existing.name = so["name"]
                     existing.date_order = date_order
                     existing.salesperson_name = salesperson
+                    existing.equipe = equipe
                     existing.dossier_id = dossier
                     existing.order_lines = lines
                     existing.invoice_ids = invoice_ids
@@ -769,6 +777,7 @@ async def run_odoo_sync(force_full: bool = False):
                         date_order=date_order,
                         state=so.get("state", "sale"),
                         salesperson_name=salesperson,
+                        equipe=equipe,
                         dossier_id=dossier,
                         order_lines=lines,
                         invoice_ids=invoice_ids,
@@ -932,7 +941,7 @@ async def run_odoo_sync(force_full: bool = False):
         try:
             _opp_domain = [["type", "=", "opportunity"]]
             _opp_fields = ["id", "name", "partner_id", "expected_revenue", "probability",
-                           "stage_id", "date_deadline", "user_id", "create_date", "order_ids",
+                           "stage_id", "date_deadline", "user_id", "team_id", "create_date", "order_ids",
                            # Datation du cycle : `date_closed` est vide tant que
                            # l'opportunité n'est pas close, `write_date` date la
                            # dernière activité (proxy d'affaire dormante).
@@ -955,6 +964,7 @@ async def run_odoo_sync(force_full: bool = False):
                         continue
                     stage = _get_odoo_name(opp.get("stage_id"))
                     salesperson = _get_odoo_name(opp.get("user_id"))
+                    equipe = _get_odoo_name(opp.get("team_id"))
                     deadline = _parse_date(opp.get("date_deadline"))
                     created_at = _parse_date(opp.get("create_date"))
                     date_closed = _parse_date(opp.get("date_closed"))
@@ -975,6 +985,7 @@ async def run_odoo_sync(force_full: bool = False):
                         existing.expected_revenue = float(opp.get("expected_revenue", 0))
                         existing.probability = float(opp.get("probability", 0))
                         existing.salesperson_name = salesperson
+                        existing.equipe = equipe
                         existing.deadline = deadline
                         existing.date_closed = date_closed
                         existing.write_date = write_date
@@ -992,6 +1003,7 @@ async def run_odoo_sync(force_full: bool = False):
                             expected_revenue=float(opp.get("expected_revenue", 0)),
                             probability=float(opp.get("probability", 0)),
                             salesperson_name=salesperson,
+                            equipe=equipe,
                             deadline=deadline,
                             created_at=created_at,
                             date_closed=date_closed,

@@ -23,6 +23,7 @@ from sqlalchemy.pool import StaticPool
 import adapters.crm.local_crm_adapter as local_crm_adapter
 from adapters.crm.local_crm_adapter import LocalCRMAdapter
 from db.database import Base
+from db.views import create_views
 from db.models import ClientModel, DossierModel
 
 
@@ -38,6 +39,7 @@ def db_session_factory(monkeypatch):
     async def _setup():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(create_views)
 
     asyncio.run(_setup())
     monkeypatch.setattr(local_crm_adapter, "AsyncSessionLocal", session_factory)

@@ -50,11 +50,11 @@ _FLUX = {
         "state IN ('sale', 'done')",
     ),
     "factures_emises": (
-        "invoices", "invoice_date", "amount", "client_id", "invoice_name",
+        "v_creances", "invoice_date", "amount", "client_id", "invoice_name",
         "status != 'cancelled'",
     ),
     "factures_reglees": (
-        "invoices", "payment_date", "amount", "client_id", "invoice_name",
+        "v_creances", "payment_date", "amount", "client_id", "invoice_name",
         "status != 'cancelled'",
     ),
     "achats_engages": (

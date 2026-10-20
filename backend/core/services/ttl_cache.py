@@ -36,6 +36,12 @@ async def cached(
     uc_arbitrage/narratif.py). Un résultat refusé est renvoyé normalement, il
     n'est simplement pas mémorisé : le prochain appel réessaiera.
     """
+    # Un résultat calculé pour un pays n'est jamais servi à un autre : la clé
+    # porte le périmètre de la requête (core/services/perimetre.py).
+    from core.services.perimetre import entite_courante
+    entite = entite_courante()
+    if entite:
+        key = (*key, ("entite", entite))
     entry = _STORE.get(key)
     if entry is not None and time.monotonic() - entry[1] < ttl_seconds:
         return entry[0]  # type: ignore[return-value]

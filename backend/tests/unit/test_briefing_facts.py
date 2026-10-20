@@ -846,6 +846,8 @@ def test_doublure_balance_suit_la_vraie_structure(_stub_sources_evolutives):
         )
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            from db.views import create_views
+            await conn.run_sync(create_views)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         original = analyses.AsyncSessionLocal
         analyses.AsyncSessionLocal = factory

@@ -566,6 +566,10 @@ _CRM_TOOLS = [
             "UTILISE CET OUTIL pour toute question analytique non couverte par les outils spécialisés : "
             "croisements de tables, filtres complexes, calculs sur mesure, questions inédites.\n\n"
             "SCHÉMA COMPLET :\n"
+            "PAYS : toutes les vues v_* portent `entite` (CI = Côte d'Ivoire, BF = Burkina Faso, "
+            "GN = Guinée ; '' = non rattaché) et `entite_source` (règle qui a donné le pays). "
+            "v_creances = invoices + pays ; v_dossiers = dossiers + pays. Pour une question sur un "
+            "pays, filtrer `WHERE entite = 'BF'` et dire la part non rattachée (entite = '').\n"
             "• v_commandes — RÉFÉRENCE des commandes (nt360, sans doublon ni annulée), avec facturé et "
             "reste à facturer.\n"
             "  (fp TEXT [ex: FP/2026/142], entite TEXT [CI|BF|GN — entité du groupe], "
@@ -1160,6 +1164,13 @@ async def _execute_tool(tool_name: str, tool_input: dict, crm_repo, rag_engine, 
             raw_sql = tool_input.get("sql", "")
             desc = tool_input.get("description", "requête SQL")
             allowed = KB_TABLES if tool_name == "interroger_documents" else ODOO_TABLES
+            if tool_name != "interroger_documents":
+                from core.services.perimetre import entite_courante
+                if entite_courante():
+                    # Périmètre pays : seules les vues portant `entite` restent
+                    # interrogeables (la connexion les restreint au pays). Une
+                    # table brute (clients, invoices…) montrerait tous les pays.
+                    allowed = {t for t in ODOO_TABLES if t.startswith("v_")}
             note = ("Max 200 lignes. Cite doc_id + fichier_source dans ta réponse."
                     if tool_name == "interroger_documents"
                     else "Max 200 lignes. Affine avec WHERE ou LIMIT si nécessaire.")

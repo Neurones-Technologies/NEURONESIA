@@ -74,4 +74,6 @@ ODOO_TABLES: set[str] = {
     # a les mêmes colonnes, contenu nt360.
     "v_commandes", "v_sale_orders", "v_lignes_commande", "v_factures", "v_purchase_orders",
     "v_opportunities",
+    # Mêmes données + pays (entite / entite_source) — cf. core/services/entites.py
+    "v_creances", "v_dossiers", "v_jalons", "v_consultations",
 }

@@ -224,7 +224,8 @@ class OdooAdapter(CRMRepository):
         records = await self._call(
             "account.move", "search_read", [domain],
             {"fields": ["id", "name", "partner_id", "amount_total", "amount_residual",
-                        "currency_id", "invoice_date", "invoice_date_due", "payment_state"],
+                        "currency_id", "invoice_date", "invoice_date_due", "payment_state",
+                        "team_id"],
              "limit": limit, "order": "invoice_date desc"},
         )
         return [self._move_to_invoice(r, str((r.get("partner_id") or [0])[0])) for r in records]
@@ -252,6 +253,7 @@ class OdooAdapter(CRMRepository):
             invoice_date=inv_date,
             invoice_name=r.get("name") or None,
             amount_residual=float(r.get("amount_residual") or 0),
+            equipe=(r.get("team_id") or [None, ""])[1] or "",
         )
 
     # ─── Projets ─────────────────────────────────────────────────────────────
@@ -629,9 +631,9 @@ class OdooAdapter(CRMRepository):
         margin_fields = sorted(set((await self.sale_order_margin_fields()).values()))
         extra = ["amount_untaxed"] + margin_fields
         fields_with_dossier = ["id", "name", "partner_id", "amount_total",
-                               "currency_id", "date_order", "state", "user_id", "dossier_id", "invoice_ids"] + extra
+                               "currency_id", "date_order", "state", "user_id", "team_id", "dossier_id", "invoice_ids"] + extra
         fields_without_dossier = ["id", "name", "partner_id", "amount_total",
-                                  "currency_id", "date_order", "state", "user_id", "invoice_ids"] + extra
+                                  "currency_id", "date_order", "state", "user_id", "team_id", "invoice_ids"] + extra
         try:
             records = await self._call(
                 "sale.order", "search_read", [domain],

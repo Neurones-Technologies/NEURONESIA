@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { AdminUser, UsersFilters } from "@/lib/api/admin";
 import { ROLE_LABELS, roleToProfile } from "@/lib/auth/roles";
+import { libellePaysCompte } from "@/lib/data/pays";
 import { formatDate } from "@/lib/format";
 import { Tag } from "@/components/ui/primitives";
 import { adminHref } from "@/components/views/admin/href";
@@ -51,6 +52,7 @@ export function UsersTable({
           <tr>
             <th>Compte</th>
             <th>Rôle</th>
+            <th>Pays</th>
             <th>Statut</th>
             <th>Dernière connexion</th>
             <th>Créé le</th>
@@ -78,6 +80,7 @@ export function UsersTable({
                     </div>
                   )}
                 </td>
+                <td>{libellePaysCompte(u.pays)}</td>
                 <td>
                   {u.is_active ? (
                     <Tag variant="s">actif</Tag>

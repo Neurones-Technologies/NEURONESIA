@@ -29,7 +29,7 @@ from db.database import get_session
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/insights", tags=["Insights IA"])
 
-_CACHE: dict[tuple[str, bool], tuple[dict, float]] = {}
+_CACHE: dict[tuple[str, bool, str | None], tuple[dict, float]] = {}
 _CACHE_TTL = 1800.0  # 30 min
 
 _SYSTEM = """Tu es l'analyste commercial intégré au cockpit de Neurones Technologies \
@@ -167,7 +167,8 @@ async def get_insights(
         raise HTTPException(status_code=403, detail=f"Accès refusé — rôle '{role}' non autorisé sur ce module")
 
     include_finance = await can_access(session, role, "tresorerie")
-    cache_key = (view, include_finance)
+    from core.services.perimetre import entite_courante
+    cache_key = (view, include_finance, entite_courante())   # jamais d'un pays à l'autre
     cached = _CACHE.get(cache_key)
     if cached and time.monotonic() - cached[1] < _CACHE_TTL:
         return cached[0]

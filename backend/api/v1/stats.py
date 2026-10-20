@@ -62,6 +62,19 @@ _SNAPSHOT_TABLES: list[tuple[str, type]] = [
 ]
 
 
+@router.get("/rattachement")
+async def rattachement_par_pays(current_user: CurrentUser):
+    """Part de chaque module rattachée à un pays (CI / BF / GN), montant non
+    rattaché et règle utilisée — ce qu'un filtre par pays voit et ne voit pas
+    (cf. core/services/rattachement.py). Réservé à l'administrateur, comme
+    `/stats/mirror` : une lecture de qualité des données, pas un module métier."""
+    role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé aux administrateurs")
+    from core.services import rattachement
+    return await rattachement.mesurer()
+
+
 @router.get("/mirror")
 async def mirror_coverage(current_user: CurrentUser):
     """Ce que le miroir Odoo contient réellement : effectif et fraîcheur par

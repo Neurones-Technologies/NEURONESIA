@@ -7,27 +7,39 @@ from sqlalchemy import select, or_
 from core.ports.crm_repository import CRMRepository
 from core.domain.client import Client, Contract, Invoice, Project, ContractStatus, InvoiceStatus
 from db.database import AsyncSessionLocal
-from db.views import VPurchaseOrderModel, VSaleOrderModel
+from db.views import VCreanceModel, VDossierModel, VPurchaseOrderModel, VSaleOrderModel
 from db.models import (
-    ClientModel, ContractModel, InvoiceModel, ProjectModel, DossierModel,
+    ClientModel, ContractModel, ProjectModel,
     SupplierModel,
 )
 
 logger = logging.getLogger(__name__)
 
-# Entités du groupe (filtre `?entite=` de nt360, colonne `entite` des vues).
-ENTITES = ("CI", "BF", "GN")
+from core.services.entites import ENTITES
+
+# Vues portant `entite` / `entite_source` (cf. db/views.py) — les seules qu'un
+# filtre par pays peut viser.
+VUES_PAR_PAYS = frozenset({
+    "v_sale_orders", "v_lignes_commande", "v_factures", "v_purchase_orders",
+    "v_opportunities", "v_creances", "v_dossiers", "v_jalons", "v_consultations",
+    "v_sale_orders_odoo", "v_achats_odoo",
+})
 
 
-def _ventes(entite: str | None = None) -> str:
-    """Source des commandes à mettre après FROM : la vue entière, ou restreinte
-    à une entité. La valeur est insérée dans le SQL : elle n'est acceptée que
-    depuis la liste blanche ENTITES."""
+def _source(vue: str, entite: str | None = None) -> str:
+    """Source à mettre après FROM : la vue entière, ou restreinte à une entité.
+
+    Vue et entité sont insérées dans le SQL : elles ne sont acceptées que depuis
+    les listes blanches VUES_PAR_PAYS et ENTITES. Les objets non rattachés
+    (entite = '') ne sortent jamais d'un filtre par pays : ils restent comptés
+    par la mesure de rattachement (core/services/rattachement.py)."""
+    if vue not in VUES_PAR_PAYS:
+        raise ValueError(f"Vue sans rattachement par pays : {vue!r}")
     if entite is None:
-        return "v_sale_orders"
+        return vue
     if entite not in ENTITES:
         raise ValueError(f"Entité inconnue : {entite!r}")
-    return f"(SELECT * FROM v_sale_orders WHERE entite = '{entite}')"
+    return f"(SELECT * FROM {vue} WHERE entite = '{entite}')"
 
 # ---- M1 « rupture de rythme » (première implémentation ; le moteur était
 #      documenté dans frontend/src/lib/data/engines.ts sans code derrière) ----
@@ -116,7 +128,7 @@ class LocalCRMAdapter(CRMRepository):
     async def get_invoices(self, client_id: str) -> list[Invoice]:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                select(InvoiceModel).where(InvoiceModel.client_id == client_id)
+                select(VCreanceModel).where(VCreanceModel.client_id == client_id)
             )
             return [self._invoice_to_domain(r) for r in result.scalars()]
 
@@ -161,7 +173,7 @@ class LocalCRMAdapter(CRMRepository):
             state_filter = VSaleOrderModel.state.in_(["sale", "done"])
             filters = [year_filter, state_filter]
             if entite is not None:
-                _ventes(entite)     # même liste blanche que les requêtes SQL
+                _source("v_sale_orders", entite)     # même liste blanche que les requêtes SQL
                 filters.append(VSaleOrderModel.entite == entite)
             if exclude_internal:
                 # Récupère les client_ids des entités internes (NEURONES*)
@@ -203,7 +215,7 @@ class LocalCRMAdapter(CRMRepository):
         exclude_clause = "AND (c.name IS NULL OR c.name NOT LIKE '%NEURONES%')" if exclude_internal else ""
         sql = f"""
             SELECT COUNT(DISTINCT o.client_id), COUNT(*), COALESCE(SUM(o.amount), 0)
-            FROM {_ventes(entite)} o
+            FROM {_source("v_sale_orders", entite)} o
             {join_clients}
             WHERE o.state IN ('sale', 'done')
               AND strftime('%Y', o.date_order) = :year
@@ -262,7 +274,7 @@ class LocalCRMAdapter(CRMRepository):
             invoice_odoo_ids = o.invoice_ids or []
             if invoice_odoo_ids:
                 inv_result = await session.execute(
-                    select(InvoiceModel).where(InvoiceModel.odoo_id.in_(invoice_odoo_ids))
+                    select(VCreanceModel).where(VCreanceModel.odoo_id.in_(invoice_odoo_ids))
                 )
                 invoices = [
                     {
@@ -292,12 +304,11 @@ class LocalCRMAdapter(CRMRepository):
 
     async def get_aggregate_stats(self) -> dict:
         from sqlalchemy import func, select as sa_select
-        from db.models import InvoiceModel
         async with AsyncSessionLocal() as session:
             clients_count = (await session.execute(sa_select(func.count()).select_from(ClientModel))).scalar()
-            invoices_count = (await session.execute(sa_select(func.count()).select_from(InvoiceModel))).scalar()
+            invoices_count = (await session.execute(sa_select(func.count()).select_from(VCreanceModel))).scalar()
             paid_count = (await session.execute(
-                sa_select(func.count()).select_from(InvoiceModel).where(InvoiceModel.status == "paid")
+                sa_select(func.count()).select_from(VCreanceModel).where(VCreanceModel.status == "paid")
             )).scalar()
             orders_count = (await session.execute(sa_select(func.count()).select_from(VSaleOrderModel))).scalar()
             total_revenue = (await session.execute(sa_select(func.sum(VSaleOrderModel.amount)))).scalar() or 0
@@ -345,7 +356,7 @@ class LocalCRMAdapter(CRMRepository):
                        COUNT(o.order_id) as nb_commandes,
                        SUM(o.amount) as ca_total,
                        MAX(COALESCE(NULLIF(c.country, ''), 'Autres/non renseigné')) as pays
-                FROM {_ventes(entite)} o
+                FROM {_source("v_sale_orders", entite)} o
                 LEFT JOIN clients c ON o.client_id = c.client_id
                 WHERE o.state IN ('sale', 'done')
             """
@@ -408,10 +419,10 @@ class LocalCRMAdapter(CRMRepository):
     async def get_unpaid_invoices(self, limit: int = 10) -> list[dict]:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                select(InvoiceModel, ClientModel)
-                .join(ClientModel, InvoiceModel.client_id == ClientModel.client_id, isouter=True)
-                .where(InvoiceModel.status != "paid")
-                .order_by(InvoiceModel.amount.desc())
+                select(VCreanceModel, ClientModel)
+                .join(ClientModel, VCreanceModel.client_id == ClientModel.client_id, isouter=True)
+                .where(VCreanceModel.status != "paid")
+                .order_by(VCreanceModel.amount.desc())
                 .limit(limit)
             )
             return [
@@ -430,21 +441,21 @@ class LocalCRMAdapter(CRMRepository):
         async with AsyncSessionLocal() as session:
             # Total global
             r = await session.execute(text(
-                "SELECT COUNT(*), SUM(amount) FROM invoices WHERE status != 'paid'"
+                "SELECT COUNT(*), SUM(amount) FROM v_creances WHERE status != 'paid'"
             ))
             row = r.fetchone()
             total_nb, total_amount = row[0] or 0, float(row[1] or 0)
 
             # Par statut
             r2 = await session.execute(text(
-                "SELECT status, COUNT(*), SUM(amount) FROM invoices "
+                "SELECT status, COUNT(*), SUM(amount) FROM v_creances "
                 "WHERE status != 'paid' GROUP BY status"
             ))
             par_statut = {row[0]: {"nb": row[1], "montant": float(row[2] or 0)} for row in r2.fetchall()}
 
             # Retard > 90 jours
             r3 = await session.execute(text(
-                "SELECT COUNT(*), SUM(amount) FROM invoices "
+                "SELECT COUNT(*), SUM(amount) FROM v_creances "
                 "WHERE status != 'paid' AND due_date IS NOT NULL "
                 "AND julianday('now') - julianday(due_date) > 90"
             ))
@@ -455,7 +466,7 @@ class LocalCRMAdapter(CRMRepository):
             r4 = await session.execute(text(
                 "SELECT c.name, COUNT(i.invoice_id), SUM(i.amount), "
                 "MAX(CAST(julianday('now') - julianday(i.due_date) AS INTEGER)) "
-                "FROM invoices i LEFT JOIN clients c ON i.client_id = c.client_id "
+                "FROM v_creances i LEFT JOIN clients c ON i.client_id = c.client_id "
                 "WHERE i.status != 'paid' "
                 "GROUP BY i.client_id ORDER BY SUM(i.amount) DESC LIMIT 10"
             ))
@@ -511,7 +522,7 @@ class LocalCRMAdapter(CRMRepository):
                        COALESCE(NULLIF(TRIM(c.name), ''), o.client_name) AS nom,
                        substr(o.date_order, 1, 10) AS jour,
                        o.amount
-                FROM {_ventes(entite)} o
+                FROM {_source("v_sale_orders", entite)} o
                 LEFT JOIN clients c ON o.client_id = c.client_id
                 WHERE o.state IN ('sale', 'done')
                   AND o.date_order >= date(:as_of, :fenetre)
@@ -526,7 +537,7 @@ class LocalCRMAdapter(CRMRepository):
             imp_sql = _text("""
                 SELECT client_id, COUNT(*), COALESCE(SUM(amount), 0),
                        MAX(CAST(julianday(:as_of) - julianday(due_date) AS INTEGER))
-                FROM invoices
+                FROM v_creances
                 WHERE status != 'paid'
                 GROUP BY client_id
             """)
@@ -656,15 +667,15 @@ class LocalCRMAdapter(CRMRepository):
 
         async with AsyncSessionLocal() as session:
             q = (
-                select(InvoiceModel, ClientModel.name.label("client_name"))
-                .join(ClientModel, InvoiceModel.client_id == ClientModel.client_id, isouter=True)
+                select(VCreanceModel, ClientModel.name.label("client_name"))
+                .join(ClientModel, VCreanceModel.client_id == ClientModel.client_id, isouter=True)
             )
             if client_name:
                 q = q.where(ClientModel.name.ilike(f"%{client_name}%"))
             if year:
                 q = q.where(
-                    InvoiceModel.invoice_date >= f"{year}-01-01",
-                    InvoiceModel.invoice_date < f"{year+1}-01-01",
+                    VCreanceModel.invoice_date >= f"{year}-01-01",
+                    VCreanceModel.invoice_date < f"{year+1}-01-01",
                 )
             result = await session.execute(q)
             rows = result.all()
@@ -778,7 +789,7 @@ class LocalCRMAdapter(CRMRepository):
         from sqlalchemy import text
         sql = """
             SELECT i.invoice_date, i.payment_date
-            FROM invoices i
+            FROM v_creances i
             LEFT JOIN clients c ON i.client_id = c.client_id
             WHERE c.name LIKE :pattern
               AND i.status = 'paid'
@@ -935,7 +946,7 @@ class LocalCRMAdapter(CRMRepository):
                    SUM(amount) as ca_total,
                    COUNT(*) as nb_commandes,
                    COUNT(DISTINCT client_id) as nb_clients
-            FROM {_ventes(entite)}
+            FROM {_source("v_sale_orders", entite)}
             WHERE salesperson_name IS NOT NULL AND salesperson_name != ''
               AND state NOT IN ('cancel', 'draft')
         """
@@ -974,11 +985,11 @@ class LocalCRMAdapter(CRMRepository):
     async def score_client_risk(self, client_id: str | None = None, limit: int = 20) -> list[dict]:
         async with AsyncSessionLocal() as session:
             q = (
-                select(InvoiceModel, ClientModel.name.label("client_name"))
-                .join(ClientModel, InvoiceModel.client_id == ClientModel.client_id, isouter=True)
+                select(VCreanceModel, ClientModel.name.label("client_name"))
+                .join(ClientModel, VCreanceModel.client_id == ClientModel.client_id, isouter=True)
             )
             if client_id:
-                q = q.where(InvoiceModel.client_id == client_id)
+                q = q.where(VCreanceModel.client_id == client_id)
             result = await session.execute(q)
             invoices_rows = result.all()
 
@@ -1068,7 +1079,7 @@ class LocalCRMAdapter(CRMRepository):
                    SUM(o.amount) as ca_total,
                    COUNT(DISTINCT o.client_id) as nb_clients,
                    COUNT(*) as nb_commandes
-            FROM {_ventes(entite)} o
+            FROM {_source("v_sale_orders", entite)} o
             LEFT JOIN clients c ON o.client_id = c.client_id
             WHERE o.state NOT IN ('cancel', 'draft')
         """
@@ -1307,7 +1318,7 @@ class LocalCRMAdapter(CRMRepository):
             # Clients actifs en année de référence (N-1)
             sql_ref = f"""
                 SELECT DISTINCT o.client_id, c.name
-                FROM {_ventes(entite)} o
+                FROM {_source("v_sale_orders", entite)} o
                 LEFT JOIN clients c ON o.client_id = c.client_id
                 WHERE strftime('%Y', o.date_order) = :yr
                   AND o.state NOT IN ('cancel', 'draft')
@@ -1355,7 +1366,7 @@ class LocalCRMAdapter(CRMRepository):
     # ── Dossiers commerciaux ──────────────────────────────────────────────────
 
     @staticmethod
-    def _dossier_to_dict(d: DossierModel) -> dict:
+    def _dossier_to_dict(d: VDossierModel) -> dict:
         return {
             "ref": d.dossier_ref,
             "client": d.client_name,
@@ -1389,7 +1400,7 @@ class LocalCRMAdapter(CRMRepository):
         async with AsyncSessionLocal() as session:
             # Chercher directement par ref dossier
             if ref.upper().startswith("DC/"):
-                row = await session.get(DossierModel, ref.upper())
+                row = await session.get(VDossierModel, ref.upper())
                 if row:
                     return self._dossier_to_dict(row)
                 return None
@@ -1399,7 +1410,7 @@ class LocalCRMAdapter(CRMRepository):
             )
             so = r.scalar_one_or_none()
             if so and so.dossier_id:
-                row = await session.get(DossierModel, so.dossier_id)
+                row = await session.get(VDossierModel, so.dossier_id)
                 if row:
                     return self._dossier_to_dict(row)
             return None
@@ -1408,12 +1419,12 @@ class LocalCRMAdapter(CRMRepository):
         """Tous les dossiers d'un client (recherche partielle sur le nom)."""
         from sqlalchemy import extract
         async with AsyncSessionLocal() as session:
-            q = select(DossierModel).where(
-                DossierModel.client_name.ilike(f"%{client_name}%")
+            q = select(VDossierModel).where(
+                VDossierModel.client_name.ilike(f"%{client_name}%")
             )
             if year:
-                q = q.where(extract("year", DossierModel.date_creation) == year)
-            q = q.order_by(DossierModel.date_creation.desc()).limit(50)
+                q = q.where(extract("year", VDossierModel.date_creation) == year)
+            q = q.order_by(VDossierModel.date_creation.desc()).limit(50)
             result = await session.execute(q)
             return [self._dossier_to_dict(d) for d in result.scalars()]
 
@@ -1495,7 +1506,7 @@ class LocalCRMAdapter(CRMRepository):
                     SUM(CASE WHEN {ex} AND depense_definitive > 0 THEN 1 ELSE 0 END) nb_marge_imputee,
                     SUM(CASE WHEN {ex} AND depense_definitive > 0 THEN ca_definitif ELSE 0 END) ca_def_impute,
                     SUM(CASE WHEN {ex} AND depense_definitive > 0 THEN marge_definitive ELSE 0 END) marge_def_impute
-                FROM dossiers
+                FROM v_dossiers
             """)
             row = (await session.execute(sql, params)).fetchone()
 
@@ -1571,7 +1582,7 @@ class LocalCRMAdapter(CRMRepository):
                 SELECT dossier_ref, client_name, project_name, salesperson, state,
                        ca_provisoire, ca_definitif, marge_provisoire, marge_definitive,
                        perc_marge_provisoire, perc_marge_definitive, date_creation
-                FROM dossiers
+                FROM v_dossiers
                 WHERE ca_provisoire > 0 {year_filter}
                 ORDER BY {col} DESC
                 LIMIT :limit
@@ -1935,7 +1946,7 @@ class LocalCRMAdapter(CRMRepository):
                                     WHEN d.marge_provisoire != 0 THEN d.marge_provisoire
                                     ELSE d.marge_previsionnelle END AS marge
                         FROM v_purchase_orders po
-                        JOIN dossiers d ON po.dossier_id = d.dossier_ref
+                        JOIN v_dossiers d ON po.dossier_id = d.dossier_ref
                         WHERE po.client_name = :name AND po.dossier_id IS NOT NULL
                     """), {"name": name})).fetchall()
                     nb_dossiers_lies = len(dossier_rows)
@@ -1962,7 +1973,7 @@ class LocalCRMAdapter(CRMRepository):
                     risk_rows = (await session.execute(text("""
                         SELECT po.dossier_id, COUNT(DISTINCT po.client_name) as nb_fournisseurs
                         FROM v_purchase_orders po
-                        JOIN dossiers d ON po.dossier_id = d.dossier_ref
+                        JOIN v_dossiers d ON po.dossier_id = d.dossier_ref
                         WHERE po.dossier_id IS NOT NULL AND d.state = 'confirmed'
                         GROUP BY po.dossier_id
                         HAVING nb_fournisseurs = 1
@@ -2040,7 +2051,7 @@ class LocalCRMAdapter(CRMRepository):
                    SUM(backlog) as backlog_total,
                    MIN(date_creation) as premiere_commande,
                    MAX(date_creation) as derniere_commande
-            FROM dossiers
+            FROM v_dossiers
             WHERE client_name IS NOT NULL AND client_name != ''{filtre}
             GROUP BY client_name
             ORDER BY SUM({ca_expr}) DESC{borne}
@@ -2075,7 +2086,7 @@ class LocalCRMAdapter(CRMRepository):
                                ROW_NUMBER() OVER (
                                    PARTITION BY client_name ORDER BY date_creation DESC
                                ) AS rang
-                        FROM dossiers
+                        FROM v_dossiers
                         WHERE client_name IN ({in_clause})
                           AND {colonne} IS NOT NULL AND {colonne} != ''
                     ) WHERE rang = 1
@@ -2138,6 +2149,18 @@ class LocalCRMAdapter(CRMRepository):
           qui n'est pas « jamais facturé » — 180 comptes ayant commandé n'ont
           aucune facture).
 
+        - Une commande nt360 SANS contrepartie Odoo n'a pas de `client_id` (il ne
+          vient que d'Odoo) : saisies manuelles nt360, commandes pas encore
+          dans le miroir — 9 commandes CI, 73 M FCFA en 2026. Les écarter
+          faisait retomber le CA du portefeuille sous celui de nt360 (5,40 Md
+          contre 5,475). Elles rejoignent le compte `clients` dont le nom est
+          EXACTEMENT le leur s'il est unique (GT BANK, CARGILL, ARION) ; sinon
+          — nom ambigu (ECOBANK : BF, CI, Group) ou mal orthographié — elles sont
+          regroupées sous leur nom nt360 (clé `nom:<NOM>`), servies avec
+          `client_id = None` et `hors_referentiel`. Jamais de rapprochement
+          approché : un faux rattachement serait invisible, un compte à part
+          se voit.
+
         Les impayés échus et les opportunités ouvertes sont joints ici car ils
         qualifient le silence : un compte muet avec du pipe, ou muet ET en défaut
         de paiement, ne se traitent pas de la même façon.
@@ -2147,7 +2170,18 @@ class LocalCRMAdapter(CRMRepository):
         jour = reference.isoformat()
         exercice = annee or reference.year
         sql = """
-            WITH cmd AS (
+            WITH so AS (
+                SELECT COALESCE(NULLIF(client_id, ''),
+                                (SELECT MAX(cl.client_id) FROM clients cl
+                                 WHERE UPPER(TRIM(cl.name)) = UPPER(TRIM(v_sale_orders.client_name))
+                                 HAVING COUNT(*) = 1),
+                                'nom:' || UPPER(TRIM(client_name))) AS client_id,
+                       date_order, amount, state, client_name, salesperson_name
+                FROM v_sale_orders
+                WHERE NULLIF(client_id, '') IS NOT NULL
+                   OR NULLIF(TRIM(client_name), '') IS NOT NULL
+            ),
+            cmd AS (
                 SELECT client_id,
                        MAX(date_order) AS last_order,
                        MIN(date_order) AS first_order,
@@ -2162,9 +2196,8 @@ class LocalCRMAdapter(CRMRepository):
                        SUM(CASE WHEN strftime('%Y', date_order) = :annee THEN amount ELSE 0 END) AS ca_ex,
                        SUM(CASE WHEN strftime('%Y', date_order) = :annee THEN 1 ELSE 0 END) AS nb_cmd_ex,
                        MAX(CASE WHEN strftime('%Y', date_order) = :annee THEN date_order END) AS last_order_ex
-                FROM v_sale_orders
-                WHERE client_id IS NOT NULL AND client_id != ''
-                  AND state IN ('sale', 'done')
+                FROM so
+                WHERE state IN ('sale', 'done')
                   AND date(date_order) <= date(:jour)
                 GROUP BY client_id
             ),
@@ -2172,7 +2205,7 @@ class LocalCRMAdapter(CRMRepository):
                 SELECT client_id, client_name FROM (
                     SELECT client_id, client_name,
                            ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_order DESC) rg
-                    FROM v_sale_orders
+                    FROM so
                     WHERE client_name IS NOT NULL AND client_name != ''
                 ) WHERE rg = 1
             ),
@@ -2180,14 +2213,14 @@ class LocalCRMAdapter(CRMRepository):
                 SELECT client_id, salesperson_name FROM (
                     SELECT client_id, salesperson_name,
                            ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY date_order DESC) rg
-                    FROM v_sale_orders
+                    FROM so
                     WHERE salesperson_name IS NOT NULL AND salesperson_name != ''
                 ) WHERE rg = 1
             ),
             impayes AS (
                 SELECT client_id, COUNT(*) AS nb, SUM(amount_residual) AS mnt,
                        MAX(CAST(julianday(date(:jour)) - julianday(date(due_date)) AS INTEGER)) AS retard
-                FROM invoices
+                FROM v_creances
                 WHERE amount_residual > 0
                   AND due_date IS NOT NULL AND date(due_date) < date(:jour)
                 GROUP BY client_id
@@ -2237,7 +2270,7 @@ class LocalCRMAdapter(CRMRepository):
         return [
             {
                 "compte": r[0] or "(compte sans nom)",
-                "client_id": r[1],
+                "client_id": None if (r[1] or "").startswith("nom:") else r[1],
                 "derniere_commande": str(r[2])[:10] if r[2] else None,
                 "premiere_commande": str(r[3])[:10] if r[3] else None,
                 "nb_commandes": int(r[4] or 0),
@@ -2284,7 +2317,7 @@ class LocalCRMAdapter(CRMRepository):
             SELECT strftime('%m', date_order) as mo,
                    SUM(amount) as ca,
                    COUNT(*) as nb
-            FROM {_ventes(entite)}
+            FROM {_source("v_sale_orders", entite)}
             WHERE state IN ('sale', 'done')
               AND strftime('%Y', date_order) = :year
             GROUP BY mo ORDER BY mo
@@ -2418,7 +2451,7 @@ class LocalCRMAdapter(CRMRepository):
         )
 
     @staticmethod
-    def _invoice_to_domain(m: InvoiceModel) -> Invoice:
+    def _invoice_to_domain(m: VCreanceModel) -> Invoice:
         return Invoice(
             invoice_id=m.invoice_id,
             client_id=m.client_id,

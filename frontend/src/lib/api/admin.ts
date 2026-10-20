@@ -10,6 +10,8 @@ export interface AdminUser {
   email: string;
   full_name: string;
   role: string;
+  /** CI / BF / GN : périmètre imposé à toutes les pages du compte ; "" = groupe. */
+  pays: string;
   is_active: boolean;
   last_login: string | null;
   created_at: string | null;
@@ -32,6 +34,8 @@ export interface AdminUsersPage {
 export interface UsersFilters {
   q?: string;
   role?: string;
+  /** CI / BF / GN, ou "groupe" pour les comptes sans pays. */
+  pays?: string;
   /** `undefined` = les deux ; `true` actifs seuls ; `false` désactivés seuls. */
   actif?: boolean;
 }
@@ -101,6 +105,7 @@ export async function getUsers(filters: UsersFilters = {}): Promise<AdminUsersPa
   const params = new URLSearchParams();
   if (filters.q) params.set("q", filters.q);
   if (filters.role) params.set("role", filters.role);
+  if (filters.pays) params.set("pays", filters.pays);
   if (filters.actif !== undefined) params.set("actif", String(filters.actif));
   const query = params.toString();
   return apiFetch<AdminUsersPage>(`/v1/auth/users${query ? `?${query}` : ""}`);

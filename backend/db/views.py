@@ -32,13 +32,60 @@ définition ici suffit, sans migration.
 import logging
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from core.services.entites import FENETRE_COMMERCIAL_MOIS, sql_equipe_vers_pays
 
 logger = logging.getLogger(__name__)
 
 # Coefficient de recalage maximal ; au-delà → ligne d'ajustement.
 COEF_MAX = 2.0
+
+# ── Rattachement par pays : pivots ───────────────────────────────────────────
+# Règles et vocabulaire de `entite_source` : core/services/entites.py. Chaque vue
+# métier prend le PREMIER lien qui répond, dans un ordre fixe ; au-delà, « non
+# rattaché » (entite = '') — jamais deviné, toujours compté.
+
+# Pivot : le pays d'une affaire est celui de sa commande nt360 (100 % des
+# commandes portent leur entité). Toutes les vues le rejoignent par N° FP.
+_V_ENTITE_FP = """
+CREATE VIEW v_entite_fp AS
+SELECT fp, entite FROM nt360_commandes WHERE entite != ''
+"""
+
+# Repli « commercial mono-pays » : un commercial qui n'a vendu que dans un pays
+# sur la fenêtre récente → ce pays. Un commercial présent dans plusieurs pays ne
+# rattache RIEN (63 opportunités ouvertes au premier relevé) : choisir son pays
+# majoritaire serait deviner.
+_V_ENTITE_COMMERCIAL = f"""
+CREATE VIEW v_entite_commercial AS
+SELECT UPPER(TRIM(am)) AS am, MAX(entite) AS entite
+FROM nt360_commandes
+WHERE am != '' AND entite != ''
+  AND date_commande >= date('now', '-{FENETRE_COMMERCIAL_MOIS} months')
+GROUP BY UPPER(TRIM(am))
+HAVING COUNT(DISTINCT entite) = 1
+"""
+
+# Repli « N° DC » pour les dossiers : pays des factures et BC nt360 qui portent
+# ce N° DC (facture : filiale puis commande ; BC : commande puis filiale). Un DC
+# dont les pièces désignent plusieurs pays n'est pas rattaché.
+_V_ENTITE_DC = """
+CREATE VIEW v_entite_dc AS
+SELECT dc, MAX(entite) AS entite FROM (
+    SELECT f.dc, COALESCE(NULLIF(f.filiale, ''), e.entite) AS entite
+    FROM nt360_factures f LEFT JOIN v_entite_fp e ON e.fp = f.fp
+    WHERE f.dc != ''
+    UNION ALL
+    SELECT b.dc, COALESCE(e.entite, NULLIF(b.filiale, '')) AS entite
+    FROM nt360_bc b LEFT JOIN v_entite_fp e ON e.fp = b.fp
+    WHERE b.dc != ''
+)
+WHERE entite IS NOT NULL
+GROUP BY dc
+HAVING COUNT(DISTINCT entite) = 1
+"""
 
 _V_COMMANDES = f"""
 CREATE VIEW v_commandes AS
@@ -59,6 +106,7 @@ base AS (
 SELECT
     fp,
     entite,
+    CASE WHEN entite != '' THEN 'nt360' ELSE '' END AS entite_source,
     client AS client_name,
     affaire,
     bu,
@@ -148,14 +196,15 @@ SELECT
     COALESCE(s.margin_amount, 0.0) AS margin_amount,
     COALESCE(s.margin_pct, 0.0) AS margin_pct,
     c.synced_at,
-    c.entite
+    c.entite,
+    c.entite_source
 FROM v_commandes c
 LEFT JOIN sale_orders s ON s.order_id = c.order_id
 UNION ALL
 SELECT
     order_id, odoo_id, client_id, client_name, name, amount, amount_untaxed, currency,
     date_order, state, salesperson_name, dossier_id, order_lines, invoice_ids,
-    purchase_total, approach_costs, provision, margin_amount, margin_pct, synced_at, ''
+    purchase_total, approach_costs, provision, margin_amount, margin_pct, synced_at, '', ''
 FROM sale_orders
 WHERE NOT {_NT360_COMMANDES_ACTIF}
 """
@@ -184,7 +233,8 @@ SELECT
     l.subtotal_xof * c.coefficient AS montant_ht,
     c.coefficient,
     l.purchase_price_xof,
-    c.entite
+    c.entite,
+    c.entite_source
 FROM v_commandes c
 JOIN sale_order_lines l ON l.order_id = c.order_id AND l.display_type IS NULL
 LEFT JOIN sale_orders s ON s.order_id = c.order_id
@@ -211,7 +261,8 @@ SELECT
     c.ajustement,
     NULL,
     0.0,
-    c.entite
+    c.entite,
+    c.entite_source
 FROM v_commandes c
 LEFT JOIN sale_orders s ON s.order_id = c.order_id
 WHERE ABS(c.ajustement) > 0.5
@@ -221,7 +272,7 @@ SELECT
     s.name, l.line_id, 'odoo', s.order_id, s.client_id, s.client_name, s.salesperson_name,
     '', CAST(strftime('%Y', s.date_order) AS INTEGER), date(s.date_order), s.date_order, s.state,
     l.product_code, l.product_name, l.product_category, l.vendor, l.qty,
-    l.subtotal_xof, l.subtotal_xof, 1.0, l.purchase_price_xof, ''
+    l.subtotal_xof, l.subtotal_xof, 1.0, l.purchase_price_xof, '', ''
 FROM sale_order_lines l
 JOIN sale_orders s ON s.order_id = l.order_id
 WHERE l.display_type IS NULL AND s.state IN ('sale', 'done')
@@ -267,16 +318,21 @@ SELECT
         WHEN f.paid AND i.status != 'paid' THEN 'statut_divergent'
         WHEN NOT f.paid AND i.status = 'paid' THEN 'statut_divergent'
         ELSE 'conforme'
-    END AS rapprochement
+    END AS rapprochement,
+    -- Pays : filiale nt360, puis commande de même FP.
+    COALESCE(NULLIF(f.filiale, ''), e.entite, '') AS entite,
+    CASE WHEN NULLIF(f.filiale, '') IS NOT NULL THEN 'filiale'
+         WHEN e.entite IS NOT NULL THEN 'commande_fp' ELSE '' END AS entite_source
 FROM nt360_factures f
 LEFT JOIN invoices i ON i.invoice_name = f.numero
 LEFT JOIN v_commandes c ON c.fp = f.fp
+LEFT JOIN v_entite_fp e ON e.fp = f.fp
 UNION ALL
 SELECT
     i.invoice_name, NULL, NULL, cl.name, i.client_id, NULL, NULL,
     i.invoice_date, i.due_date, i.amount, 'TTC',
     i.amount - i.amount_residual, i.amount_residual, i.status = 'paid', i.status, i.currency,
-    'odoo', i.invoice_id, i.amount, i.amount_residual, i.status, i.payment_date, 'conforme'
+    'odoo', i.invoice_id, i.amount, i.amount_residual, i.status, i.payment_date, 'conforme', '', ''
 FROM invoices i
 LEFT JOIN clients cl ON cl.client_id = i.client_id
 WHERE i.status != 'cancelled' AND NOT {_NT360_FACTURES_ACTIF}
@@ -311,14 +367,22 @@ SELECT
     b.fp,
     b.expense_type,
     b.eta_contrat,
-    b.eta_reel
+    b.eta_reel,
+    -- Deux pays, deux questions : `entite` = pays de l'AFFAIRE servie (commande
+    -- de même FP) — « que coûtent les affaires du Burkina ? » ; `entite_achat` =
+    -- filiale qui ACHÈTE — « qu'achète l'entité Burkina ? ». 180 BC émis par la
+    -- CI servent des affaires BF : les deux ne se confondent pas.
+    COALESCE(e.entite, '') AS entite,
+    CASE WHEN e.entite IS NOT NULL THEN 'commande_fp' ELSE '' END AS entite_source,
+    COALESCE(NULLIF(b.filiale, ''), '') AS entite_achat
 FROM nt360_bc b
 LEFT JOIN purchase_orders p ON p.name = b.bc_number AND b.bc_number != ''
+LEFT JOIN v_entite_fp e ON e.fp = b.fp AND b.fp != ''
 WHERE b.status NOT IN ('a_emettre', 'annule')
 UNION ALL
 SELECT
     order_id, odoo_id, client_id, client_name, name, amount, currency, date_order, state,
-    synced_at, dossier_id, NULL, NULL, NULL, NULL, NULL
+    synced_at, dossier_id, NULL, NULL, NULL, NULL, NULL, '', '', ''
 FROM purchase_orders
 WHERE NOT EXISTS (SELECT 1 FROM nt360_bc)
 """
@@ -333,7 +397,9 @@ WHERE NOT EXISTS (SELECT 1 FROM nt360_bc)
 #                 (NULL pour les saisies nt360 sans opportunité Odoo)
 #   client_id   = Odoo, sinon celui de la commande (même FP)
 # Repli Odoo tant que nt360 n'a jamais été synchronisé.
-_V_OPPORTUNITIES = """
+_EQUIPE_OPP = sql_equipe_vers_pays("o.equipe")
+
+_V_OPPORTUNITIES = f"""
 CREATE VIEW v_opportunities AS
 SELECT
     COALESCE(n.opp_id, 'nt360:' || n.id) AS opp_id,
@@ -358,27 +424,131 @@ SELECT
     n.weighted,
     n.source,
     n.stage AS stage_num,
-    COALESCE(c.entite, '') AS entite
+    -- Pays : commande de même FP (affaire gagnée) → équipe Odoo désignant un
+    -- pays → commercial mono-pays (24 mois) → non rattaché. Une opportunité
+    -- ouverte a un N° FP mais pas encore de commande : d'où les replis.
+    COALESCE(e.entite, {_EQUIPE_OPP}, com.entite, '') AS entite,
+    CASE WHEN e.entite IS NOT NULL THEN 'commande_fp'
+         WHEN {_EQUIPE_OPP} IS NOT NULL THEN 'equipe'
+         WHEN com.entite IS NOT NULL THEN 'commercial'
+         ELSE '' END AS entite_source
 FROM nt360_opportunites n
 LEFT JOIN opportunities o ON o.opp_id = n.opp_id
 LEFT JOIN v_commandes c ON c.fp = n.fp AND n.fp != ''
+LEFT JOIN v_entite_fp e ON e.fp = n.fp AND n.fp != ''
+LEFT JOIN v_entite_commercial com ON com.am = UPPER(TRIM(n.am))
 UNION ALL
 SELECT
     opp_id, odoo_id, client_id, client_name, name, stage, expected_revenue, probability,
     salesperson_name, deadline, created_at, synced_at, write_date, date_closed, 1,
-    order_ids, offer_family, NULL, NULL, NULL, 'odoo', NULL, ''
+    order_ids, offer_family, NULL, NULL, NULL, 'odoo', NULL, '', ''
 FROM opportunities
 WHERE NOT EXISTS (SELECT 1 FROM nt360_opportunites)
 """
 
-# Ordre de création : les autres vues lisent v_commandes.
+# Créances : `invoices` (Odoo, TTC — l'argent dû) avec son pays. Mêmes colonnes
+# que la table : ses lecteurs basculent en changeant seulement le nom de table.
+# Pays : facture nt360 de même numéro (filiale, puis commande de même FP) →
+# équipe Odoo désignant un pays → non rattaché.
+_EQUIPE_INV = sql_equipe_vers_pays("i.equipe")
+
+_V_CREANCES = f"""
+CREATE VIEW v_creances AS
+SELECT
+    i.*,
+    COALESCE(NULLIF(f.filiale, ''), e.entite, {_EQUIPE_INV}, '') AS entite,
+    CASE WHEN COALESCE(NULLIF(f.filiale, ''), e.entite) IS NOT NULL THEN 'facture'
+         WHEN {_EQUIPE_INV} IS NOT NULL THEN 'equipe'
+         ELSE '' END AS entite_source
+FROM invoices i
+LEFT JOIN nt360_factures f ON f.numero = i.invoice_name
+LEFT JOIN v_entite_fp e ON e.fp = f.fp AND f.fp != ''
+"""
+
+# Dossiers : `dossiers` (Odoo) avec son pays, par le N° DC des factures et BC nt360.
+_V_DOSSIERS = """
+CREATE VIEW v_dossiers AS
+SELECT
+    d.*,
+    COALESCE(x.entite, '') AS entite,
+    CASE WHEN x.entite IS NOT NULL THEN 'dossier_dc' ELSE '' END AS entite_source
+FROM dossiers d
+LEFT JOIN v_entite_dc x ON x.dc = d.dossier_ref
+"""
+
+
+# Montants TTC Odoo, avec pays. Le DAF rapproche le CA et les achats d'argent qui
+# circule réellement (encours client, décaissements), donc en TTC : ces deux vues
+# portent les tables brutes `sale_orders` / `purchase_orders` à l'identique, plus
+# le pays — sans elles, un DSO par pays diviserait un encours du pays par un CA
+# TTC du groupe.
+_EQUIPE_SO = sql_equipe_vers_pays("s.equipe")
+
+_V_SALE_ORDERS_ODOO = f"""
+CREATE VIEW v_sale_orders_odoo AS
+SELECT
+    s.*,
+    COALESCE(e.entite, {_EQUIPE_SO}, '') AS entite,
+    CASE WHEN e.entite IS NOT NULL THEN 'commande_fp'
+         WHEN {_EQUIPE_SO} IS NOT NULL THEN 'equipe' ELSE '' END AS entite_source
+FROM sale_orders s
+LEFT JOIN v_entite_fp e ON e.fp = s.name
+"""
+
+_V_ACHATS_ODOO = """
+CREATE VIEW v_achats_odoo AS
+SELECT
+    p.*,
+    COALESCE(e.entite, '') AS entite,
+    CASE WHEN e.entite IS NOT NULL THEN 'commande_fp' ELSE '' END AS entite_source
+FROM purchase_orders p
+LEFT JOIN nt360_bc b ON b.bc_number = p.name AND b.bc_number != ''
+LEFT JOIN v_entite_fp e ON e.fp = b.fp AND b.fp != ''
+"""
+
+
+def _vue_par_fp(nom: str, table: str, colonne_fp: str) -> str:
+    """Table nt360 portant un N° FP, augmentée du pays de sa commande."""
+    return f"""
+CREATE VIEW {nom} AS
+SELECT
+    t.*,
+    COALESCE(e.entite, '') AS entite,
+    CASE WHEN e.entite IS NOT NULL THEN 'commande_fp' ELSE '' END AS entite_source
+FROM {table} t
+LEFT JOIN v_entite_fp e ON e.fp = t.{colonne_fp} AND t.{colonne_fp} != ''
+"""
+
+
+# Consultations : pas de N° FP, mais une filiale nt360 sur 100 % d'entre elles.
+_V_CONSULTATIONS = """
+CREATE VIEW v_consultations AS
+SELECT
+    t.*,
+    COALESCE(NULLIF(t.filiale, ''), '') AS entite,
+    CASE WHEN NULLIF(t.filiale, '') IS NOT NULL THEN 'filiale' ELSE '' END AS entite_source
+FROM nt360_consultations t
+"""
+
+# Ordre de création : pivots d'abord, puis v_commandes que les autres lisent.
 VUES: list[tuple[str, str]] = [
+    ("v_entite_fp", _V_ENTITE_FP),
+    ("v_entite_commercial", _V_ENTITE_COMMERCIAL),
+    ("v_entite_dc", _V_ENTITE_DC),
     ("v_commandes", _V_COMMANDES),
     ("v_sale_orders", _V_SALE_ORDERS),
     ("v_lignes_commande", _V_LIGNES_COMMANDE),
     ("v_factures", _V_FACTURES),
     ("v_purchase_orders", _V_PURCHASE_ORDERS),
     ("v_opportunities", _V_OPPORTUNITIES),
+    ("v_creances", _V_CREANCES),
+    ("v_dossiers", _V_DOSSIERS),
+    ("v_jalons", _vue_par_fp("v_jalons", "nt360_jalons", "fp")),
+    ("v_demandes_facturation", _vue_par_fp("v_demandes_facturation", "nt360_demandes_facturation", "fp")),
+    ("v_fiches", _vue_par_fp("v_fiches", "nt360_fiches", "numero_fp")),
+    ("v_consultations", _V_CONSULTATIONS),
+    ("v_sale_orders_odoo", _V_SALE_ORDERS_ODOO),
+    ("v_achats_odoo", _V_ACHATS_ODOO),
 ]
 
 
@@ -464,3 +634,26 @@ def create_views(sync_conn) -> None:
         sync_conn.exec_driver_sql(f"DROP VIEW IF EXISTS {nom}")
     for _, ddl in VUES:
         sync_conn.exec_driver_sql(ddl)
+
+
+def _modele_vue(nom_classe: str, vue: str, modele) -> type:
+    """Modèle ORM en lecture seule sur une vue « table + pays » : mêmes colonnes
+    que `modele` (recopiées, donc jamais en retard d'une migration), plus
+    `entite` et `entite_source`. Les lecteurs ORM basculent en changeant de classe."""
+    attrs: dict = {"__tablename__": vue, "__doc__": f"Lecture seule — {vue} (cf. db/views.py)."}
+    for col in modele.__table__.columns:
+        attrs[col.name] = mapped_column(col.type, primary_key=col.primary_key, nullable=not col.primary_key)
+    attrs["entite"] = mapped_column(String(10))
+    attrs["entite_source"] = mapped_column(String(20))
+    return type(nom_classe, (_VueBase,), attrs)
+
+
+def _modeles_rattachement():
+    from db.models import DossierModel, InvoiceModel
+    return (
+        _modele_vue("VCreanceModel", "v_creances", InvoiceModel),
+        _modele_vue("VDossierModel", "v_dossiers", DossierModel),
+    )
+
+
+VCreanceModel, VDossierModel = _modeles_rattachement()

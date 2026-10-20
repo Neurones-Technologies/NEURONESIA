@@ -55,7 +55,7 @@ async def fetch_factures_clients() -> list[dict]:
                COALESCE(NULLIF(TRIM(c.name), ''), '') AS client,
                i.amount, i.amount_residual, i.currency,
                i.invoice_date, i.due_date, i.status, i.payment_date
-        FROM invoices i
+        FROM v_creances i
         LEFT JOIN clients c ON c.client_id = i.client_id
     """)
     return [
@@ -100,7 +100,7 @@ async def fetch_achats_ttc() -> list[dict]:
     (dettes fournisseurs, encaissements clients), donc TTC. Des achats HT y
     sous-estimeraient les décaissements d'environ 18 %.
     """
-    return await _achats("purchase_orders")
+    return await _achats("v_achats_odoo")   # TTC Odoo, avec pays
 
 
 async def _achats(table: str) -> list[dict]:
@@ -194,7 +194,7 @@ async def fetch_dossiers() -> list[dict]:
                ca_provisoire, ca_definitif, depense_provisoire, depense_definitive,
                marge_provisoire, marge_definitive, perc_marge_definitive,
                montant_recu, reste_a_encaisser, backlog, fournisseurs_restant
-        FROM dossiers
+        FROM v_dossiers
     """)
     return [
         {
@@ -251,7 +251,7 @@ async def fetch_ca_mensuel_ttc(annee: int) -> list[dict]:
     que le client doit réellement, et nt360 ne date aucun règlement. Un CA HT au
     dénominateur gonflerait le DSO d'environ 18 % : il reste donc TTC, sur Odoo.
     """
-    return await _ca_mensuel(annee, "sale_orders")
+    return await _ca_mensuel(annee, "v_sale_orders_odoo")   # TTC Odoo, avec pays
 
 
 async def fetch_annees_disponibles() -> list[int]:
@@ -263,11 +263,11 @@ async def fetch_annees_disponibles() -> list[int]:
     """
     rows = await _rows("""
         SELECT DISTINCT annee FROM (
-            SELECT strftime('%Y', invoice_date) AS annee FROM invoices WHERE invoice_date IS NOT NULL
+            SELECT strftime('%Y', invoice_date) AS annee FROM v_creances WHERE invoice_date IS NOT NULL
             UNION
             SELECT strftime('%Y', date_order) AS annee FROM v_purchase_orders WHERE date_order IS NOT NULL
             UNION
-            SELECT strftime('%Y', date_creation) AS annee FROM dossiers WHERE date_creation IS NOT NULL
+            SELECT strftime('%Y', date_creation) AS annee FROM v_dossiers WHERE date_creation IS NOT NULL
         )
         WHERE annee IS NOT NULL
         ORDER BY annee DESC

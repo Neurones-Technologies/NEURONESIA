@@ -11,6 +11,7 @@ function base(filters: UsersFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.q) params.set("q", filters.q);
   if (filters.role) params.set("role", filters.role);
+  if (filters.pays) params.set("pays", filters.pays);
   if (filters.actif !== undefined) params.set("actif", filters.actif ? "oui" : "non");
   return params;
 }

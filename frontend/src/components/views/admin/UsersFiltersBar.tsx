@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 
 import type { UsersFilters } from "@/lib/api/admin";
 import { ROLE_LABELS } from "@/lib/auth/roles";
+import { PAYS_COMPTE } from "@/lib/data/pays";
 import { adminHref } from "@/components/views/admin/href";
 
 /** Filtres de la liste des comptes.
@@ -36,6 +37,7 @@ export function UsersFiltersBar({
   const [q, setQ] = useState(filters.q ?? "");
   const rechercheId = useId();
   const roleId = useId();
+  const paysId = useId();
   const statutId = useId();
 
   // La valeur venue de l'URL reprend la main quand elle change sans passer par
@@ -63,10 +65,10 @@ export function UsersFiltersBar({
     return () => clearTimeout(t);
     // `filters` et `q` suffisent : `naviguer` ne fait que refermer sur eux.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, filters.q, filters.role, filters.actif]);
+  }, [q, filters.q, filters.role, filters.pays, filters.actif]);
 
   const actifValue = filters.actif === undefined ? "" : filters.actif ? "oui" : "non";
-  const filtre = Boolean(filters.q || filters.role || filters.actif !== undefined);
+  const filtre = Boolean(filters.q || filters.role || filters.pays || filters.actif !== undefined);
 
   return (
     // Trois champs sur une rangée : `.fld` est une grille `1fr auto` faite pour
@@ -103,6 +105,22 @@ export function UsersFiltersBar({
           {roles.map((role) => (
             <option key={role} value={role}>
               {ROLE_LABELS[role] ?? role}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="fgrp" style={{ marginBottom: 0, flex: "1 1 170px" }}>
+        <label htmlFor={paysId}>Pays</label>
+        <select
+          id={paysId}
+          value={filters.pays ?? ""}
+          onChange={(e) => naviguer({ ...filters, pays: e.target.value || undefined })}
+        >
+          <option value="">Tous les pays</option>
+          {PAYS_COMPTE.map((p) => (
+            <option key={p.code || "groupe"} value={p.code || "groupe"}>
+              {p.code ? p.label : "Groupe (sans pays)"}
             </option>
           ))}
         </select>

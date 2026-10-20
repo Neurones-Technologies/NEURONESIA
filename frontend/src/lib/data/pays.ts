@@ -35,3 +35,23 @@ export function paysDe(valeur: string | undefined): Pays {
 export function paysLabel(pays: Pays): string {
   return PAYS.find((p) => p.id === pays)?.label ?? pays;
 }
+
+// ── Pays d'un COMPTE (écran d'administration) ────────────────────────────────
+// Codes du serveur (users.pays) : "" = groupe, CI / BF / GN = périmètre imposé
+// à toutes les pages du compte. Distincts des identifiants d'URL ci-dessus
+// (minuscules), qui ne servent qu'au sélecteur.
+
+export const PAYS_COMPTE: { code: string; label: string }[] = [
+  { code: "", label: "Groupe (tous pays)" },
+  { code: "CI", label: "Côte d'Ivoire" },
+  { code: "BF", label: "Burkina Faso" },
+  { code: "GN", label: "Guinée" },
+];
+
+/** Rôles toujours rattachés au groupe : le DG pilote les trois entités, l'admin
+ * administre tout. Le serveur refuse un pays sur ces comptes. */
+export const ROLES_TOUJOURS_GROUPE = ["dg", "admin"];
+
+export function libellePaysCompte(code: string | null | undefined): string {
+  return PAYS_COMPTE.find((p) => p.code === (code ?? "").toUpperCase())?.label ?? "Groupe (tous pays)";
+}

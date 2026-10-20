@@ -7,6 +7,7 @@ import { ADMIN_IDLE } from "@/lib/actions/admin-state";
 import { ROLE_LABELS, roleToProfile } from "@/lib/auth/roles";
 import { ActionMessage, SubmitBtn } from "@/components/views/arbitrage/feedback";
 import { MotDePasse } from "@/components/views/admin/MotDePasse";
+import { ChampPays } from "@/components/views/admin/ChampPays";
 
 /** Création d'un compte, dans une modale (cf. `Modale`).
  *
@@ -80,6 +81,8 @@ export function UserCreateForm({ profile, roles }: { profile: string; roles: str
             ))}
           </select>
         </div>
+
+        <ChampPays role={role} invalide={state.field === "pays"} />
 
         <MotDePasse
           label="Mot de passe initial"

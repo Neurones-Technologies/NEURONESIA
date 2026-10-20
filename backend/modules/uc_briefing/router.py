@@ -61,8 +61,15 @@ async def get_briefing(request: Request, current_user: CurrentUser, pays: str | 
         payload = await service.generate(_crm(request), _llm(request), triggered_by="cold_start")
 
     role = _role_of(current_user)
-    entite = (pays or "").upper()
-    if role in service.ROLES_PAR_ENTITE and entite in service.ENTITES:
+    if role in service.ROLES_PAR_ENTITE:
+        # DG : son sélecteur (?pays=) ne ventile que son briefing.
+        entite = (pays or "").upper()
+    else:
+        # Autres profils : le périmètre de la session — pays imposé au compte, ou
+        # pays choisi par un compte groupe (core/services/perimetre.py).
+        from core.services.perimetre import entite_courante
+        entite = entite_courante() or ""
+    if entite in service.ENTITES:
         section = payload.get("sections", {}).get(service.cle_section(role, entite))
         if section is None:
             # Snapshot antérieur aux sections d'entité : générée une fois, à la demande.

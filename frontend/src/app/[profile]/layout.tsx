@@ -53,6 +53,9 @@ export default async function ProfileLayout({
     fullName: me.full_name,
     roleLabel: ROLE_LABELS[me.role] ?? me.role,
     isAdmin: admin,
+    role: me.role,
+    perimetre: me.perimetre ?? null,
+    paysVerrouille: Boolean(me.pays_verrouille),
   };
 
   return (

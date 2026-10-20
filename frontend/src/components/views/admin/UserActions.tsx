@@ -11,6 +11,7 @@ import {
 import { ADMIN_IDLE } from "@/lib/actions/admin-state";
 import type { UserDetail } from "@/lib/api/admin";
 import { ROLE_LABELS } from "@/lib/auth/roles";
+import { ChampPays } from "@/components/views/admin/ChampPays";
 import { ActionMessage, SubmitBtn } from "@/components/views/arbitrage/feedback";
 import { MotDePasse } from "@/components/views/admin/MotDePasse";
 
@@ -120,6 +121,8 @@ export function UserActions({
             ))}
           </select>
         </div>
+
+        <ChampPays role={role} defaut={compte.pays} invalide={identite.field === "pays"} />
 
         {compte.est_moi && role !== compte.role && (
           <p className="foot-n">

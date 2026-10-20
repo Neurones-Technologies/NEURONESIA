@@ -140,7 +140,7 @@ _CA_FACTURE = """
 # le jour du solde. L'encaissement quotidien est donc juste en cumul et
 # grossier au jour le jour ; la réserve le dit.
 _ENCAISSEMENTS = """
-    SELECT COALESCE(SUM(amount), 0) FROM invoices
+    SELECT COALESCE(SUM(amount), 0) FROM v_creances
     WHERE status != 'cancelled' AND payment_date IS NOT NULL
       AND date(payment_date) <= date(:d) AND {periode}
 """
@@ -200,7 +200,7 @@ _RESERVE_PIPE_BRUT = (
 # réserve de l'indicateur le porte.
 _IMPAYES = """
     SELECT COALESCE(SUM(CASE WHEN payment_date IS NULL THEN amount_residual ELSE amount END), 0)
-    FROM invoices
+    FROM v_creances
     WHERE status != 'cancelled'
       AND invoice_date IS NOT NULL AND date(invoice_date) <= date(:d)
       AND due_date IS NOT NULL AND date(due_date) < date(:d, '{recul}')
@@ -274,14 +274,14 @@ CATALOGUE: dict[str, Indicateur] = {ind.cle: ind for ind in [
         "backlog", "Backlog non facturé", "xof", "stock",
         sql_historique="SELECT COALESCE(SUM(backlog), 0) FROM backlog_snapshots "
                        "WHERE snapshot_date = date(:d)",
-        sql_jour="SELECT COALESCE(SUM(backlog), 0) FROM dossiers",
+        sql_jour="SELECT COALESCE(SUM(backlog), 0) FROM v_dossiers",
             source_snapshot="backlog_snapshots",
     ),
     Indicateur(
         "reste_a_encaisser", "Reste à encaisser sur dossiers", "xof", "stock",
         sql_historique="SELECT COALESCE(SUM(reste_a_encaisser), 0) FROM backlog_snapshots "
                        "WHERE snapshot_date = date(:d)",
-        sql_jour="SELECT COALESCE(SUM(reste_a_encaisser), 0) FROM dossiers",
+        sql_jour="SELECT COALESCE(SUM(reste_a_encaisser), 0) FROM v_dossiers",
             source_snapshot="backlog_snapshots",
     ),
 
@@ -296,7 +296,7 @@ CATALOGUE: dict[str, Indicateur] = {ind.cle: ind for ind in [
     ),
     Indicateur(
         "dette_fournisseurs_echue", "Dette fournisseurs échue", "xof", "stock",
-        sql_historique=_IMPAYES.replace("invoices", "supplier_invoices")
+        sql_historique=_IMPAYES.replace("v_creances", "supplier_invoices")
                                .replace("status != 'cancelled'", "payment_state != 'cancel'")
                                .format(recul="+0 day"),
         reserve=_RESERVE_FOURNISSEUR,
@@ -593,6 +593,34 @@ def _point_de_comparaison(
         if valeur is not None and jour < as_of and _comparable(ind, as_of, jour):
             return jour, valeur
     return None
+
+
+# Indicateurs lus sur des tables SANS pays : sous un périmètre pays, leur valeur
+# serait celle du groupe. Ils ne sont pas servis (cf. valeurs_du_jour).
+INDICATEURS_SANS_PAYS = {"dette_fournisseurs_echue"}
+
+
+async def valeurs_du_jour(cles: list[str], as_of: date | None = None) -> dict[str, dict]:
+    """Valeur du jour SEULE, calculée en direct — pour un briefing sous périmètre pays.
+
+    L'historique (`indicator_snapshots`) est celui du GROUPE : comparer la valeur
+    d'un pays à la veille du groupe fabriquerait une chute qui n'existe pas. On
+    ne sert donc aucun horizon (les puces restent sans suffixe de variation), et
+    la valeur est recalculée sur les vues — que la connexion restreint au pays
+    (core/services/perimetre.py).
+    """
+    as_of = as_of or date.today()
+    resultat: dict[str, dict] = {}
+    for cle in cles:
+        ind = CATALOGUE.get(cle)
+        if ind is None or cle in INDICATEURS_SANS_PAYS:
+            continue
+        resultat[cle] = {
+            "cle": cle, "libelle": ind.libelle, "unite": ind.unite, "nature": ind.nature,
+            "valeur": await calculer(cle, as_of, historique=False),
+            "reserve": ind.reserve,
+        }
+    return resultat
 
 
 async def delta(cles: list[str], as_of: date | None = None) -> dict[str, dict]:

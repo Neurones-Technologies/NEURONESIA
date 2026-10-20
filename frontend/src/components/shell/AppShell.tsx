@@ -4,12 +4,17 @@ import { META } from "@/lib/data/profiles";
 import { Rail } from "./Rail";
 import { Header } from "./Header";
 import { DetailProvider } from "@/components/ui/detail";
+import { PerimetreRappel } from "./PerimetreBar";
 
 export interface ShellUser {
   code: string;
   fullName: string;
   roleLabel: string;
   isAdmin: boolean;
+  role: string;
+  /** Pays appliqué à la session (CI / BF / GN), `null` = groupe. */
+  perimetre: string | null;
+  paysVerrouille: boolean;
 }
 
 export function AppShell({
@@ -27,6 +32,7 @@ export function AppShell({
         <Rail profile={profile} code={user.code} isAdmin={user.isAdmin} />
         <div className="stage">
           <Header profile={profile} user={{ ...user, menuLabel: META[profile].menuLabel }} />
+          <PerimetreRappel perimetre={user.perimetre} />
           <main className="canvas">{children}</main>
         </div>
       </div>
